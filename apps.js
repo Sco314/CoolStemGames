@@ -1,16 +1,15 @@
 // Add a new game/app by appending an entry below.
-// - title: shown big on the card
-// - sub: small caption (optional)
-// - href: where the card links (internal path like "/moon-landing/" or external URL)
-// - external: true if href is on another domain
-// - bg: any CSS background (gradient, color, url(...))
+// - title    : (used for alt text + fallback if no image)
+// - href     : where the card links (internal path like "/moon-landing/" or external URL)
+// - image    : path to a card image (recommended aspect ratio 285:107, e.g. an SVG)
+// - bg       : (fallback) any CSS background if no image is supplied
+// - sub      : optional small caption shown only on text cards
+// - external : true if href is on another domain (adds an EXTERNAL badge + target=_blank)
 window.COOL_STEM_APPS = [
   {
-    title: "Moon Landing",
-    sub: "Land the Lunar Module",
-    href: "https://moonlanding.site",
-    external: true,
-    bg: "radial-gradient(circle at 30% 30%, #2b3a67 0%, #0b1020 70%), #0b1020",
+    title: "Moon Landing — Artemis II Mission Tracker",
+    href: "/moon-landing/",
+    image: "/link-images/moon-landing.svg",
   },
   // Example: future internal app
   // {
