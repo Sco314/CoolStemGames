@@ -3,7 +3,7 @@
 The source for **[coolstemgames.com](https://coolstemgames.com)** a hub for cool
 science, technology, engineering and math games, apps, learning and exploration.
 
-Inspired by the layout of [neal.fun](https://neal.fun).
+Inspired by the intersection of best educational practices and fun).
 
 ## Project layout
 
