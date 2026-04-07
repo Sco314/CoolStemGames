@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:osb="http://www.openswatchbook.org/uri/2009/osb"
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   viewBox="0 0 620 215"
+   width="620"
+   height="215"
+   style="border-radius:18px;"
+   id="svg3206"
+   version="1.1"
+   inkscape:version="0.48.4 r9939"
+   sodipodi:docname="moonlandingsitebutton237.svg">
+  <metadata id="metadata3425">
+  <rdf:RDF>
+    <cc:Work rdf:about="">
+      <dc:format>image/svg+xml</dc:format>
+      <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      <dc:title>Scott Sandvik Signature</dc:title>
+      <dc:creator>
+        <cc:Agent>
+          <dc:title>Scott Sandvik contact at www.coolstemgames.com Artemis Mission Moon Mission Astronaut</dc:title>
+        </cc:Agent>
+      </dc:creator>
+      <dc:rights>
+        <cc:Agent>
+          <dc:title>Copyright 2026 E. Scott Sandvik. All rights reserved.</dc:title>
+        </cc:Agent>
+      </dc:rights>
+      <dc:date>2025</dc:date>
+    </cc:Work>
+  </rdf:RDF>
+</metadata>
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     id="namedview3423"
+     showgrid="false"
+     inkscape:zoom="1.0036354"
+     inkscape:cx="257.22095"
+     inkscape:cy="209.61341"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g18443" />
+  <defs id="defs3208">
+    <clipPath id="ec">
+      <circle cx="530" cy="46" r="28" id="circle3211" />
+    </clipPath>
+  </defs>
+  <g id="g18443">
+    <rect style="fill:#060a1c" y="0" x="0" id="rect3213" rx="18" height="215" width="620" />
+    <!-- Stars: top band -->
+    <circle style="opacity:0.8;fill:#ffffff" r="1.2" cy="18" cx="252" />
+    <circle style="opacity:0.6;fill:#ffffff" r="0.9" cy="44" cx="288" />
+    <circle style="opacity:0.75;fill:#ffffff" r="1.4" cy="11" cx="318" />
+    <circle style="opacity:0.65;fill:#ffffff" r="0.8" cy="28" cx="354" />
+    <circle style="opacity:0.85;fill:#ffffff" r="1.1" cy="7" cx="382" />
+    <circle style="opacity:0.6;fill:#ffffff" r="0.7" cy="49" cx="402" />
+    <circle style="opacity:0.7;fill:#ffffff" r="1.3" cy="21" cx="425" />
+    <circle style="opacity:0.75;fill:#ffffff" r="0.8" cy="37" cx="448" />
+    <circle style="opacity:0.8;fill:#ffffff" r="1" cy="9" cx="468" />
+    <circle style="opacity:0.6;fill:#ffffff" r="0.9" cy="57" cx="492" />
+    <circle style="opacity:0.65;fill:#ffffff" r="0.8" cy="34" cx="588" />
+    <circle style="opacity:0.8;fill:#ffffff" r="1.3" cy="11" cx="605" />
+    <circle style="opacity:0.55;fill:#ffffff" r="0.7" cy="60" cx="611" />
+    <circle style="opacity:0.7;fill:#ffffff" r="1.1" cy="98" cx="598" />
+    <circle style="opacity:0.6;fill:#ffffff" r="0.9" cy="112" cx="614" />
+    <circle style="opacity:0.65;fill:#ffffff" r="1.2" cy="148" cx="600" />
+    <circle style="opacity:0.55;fill:#ffffff" r="0.8" cy="175" cx="614" />
+    <circle style="opacity:0.6;fill:#ffffff" r="1" cy="196" cx="582" />
+    <circle style="opacity:0.5;fill:#ffffff" r="0.7" cy="110" cx="548" />
+    <circle style="opacity:0.5;fill:#ffffff" r="0.8" cy="64" cx="342" />
+    <circle style="opacity:0.55;fill:#ffffff" r="1" cy="82" cx="312" />
+    <circle style="opacity:0.45;fill:#ffffff" r="0.7" cy="70" cx="268" />
+    <circle style="opacity:0.5;fill:#ffffff" r="0.9" cy="80" cx="442" />
+    <circle style="opacity:0.55;fill:#ffffff" r="1.1" cy="104" cx="462" />
+    <circle style="opacity:0.45;fill:#ffffff" r="0.8" cy="158" cx="272" />
+    <circle style="opacity:0.5;fill:#ffffff" r="1.2" cy="184" cx="252" />
+    <circle style="opacity:0.45;fill:#ffffff" r="0.7" cy="200" cx="292" />
+    <circle style="opacity:0.5;fill:#ffffff" r="0.8" cy="128" cx="510" />
+    <circle style="opacity:0.55;fill:#ffffff" r="1" cy="165" cx="540" />
+    <circle style="opacity:0.45;fill:#ffffff" r="0.9" cy="180" cx="330" />
+    <circle style="opacity:0.4;fill:#ffffff" r="0.7" cy="195" cx="370" />
+
+    <!-- Trajectory dashed arc behind moon -->
+    <path d="M 215,108 Q 380,4 555,55" style="fill:none;stroke:#4ab0f0;stroke-width:1.6;stroke-dasharray:3,4;opacity:0.9" />
+
+    <!-- Full moon -->
+    <circle cx="110" cy="108" r="105" style="fill:#d0c890" />
+
+    <!-- Craters -->
+    <circle cx="38" cy="128" r="8" style="opacity:0.7;fill:#c0b880" />
+    <circle cx="75" cy="105" r="12" style="opacity:0.55;fill:#b8b07c" />
+    <circle cx="44" cy="144" r="6" style="opacity:0.7;fill:#bab282" />
+    <circle cx="22" cy="86" r="12" style="opacity:0.55;fill:#c2ba86" />
+    <circle cx="48" cy="86" r="5" style="opacity:0.65;fill:#c8c08e" />
+    <circle cx="152" cy="64" r="9" style="opacity:0.6;fill:#b8b07c" />
+    <circle cx="80" cy="54" r="7" style="opacity:0.55;fill:#c0b880" />
+    <circle cx="110" cy="58" r="13" style="opacity:0.6;fill:#c2ba86" />
+    <circle cx="140" cy="82" r="8" style="opacity:0.55;fill:#c0b880" />
+    <circle cx="170" cy="100" r="10" style="opacity:0.55;fill:#b8b07c" />
+    <circle cx="180" cy="135" r="9" style="opacity:0.6;fill:#c0b880" />
+    <circle cx="120" cy="160" r="11" style="opacity:0.55;fill:#bab282" />
+    <circle cx="60" cy="170" r="7" style="opacity:0.6;fill:#c0b880" />
+    <circle cx="155" cy="155" r="6" style="opacity:0.65;fill:#c8c08e" />
+    <text x="38" y="128" dominant-baseline="middle" font-size="7" font-weight="bold" style="text-anchor:middle;fill:#ffffff;font-family:Arial,sans-serif">1</text>
+    <text x="44" y="144" dominant-baseline="middle" font-size="5" font-weight="bold" style="text-anchor:middle;fill:#ffffff;font-family:Arial,sans-serif">5</text>
+    <text x="22" y="86" dominant-baseline="middle" font-size="10" font-weight="bold" style="text-anchor:middle;fill:#ffffff;font-family:Arial,sans-serif">6</text>
+    <text x="48" y="86" dominant-baseline="middle" font-size="5" font-weight="bold" style="text-anchor:middle;fill:#ffffff;font-family:Arial,sans-serif">8</text>
+    <text x="152" y="64" dominant-baseline="middle" font-size="8" font-weight="bold" style="text-anchor:middle;fill:#ffffff;font-family:Arial,sans-serif">9</text>
+    <text x="80" y="54" dominant-baseline="middle" font-size="5" font-weight="bold" style="text-anchor:middle;fill:#ffffff;font-family:Arial,sans-serif">10</text>
+    <text x="110" y="58" dominant-baseline="middle" font-size="9" font-weight="bold" style="text-anchor:middle;fill:#ffffff;font-family:Arial,sans-serif">13</text>
+
+    <!-- Earth -->
+    <circle r="28" cy="65" cx="554" style="fill:#1a5faa" />
+    <ellipse cx="548" cy="58" rx="6" ry="3" style="fill:#268040;opacity:0.85" />
+    <ellipse cx="562" cy="68" rx="8" ry="4" style="fill:#268040;opacity:0.85" />
+    <ellipse cx="552" cy="76" rx="5" ry="2.5" style="fill:#268040;opacity:0.85" />
+    <ellipse cx="544" cy="70" rx="3" ry="2" style="fill:#268040;opacity:0.85" />
+    <ellipse cx="568" cy="56" rx="3" ry="1.5" style="fill:#268040;opacity:0.85" />
+    <ellipse cx="556" cy="49" rx="6" ry="0.6" style="opacity:0.4;fill:#ffffff" />
+    <ellipse cx="556" cy="80" rx="5" ry="0.6" style="opacity:0.35;fill:#ffffff" />
+    <circle r="28" cy="65" cx="554" style="fill:none;stroke:#0c0f0a;stroke-width:0.6;opacity:0.55" />
+
+    <!-- Orion spacecraft along trajectory -->
+    <g transform="translate(380,30) rotate(-22)">
+      <rect x="-7" y="-3.5" width="14" height="7" rx="1" style="fill:#37353b;stroke:#000;stroke-width:0.4" />
+      <rect x="-12" y="-4.5" width="5" height="9" style="fill:#7b71be" />
+      <rect x="7" y="-4.5" width="5" height="9" style="fill:#7b71be" />
+      <circle cx="0" cy="0" r="1.4" style="fill:#58b8f8" />
+    </g>
+
+    <!-- Title -->
+    <text style="font-size:32px;font-weight:bold;letter-spacing:-0.5;font-family:Georgia,'Times New Roman',serif" font-weight="bold" font-size="32" dominant-baseline="middle">
+      <tspan style="fill:#f0f0f5" y="108" x="252">MoonLanding</tspan>
+      <tspan style="fill:#58b8f8">.Site</tspan>
+    </text>
+
+    <!-- Subtitle -->
+    <text style="font-size:11px;letter-spacing:1.93;fill:#cccccc;font-family:Arial,'Helvetica Neue',sans-serif" y="139" x="252">ARTEMIS II MISSION TRACKER</text>
+
+    <!-- LIVE indicator -->
+    <circle style="fill:#22c866" r="3.5" cy="158" cx="252" />
+    <text style="font-size:10.5px;font-weight:bold;letter-spacing:1.5;fill:#22c866;font-family:Arial,'Helvetica Neue',sans-serif" font-weight="bold" font-size="10.5" dominant-baseline="middle" y="158" x="262">LIVE</text>
+  </g>
+</svg>
