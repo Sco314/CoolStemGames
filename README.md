@@ -1,6 +1,6 @@
 # Cool STEM Games
 
-The source for **[coolstemgames.com](https://coolstemgames.com)** — a hub for cool
+The source for **[coolstemgames.com](https://coolstemgames.com)** a hub for cool
 science, technology, engineering and math games, apps, learning and exploration.
 
 Inspired by the layout of [neal.fun](https://neal.fun).
