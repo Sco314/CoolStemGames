@@ -8,8 +8,10 @@
 window.COOL_STEM_APPS = [
   {
     title: "Moon Landing — Artemis II Mission Tracker",
-    href: "/moon-landing/",
+    href: "https://moonlanding.site/",
     image: "/link-images/moon-landing.svg",
+    bg: "radial-gradient(circle at 40% 40%, #1c2541 0%, #060a1c 70%)",
+    external: true,
   },
   // Example: future internal app
   // {

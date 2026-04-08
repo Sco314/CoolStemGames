@@ -3,11 +3,21 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: interest-cohort=()
 
-/styles.css
-  Cache-Control: public, max-age=3600
+# Force image/svg+xml on card art so X-Content-Type-Options: nosniff
+# can't refuse to render it, and keep the cache short so future art
+# swaps go live immediately.
+/link-images/*
+  Content-Type: image/svg+xml
+  Cache-Control: public, max-age=300, must-revalidate
 
-/main.js
-  Cache-Control: public, max-age=3600
-
+# Everything the site owner edits frequently must be always-fresh.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
 /apps.js
-  Cache-Control: public, max-age=300
+  Cache-Control: public, max-age=0, must-revalidate
+/main.js
+  Cache-Control: public, max-age=0, must-revalidate
+/styles.css
+  Cache-Control: public, max-age=0, must-revalidate

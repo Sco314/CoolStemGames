@@ -8,6 +8,12 @@
 
     if (app.image) {
       // Image card — the SVG/PNG fills the whole 285:107 area.
+      // If the image fails to load, a hidden fallback text layer
+      // becomes visible and shows the title on top of the themed
+      // background (see .page-link-image-fallback in styles.css).
+      var bgStyle = app.bg
+        ? ' style="background:' + escapeAttr(app.bg) + '"'
+        : "";
       return (
         '<a class="page-link page-link-image" href="' +
         escapeAttr(app.href) +
@@ -15,13 +21,19 @@
         attrs +
         ' aria-label="' +
         escapeAttr(app.title) +
-        '">' +
+        '"' +
+        bgStyle +
+        ">" +
         badge +
         '<img class="page-link-img" src="' +
         escapeAttr(app.image) +
-        '" alt="' +
-        escapeAttr(app.title) +
-        '" loading="lazy" />' +
+        '" alt="" loading="lazy"' +
+        ' onerror="this.closest(\'.page-link\').classList.add(\'image-failed\'); this.remove();" />' +
+        '<div class="page-link-inner page-link-image-fallback">' +
+        '<div class="page-link-title">' +
+        escapeHtml(app.title) +
+        "</div>" +
+        "</div>" +
         "</a>"
       );
     }
