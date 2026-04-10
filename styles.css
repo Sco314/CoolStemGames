@@ -137,6 +137,14 @@ html, body {
   letter-spacing: 0.05em;
 }
 
+.page-link-image .page-link-image-fallback {
+  display: none;
+}
+
+.page-link-image.image-failed .page-link-image-fallback {
+  display: flex;
+}
+
 .site-footer {
   margin-top: 60px;
   text-align: center;
