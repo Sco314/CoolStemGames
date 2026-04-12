@@ -1,6 +1,12 @@
 /**
- * 3D graph: node/edge management and force-directed layout.
+ * 3D graph: node/edge management, layout modes, force-directed physics.
  * Each Collatz value gets one shared node. Edges connect value → successor.
+ *
+ * Layout modes:
+ *   'particles'  – force-directed (organic clustering, no math meaning)
+ *   'value'      – Y = log2(value), golden-angle spiral on XZ
+ *   'parity'     – even left / odd right, Y = log2(value)
+ *   'stopping'   – concentric rings by stopping time
  */
 
 import * as THREE from 'three';
@@ -16,11 +22,32 @@ import {
 } from './constants.js';
 
 // ── State ────────────────────────────────────────────────
-const nodes = new Map();   // value → { mesh, labelSprite, vel, stoppingTime, value }
-const edges = new Map();   // "from-to" → { line, fromVal, toVal }
-let group = null;          // THREE.Group containing all graph objects
+const nodes = new Map();   // value → node object
+const edges = new Map();   // "from-to" → edge object
+let group = null;
 let maxStoppingTime = 0;
 let settled = true;
+
+// ── Layout mode ──────────────────────────────────────────
+let currentMode = 'particles';
+const MODE_TRANSITION_SPEED = 0.04;  // lerp factor per frame toward targets
+
+export const MODES = ['particles', 'value', 'parity', 'stopping'];
+
+export function getMode() { return currentMode; }
+
+export function setMode(mode) {
+  if (!MODES.includes(mode)) return;
+  currentMode = mode;
+  if (mode !== 'particles') {
+    computeTargets(mode);
+    // Clear velocities so force-sim doesn't fight the transition
+    for (const node of nodes.values()) {
+      node.vel.set(0, 0, 0);
+    }
+  }
+  settled = false;
+}
 
 export function getGroup() { return group; }
 export function getNodes() { return nodes; }
@@ -32,14 +59,11 @@ export function isSettled() { return settled; }
 export function initGraph(scene) {
   group = new THREE.Group();
   scene.add(group);
-
-  // Create anchor node "1"
   addNode(1, 0, true);
 }
 
 // ── Color ramp ───────────────────────────────────────────
 function sampleRamp(t) {
-  // t in [0,1], interpolate through COLOR_RAMP
   t = Math.max(0, Math.min(1, t));
   const n = COLOR_RAMP.length - 1;
   const i = Math.floor(t * n);
@@ -118,17 +142,14 @@ export function addNode(value, stoppingTime, immediate = false) {
   });
   const mesh = new THREE.Mesh(geo, mat);
 
-  // Position: anchor at origin, others get a random offset near their successor
   if (isAnchor) {
     mesh.position.set(0, 0, 0);
   } else {
-    // Will be repositioned by the caller near the successor
     const angle = Math.random() * Math.PI * 2;
     const dist = SPRING_LENGTH * 0.8;
     mesh.position.set(Math.cos(angle) * dist, Math.sin(angle) * dist, (Math.random() - 0.5) * 2);
   }
 
-  // Start at scale 0 unless immediate
   if (!immediate) {
     mesh.scale.setScalar(0.001);
   }
@@ -146,6 +167,7 @@ export function addNode(value, stoppingTime, immediate = false) {
     label,
     radius,
     vel: new THREE.Vector3(),
+    target: null,         // target position for deterministic modes
     pinned: isAnchor,
     targetScale: 1,
     currentScale: immediate ? 1 : 0.001,
@@ -158,6 +180,12 @@ export function addNode(value, stoppingTime, immediate = false) {
 
   nodes.set(value, node);
   settled = false;
+
+  // If we're in a deterministic mode, compute target for the new node
+  if (currentMode !== 'particles') {
+    computeTargets(currentMode);
+  }
+
   return node;
 }
 
@@ -222,14 +250,101 @@ function updateEdgeColors(edge) {
   col.needsUpdate = true;
 }
 
-// ── Force-directed layout step ───────────────────────────
+// ═══════════════════════════════════════════════════════════
+// ── TARGET POSITION COMPUTATION PER MODE ─────────────────
+// ═══════════════════════════════════════════════════════════
+
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)); // ~137.5°
+
+function computeTargets(mode) {
+  for (const node of nodes.values()) {
+    if (node.value === 1) {
+      node.target = new THREE.Vector3(0, 0, 0);
+      continue;
+    }
+    switch (mode) {
+      case 'value':    node.target = targetValue(node); break;
+      case 'parity':   node.target = targetParity(node); break;
+      case 'stopping': node.target = targetStopping(node); break;
+    }
+  }
+}
+
+/**
+ * Mode: Value
+ * Y = log2(value) — height encodes magnitude.
+ * XZ = golden-angle spiral — spreads nodes at similar heights apart.
+ * Creates a vertical "tower" showing how values climb and fall.
+ */
+function targetValue(node) {
+  const y = Math.log2(node.value) * 2.0;
+  const angle = node.value * GOLDEN_ANGLE;
+  const spread = 1.2 + Math.log2(node.value) * 0.3;
+  const x = Math.cos(angle) * spread;
+  const z = Math.sin(angle) * spread;
+  return new THREE.Vector3(x, y, z);
+}
+
+/**
+ * Mode: Parity
+ * Even nodes on the left (X < 0), odd nodes on the right (X > 0).
+ * Y = log2(value) for vertical spread.
+ * Within each side, Z spreads nodes using golden angle.
+ * Shows how edges constantly cross between even/odd columns.
+ */
+function targetParity(node) {
+  const even = node.value % 2 === 0;
+  const side = even ? -1 : 1;
+  const y = Math.log2(node.value) * 2.0;
+  // Spread within each column using golden angle
+  const angle = node.value * GOLDEN_ANGLE;
+  const spread = 0.8 + Math.log2(node.value) * 0.15;
+  const x = side * (3.0 + Math.abs(Math.cos(angle)) * spread);
+  const z = Math.sin(angle) * spread;
+  return new THREE.Vector3(x, y, z);
+}
+
+/**
+ * Mode: Stopping Time
+ * Concentric rings: radius = stoppingTime, angle = golden angle by value.
+ * Y = small offset per ring so they separate vertically.
+ * Node 1 sits at center (stopping time 0).
+ * Shows how far each number is from reaching 1.
+ */
+function targetStopping(node) {
+  const st = node.stoppingTime;
+  const ringRadius = st * 0.8 + 0.5;
+  const angle = node.value * GOLDEN_ANGLE;
+  const x = Math.cos(angle) * ringRadius;
+  const z = Math.sin(angle) * ringRadius;
+  const y = st * 0.3;  // gentle rise so rings separate in 3D
+  return new THREE.Vector3(x, y, z);
+}
+
+// ═══════════════════════════════════════════════════════════
+// ── LAYOUT STEP (runs every frame) ───────────────────────
+// ═══════════════════════════════════════════════════════════
+
 export function layoutStep(dt) {
   if (nodes.size < 2) { settled = true; return; }
 
+  if (currentMode === 'particles') {
+    layoutStepForceDirected(dt);
+  } else {
+    layoutStepTargeted(dt);
+  }
+
+  // Always update edges after positions move
+  for (const edge of edges.values()) {
+    updateEdgePositions(edge);
+  }
+}
+
+// ── Force-directed (particles mode) ──────────────────────
+function layoutStepForceDirected(dt) {
   const nodeArr = Array.from(nodes.values());
   let maxVel = 0;
 
-  // Accumulate forces
   for (const node of nodeArr) {
     if (node.pinned) continue;
 
@@ -248,7 +363,7 @@ export function layoutStep(dt) {
       }
     }
 
-    // Spring attraction to connected nodes (edges)
+    // Spring attraction to connected nodes
     for (const edge of edges.values()) {
       let other = null;
       if (edge.fromVal === node.value) other = nodes.get(edge.toVal);
@@ -264,12 +379,10 @@ export function layoutStep(dt) {
     // Gravity toward origin
     force.add(p.clone().negate().multiplyScalar(GRAVITY_STRENGTH));
 
-    // Apply force to velocity
     node.vel.add(force.multiplyScalar(dt));
     node.vel.multiplyScalar(LAYOUT_DAMPING);
   }
 
-  // Update positions
   for (const node of nodeArr) {
     if (node.pinned) continue;
     node.mesh.position.add(node.vel.clone().multiplyScalar(dt * 60));
@@ -277,12 +390,22 @@ export function layoutStep(dt) {
     if (speed > maxVel) maxVel = speed;
   }
 
-  // Update all edges
-  for (const edge of edges.values()) {
-    updateEdgePositions(edge);
+  settled = maxVel < LAYOUT_MIN_VELOCITY;
+}
+
+// ── Targeted lerp (value / parity / stopping modes) ──────
+function layoutStepTargeted(dt) {
+  let maxDist = 0;
+
+  for (const node of nodes.values()) {
+    if (!node.target) continue;
+    const p = node.mesh.position;
+    const dist = p.distanceTo(node.target);
+    p.lerp(node.target, MODE_TRANSITION_SPEED);
+    if (dist > maxDist) maxDist = dist;
   }
 
-  settled = maxVel < LAYOUT_MIN_VELOCITY;
+  settled = maxDist < 0.01;
 }
 
 // ── Recolor all nodes against current maxStoppingTime ────
@@ -299,7 +422,6 @@ export function recolorAll(progress = 1) {
       node.mesh.material.emissive.lerp(targetColor, progress);
     }
   }
-  // Update edge colors too
   for (const edge of edges.values()) {
     updateEdgeColors(edge);
   }

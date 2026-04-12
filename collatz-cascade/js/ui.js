@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { stoppingTime } from './collatz.js';
-import { colorHexForStoppingTime, getNodes, getNodePosition } from './graph.js';
+import { colorHexForStoppingTime, getNodes, getNodePosition, setMode } from './graph.js';
 import { pulseAnchor } from './animate.js';
 import { autoFrame, flyToNode, recenter } from './camera.js';
 import { INPUT_MAX, RECENT_MAX } from './constants.js';
@@ -73,6 +73,18 @@ export function initUI(onSubmit) {
   });
 
   btnRecenter.addEventListener('click', () => recenter());
+
+  // Mode selector
+  const modeBtns = document.querySelectorAll('.mode-btn');
+  for (const btn of modeBtns) {
+    btn.addEventListener('click', () => {
+      for (const b of modeBtns) b.classList.remove('active');
+      btn.classList.add('active');
+      setMode(btn.dataset.mode);
+      // Re-frame after transition starts
+      setTimeout(() => autoFrame(), 800);
+    });
+  }
 
   // Mouse move for tooltip raycasting
   document.addEventListener('mousemove', (e) => {
