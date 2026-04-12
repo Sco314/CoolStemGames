@@ -75,10 +75,47 @@ html, body {
   color: #e0e6f0;
 }
 
+/* ── Mode Selector ──────────────────────────────────────── */
+#mode-selector {
+  position: absolute;
+  bottom: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  background: rgba(11,16,32,0.85);
+  backdrop-filter: blur(12px);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 3px;
+}
+
+.mode-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #667799;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+.mode-btn:hover {
+  color: #c0d0f0;
+  background: rgba(255,255,255,0.06);
+}
+.mode-btn.active {
+  background: rgba(255,255,255,0.12);
+  color: #e0e6f0;
+  font-weight: 600;
+}
+
 /* ── Input Area ─────────────────────────────────────────── */
 #input-area {
   position: absolute;
-  bottom: 24px;
+  bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -128,7 +165,7 @@ html, body {
 /* ── Step Info ──────────────────────────────────────────── */
 #step-info {
   position: absolute;
-  bottom: 80px;
+  bottom: 120px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;

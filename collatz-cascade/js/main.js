@@ -42,7 +42,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05); // cap dt at 50ms
   const now = performance.now();
 
-  // Force-directed layout
+  // Layout (force-directed or target-based depending on mode)
   if (!isSettled() || hasActiveAnimations()) {
     layoutStep(dt);
   }

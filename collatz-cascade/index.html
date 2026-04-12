@@ -28,6 +28,13 @@
         <button id="btn-recenter" class="icon-btn" title="Recenter camera">&#8634;</button>
       </header>
 
+      <nav id="mode-selector">
+        <button class="mode-btn active" data-mode="particles" title="Force-directed layout">Particles</button>
+        <button class="mode-btn" data-mode="value" title="Y = log₂(value)">Value</button>
+        <button class="mode-btn" data-mode="parity" title="Even left, odd right">Parity</button>
+        <button class="mode-btn" data-mode="stopping" title="Rings by stopping time">Stopping Time</button>
+      </nav>
+
       <div id="input-area">
         <input id="num-input" type="text" inputmode="numeric" placeholder="Try 27" autocomplete="off" />
         <button id="btn-go">Add</button>
