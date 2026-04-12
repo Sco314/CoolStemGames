@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Collatz Cascade | Cool STEM Games</title>
+    <meta name="description" content="Explore the Collatz conjecture as a living 3D graph. Type numbers and watch every path fall home to 1." />
+    <meta name="theme-color" content="#0a0f1e" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="style.css" />
+    <script async src="https://cdn.jsdelivr.net/npm/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="ui-root">
+      <header id="top-bar">
+        <a href="/" class="back-link">&larr; CoolStemGames</a>
+        <span class="app-title">Collatz Cascade</span>
+        <button id="btn-recenter" class="icon-btn" title="Recenter camera">&#8634;</button>
+      </header>
+
+      <div id="input-area">
+        <input id="num-input" type="text" inputmode="numeric" placeholder="Try 27" autocomplete="off" />
+        <button id="btn-go">Add</button>
+      </div>
+
+      <div id="step-info" class="hidden">
+        <span id="step-value"></span>
+        <span id="step-detail"></span>
+      </div>
+
+      <aside id="recent-panel">
+        <h3>Recent</h3>
+        <ul id="recent-list"></ul>
+      </aside>
+
+      <div id="tooltip" class="hidden"></div>
+
+      <div id="legend" class="hidden">
+        <div class="legend-bar"></div>
+        <div class="legend-labels">
+          <span>shallow</span>
+          <span>deep</span>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

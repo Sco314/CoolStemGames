@@ -1,0 +1,270 @@
+/* ── Reset & Canvas ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #0a0f1e;
+  color: #e0e6f0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── UI Root (overlay) ──────────────────────────────────── */
+#ui-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+#ui-root > * {
+  pointer-events: auto;
+}
+
+/* ── Top Bar ────────────────────────────────────────────── */
+#top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(to bottom, rgba(10,15,30,0.85) 0%, rgba(10,15,30,0) 100%);
+}
+
+.back-link {
+  color: #8899bb;
+  text-decoration: none;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+.back-link:hover { color: #c0d0f0; }
+
+.app-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #c0d0f0;
+  flex: 1;
+}
+
+.icon-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #8899bb;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+.icon-btn:hover {
+  background: rgba(255,255,255,0.15);
+  color: #e0e6f0;
+}
+
+/* ── Input Area ─────────────────────────────────────────── */
+#input-area {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+
+#num-input {
+  width: 160px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  background: rgba(11,16,32,0.9);
+  color: #e0e6f0;
+  font-size: 16px;
+  outline: none;
+  backdrop-filter: blur(12px);
+  transition: border-color 0.2s;
+}
+#num-input:focus {
+  border-color: rgba(255,255,255,0.35);
+}
+#num-input.error {
+  border-color: #ff5a5a;
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+#btn-go {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #d4a44a 0%, #c08830 100%);
+  color: #1a1200;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+#btn-go:hover { opacity: 0.9; }
+#btn-go:active { transform: scale(0.97); }
+
+/* ── Step Info ──────────────────────────────────────────── */
+#step-info {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 14px;
+  background: rgba(11,16,32,0.85);
+  backdrop-filter: blur(12px);
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  white-space: nowrap;
+}
+#step-value {
+  font-weight: 700;
+  font-size: 18px;
+  color: #ffd866;
+}
+#step-detail {
+  color: #8899bb;
+}
+
+/* ── Recent Panel ───────────────────────────────────────── */
+#recent-panel {
+  position: absolute;
+  top: 56px;
+  right: 12px;
+  width: 170px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  background: rgba(11,16,32,0.85);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 10px;
+}
+#recent-panel h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #667799;
+  margin-bottom: 8px;
+}
+
+#recent-list {
+  list-style: none;
+}
+#recent-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+#recent-list li:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.recent-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.recent-num {
+  font-weight: 600;
+  color: #c0d0f0;
+  min-width: 40px;
+}
+.recent-steps {
+  color: #667799;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+/* ── Tooltip ────────────────────────────────────────────── */
+#tooltip {
+  position: fixed;
+  padding: 6px 10px;
+  background: rgba(11,16,32,0.92);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  z-index: 20;
+  max-width: 180px;
+  transition: opacity 0.15s;
+}
+#tooltip .tt-value {
+  font-weight: 700;
+  font-size: 16px;
+  color: #ffd866;
+}
+#tooltip .tt-detail {
+  color: #8899bb;
+}
+
+/* ── Legend ──────────────────────────────────────────────── */
+#legend {
+  position: absolute;
+  bottom: 24px;
+  right: 12px;
+  width: 140px;
+}
+.legend-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(to right, #6a0dbd, #2b60de, #1a998e, #43aa2f, #e6c619, #e87d1e, #d42020);
+}
+.legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #667799;
+  margin-top: 3px;
+}
+
+/* ── Utility ────────────────────────────────────────────── */
+.hidden { display: none !important; }
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+#recent-panel::-webkit-scrollbar { width: 4px; }
+#recent-panel::-webkit-scrollbar-track { background: transparent; }
+#recent-panel::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+  border-radius: 2px;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 600px) {
+  #recent-panel { display: none; }
+  #legend { display: none; }
+  #num-input { width: 120px; }
+}

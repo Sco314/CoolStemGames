@@ -1,0 +1,201 @@
+/**
+ * DOM overlay: input handling, recent inputs panel, tooltips, legend.
+ */
+
+import * as THREE from 'three';
+import { stoppingTime } from './collatz.js';
+import { colorHexForStoppingTime, getNodes, getNodePosition } from './graph.js';
+import { pulseAnchor } from './animate.js';
+import { autoFrame, flyToNode, recenter } from './camera.js';
+import { INPUT_MAX, RECENT_MAX } from './constants.js';
+
+// ── DOM refs ─────────────────────────────────────────────
+const input = document.getElementById('num-input');
+const btnGo = document.getElementById('btn-go');
+const btnRecenter = document.getElementById('btn-recenter');
+const recentList = document.getElementById('recent-list');
+const tooltip = document.getElementById('tooltip');
+const legend = document.getElementById('legend');
+const stepInfo = document.getElementById('step-info');
+
+const recentEntries = []; // { value, stoppingTime, li }
+
+// ── Tooltip state ────────────────────────────────────────
+let hoveredValue = null;
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+raycaster.params.Points = { threshold: 0.5 };
+
+export function getRaycaster() { return raycaster; }
+export function getMouse() { return mouse; }
+
+// ── Init ─────────────────────────────────────────────────
+export function initUI(onSubmit) {
+  input.focus();
+
+  function submit() {
+    const raw = input.value.trim();
+    const n = parseInt(raw, 10);
+
+    if (!raw || isNaN(n) || n < 1 || !Number.isInteger(Number(raw))) {
+      showError('Enter a positive integer.');
+      return;
+    }
+    if (n > INPUT_MAX) {
+      showError(`Keep it under ${INPUT_MAX.toLocaleString()} so the layout stays readable.`);
+      return;
+    }
+
+    input.value = '';
+    clearError();
+
+    if (n === 1) {
+      pulseAnchor();
+      return;
+    }
+
+    const result = onSubmit(n);
+
+    // Add to recent panel
+    addRecent(n);
+
+    // Show legend after first input
+    legend.classList.remove('hidden');
+
+    // Auto-frame after a short delay to let nodes spawn
+    setTimeout(() => autoFrame(), 600);
+  }
+
+  btnGo.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submit();
+    clearError();
+  });
+
+  btnRecenter.addEventListener('click', () => recenter());
+
+  // Mouse move for tooltip raycasting
+  document.addEventListener('mousemove', (e) => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    tooltipScreenPos = { x: e.clientX, y: e.clientY };
+  });
+}
+
+let tooltipScreenPos = { x: 0, y: 0 };
+
+// ── Error feedback ───────────────────────────────────────
+function showError(msg) {
+  input.classList.add('error');
+  input.placeholder = msg;
+  setTimeout(() => {
+    input.placeholder = 'Try 27';
+    input.classList.remove('error');
+  }, 2000);
+}
+
+function clearError() {
+  input.classList.remove('error');
+}
+
+// ── Recent panel ─────────────────────────────────────────
+function addRecent(value) {
+  // Remove if already in list
+  const existingIdx = recentEntries.findIndex(e => e.value === value);
+  if (existingIdx >= 0) {
+    recentEntries[existingIdx].li.remove();
+    recentEntries.splice(existingIdx, 1);
+  }
+
+  const st = stoppingTime(value);
+  const li = document.createElement('li');
+  li.innerHTML = `
+    <span class="recent-swatch" style="background:${colorHexForStoppingTime(st)}"></span>
+    <span class="recent-num">${value}</span>
+    <span class="recent-steps">${st} steps</span>
+  `;
+  li.addEventListener('click', () => {
+    const pos = getNodePosition(value);
+    if (pos) flyToNode(pos);
+  });
+
+  recentList.prepend(li);
+  recentEntries.unshift({ value, stoppingTime: st, li });
+
+  // Cap at RECENT_MAX
+  while (recentEntries.length > RECENT_MAX) {
+    const removed = recentEntries.pop();
+    removed.li.remove();
+  }
+}
+
+/**
+ * Update the color swatches in the recent panel (after rescale).
+ */
+export function updateRecentColors() {
+  for (const entry of recentEntries) {
+    const swatch = entry.li.querySelector('.recent-swatch');
+    if (swatch) {
+      swatch.style.background = colorHexForStoppingTime(entry.stoppingTime);
+    }
+  }
+}
+
+// ── Tooltip ──────────────────────────────────────────────
+export function updateTooltip(camera, scene) {
+  raycaster.setFromCamera(mouse, camera);
+
+  // Collect all node meshes
+  const meshes = [];
+  for (const node of getNodes().values()) {
+    meshes.push(node.mesh);
+  }
+
+  const intersects = raycaster.intersectObjects(meshes, false);
+
+  if (intersects.length > 0) {
+    const obj = intersects[0].object;
+    const value = obj.userData.collatzValue;
+    if (value !== undefined) {
+      hoveredValue = value;
+      const st = stoppingTime(value);
+      tooltip.innerHTML = `
+        <div class="tt-value">${value}</div>
+        <div class="tt-detail">${st} steps to 1</div>
+        <div class="tt-detail">${value % 2 === 0 ? 'Even (÷2)' : 'Odd (×3+1)'}</div>
+      `;
+      tooltip.classList.remove('hidden');
+      tooltip.style.left = (tooltipScreenPos.x + 14) + 'px';
+      tooltip.style.top = (tooltipScreenPos.y - 10) + 'px';
+
+      // Brighten the hovered node slightly
+      if (value !== 1) {
+        obj.material.emissiveIntensity = Math.min(obj.material.emissiveIntensity + 0.15, 0.8);
+      }
+      return;
+    }
+  }
+
+  // Reset previously hovered node
+  if (hoveredValue !== null && hoveredValue !== 1) {
+    const node = getNodes().get(hoveredValue);
+    if (node) {
+      const climber = hoveredValue > 1 && hoveredValue % 2 !== 0;
+      node.mesh.material.emissiveIntensity = climber ? 0.35 : 0.05;
+    }
+  }
+  hoveredValue = null;
+  tooltip.classList.add('hidden');
+}
+
+// ── Step info display ────────────────────────────────────
+export function showStepInfo(value, detail) {
+  const el = document.getElementById('step-info');
+  document.getElementById('step-value').textContent = value;
+  document.getElementById('step-detail').textContent = detail;
+  el.classList.remove('hidden');
+}
+
+export function hideStepInfo() {
+  document.getElementById('step-info').classList.add('hidden');
+}

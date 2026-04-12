@@ -13,11 +13,10 @@ window.COOL_STEM_APPS = [
     bg: "radial-gradient(circle at 40% 40%, #1c2541 0%, #060a1c 70%)",
     external: true,
   },
-  // Example: future internal app
-  // {
-  //   title: "Constellation Draw",
-  //   sub: "Connect the stars",
-  //   href: "/constellation-draw/",
-  //   bg: "radial-gradient(circle at 50% 60%, #1c2541 0%, #0a0f1e 80%)",
-  // },
+  {
+    title: "Collatz Cascade",
+    sub: "Explore the 3n+1 conjecture",
+    href: "/collatz-cascade/",
+    bg: "radial-gradient(circle at 50% 40%, #1a3a5c 0%, #0a0f1e 80%)",
+  },
 ];
