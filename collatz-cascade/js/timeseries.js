@@ -32,6 +32,7 @@ let active = false;
 let sequences = [];   // { startValue, values, color, mesh, label, drawProgress }
 let stepMax = 10;
 let valueMax = 2;
+let flipped = false;  // swap X/Y axes when true
 
 // ── Public API ───────────────────────────────────────────
 export function initTimeSeries(scene) {
@@ -143,11 +144,39 @@ export function getTimeSeriesCameraTarget() {
 
 // ── Internal: coordinate mapping ─────────────────────────
 function positionFor(step, value) {
-  const x = (step / Math.max(stepMax, 1)) * CHART_WIDTH;
+  const normStep = step / Math.max(stepMax, 1);
   const logV = Math.log2(Math.max(value, 1));
   const logMax = Math.log2(Math.max(valueMax, 2));
-  const y = (logV / logMax) * CHART_HEIGHT;
-  return new THREE.Vector3(x, y, 0);
+  const normValue = logV / logMax;
+  if (flipped) {
+    return new THREE.Vector3(normValue * CHART_WIDTH, normStep * CHART_HEIGHT, 0);
+  }
+  return new THREE.Vector3(normStep * CHART_WIDTH, normValue * CHART_HEIGHT, 0);
+}
+
+// ── Flip X/Y ────────────────────────────────────────────
+export function toggleFlip() {
+  flipped = !flipped;
+  rebuildAxes();
+  for (const seq of sequences) rebuildLineFor(seq);
+}
+
+export function isFlipped() { return flipped; }
+
+// ── Visibility control for slider ───────────────────────
+export function setVisibleMax(n) {
+  // Ensure sequences exist for 2..n
+  for (let i = 2; i <= n; i++) {
+    if (!sequences.some(s => s.startValue === i)) {
+      addTimeSeriesNumber(i);
+    }
+  }
+  // Show/hide based on threshold
+  for (const seq of sequences) {
+    const visible = seq.startValue <= n;
+    if (seq.mesh) seq.mesh.visible = visible;
+    if (seq.label) seq.label.visible = visible;
+  }
 }
 
 // ── Internal: line rebuild ──────────────────────────────
@@ -226,60 +255,94 @@ function rebuildAxes() {
   ]);
   axesGroup.add(new THREE.Line(yAxis, axisMat));
 
-  // X-axis labels at major step intervals
-  const xInterval = niceInterval(stepMax);
-  for (let s = 0; s <= stepMax; s += xInterval) {
-    const x = (s / Math.max(stepMax, 1)) * CHART_WIDTH;
-    // Tick
-    const tickGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(x, 0, 0),
-      new THREE.Vector3(x, -0.2, 0),
-    ]);
-    axesGroup.add(new THREE.Line(tickGeo, axisMat));
-    // Label
-    if (s > 0 || stepMax < 5) {
-      const label = makeAxisLabel(String(s));
+  // What each axis represents depends on flipped state
+  // NOT flipped: X = step, Y = log(value)
+  //     flipped: X = log(value), Y = step
+  const logMax = Math.log2(Math.max(valueMax, 2));
+  let vStep = 1;
+  if (logMax > 8) vStep = 2;
+  if (logMax > 16) vStep = 4;
+
+  const sInterval = niceInterval(stepMax);
+
+  if (!flipped) {
+    // X-axis: step ticks
+    for (let s = 0; s <= stepMax; s += sInterval) {
+      const x = (s / Math.max(stepMax, 1)) * CHART_WIDTH;
+      axesGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, 0, 0), new THREE.Vector3(x, -0.2, 0)
+        ]), axisMat));
+      if (s > 0 || stepMax < 5) {
+        const label = makeAxisLabel(String(s));
+        label.position.set(x, -0.7, 0);
+        axesGroup.add(label);
+      }
+    }
+    // Y-axis: powers of 2
+    for (let p = 0; p <= logMax; p += vStep) {
+      const y = (p / logMax) * CHART_HEIGHT;
+      const v = Math.pow(2, p);
+      axesGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, y, 0), new THREE.Vector3(-0.2, y, 0)
+        ]), axisMat));
+      const label = makeAxisLabel(formatAxisValue(v));
+      label.position.set(-1.2, y, 0);
+      axesGroup.add(label);
+      // Horizontal grid line
+      const gridMat = new THREE.LineBasicMaterial({
+        color: GRID_COLOR, transparent: true, opacity: GRID_OPACITY,
+      });
+      axesGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, y, 0), new THREE.Vector3(CHART_WIDTH, y, 0)
+        ]), gridMat));
+    }
+  } else {
+    // X-axis: powers of 2 (values)
+    for (let p = 0; p <= logMax; p += vStep) {
+      const x = (p / logMax) * CHART_WIDTH;
+      const v = Math.pow(2, p);
+      axesGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, 0, 0), new THREE.Vector3(x, -0.2, 0)
+        ]), axisMat));
+      const label = makeAxisLabel(formatAxisValue(v));
       label.position.set(x, -0.7, 0);
       axesGroup.add(label);
     }
+    // Y-axis: steps
+    for (let s = 0; s <= stepMax; s += sInterval) {
+      const y = (s / Math.max(stepMax, 1)) * CHART_HEIGHT;
+      axesGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, y, 0), new THREE.Vector3(-0.2, y, 0)
+        ]), axisMat));
+      if (s > 0 || stepMax < 5) {
+        const label = makeAxisLabel(String(s));
+        label.position.set(-1.2, y, 0);
+        axesGroup.add(label);
+      }
+      // Horizontal grid line
+      const gridMat = new THREE.LineBasicMaterial({
+        color: GRID_COLOR, transparent: true, opacity: GRID_OPACITY,
+      });
+      axesGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, y, 0), new THREE.Vector3(CHART_WIDTH, y, 0)
+        ]), gridMat));
+    }
   }
 
-  // Y-axis labels at powers of 2
-  const logMax = Math.log2(Math.max(valueMax, 2));
-  let yStep = 1;
-  if (logMax > 8) yStep = 2;
-  if (logMax > 16) yStep = 4;
-  for (let p = 0; p <= logMax; p += yStep) {
-    const y = (p / logMax) * CHART_HEIGHT;
-    const v = Math.pow(2, p);
-    // Tick
-    const tickGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, y, 0),
-      new THREE.Vector3(-0.2, y, 0),
-    ]);
-    axesGroup.add(new THREE.Line(tickGeo, axisMat));
-    // Label
-    const label = makeAxisLabel(formatAxisValue(v));
-    label.position.set(-1.2, y, 0);
-    axesGroup.add(label);
-
-    // Grid line
-    const gridGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, y, 0),
-      new THREE.Vector3(CHART_WIDTH, y, 0),
-    ]);
-    const gridMat = new THREE.LineBasicMaterial({
-      color: GRID_COLOR, transparent: true, opacity: GRID_OPACITY,
-    });
-    axesGroup.add(new THREE.Line(gridGeo, gridMat));
-  }
-
-  // Axis titles
-  const xTitle = makeAxisLabel('step →', 0.6);
+  // Axis titles (swap labels when flipped)
+  const xLabel = flipped ? 'value (log₂) →' : 'step →';
+  const yLabel = flipped ? 'step' : 'value (log₂)';
+  const xTitle = makeAxisLabel(xLabel, 0.6);
   xTitle.position.set(CHART_WIDTH / 2, -1.5, 0);
   axesGroup.add(xTitle);
 
-  const yTitle = makeAxisLabel('value (log₂)', 0.6);
+  const yTitle = makeAxisLabel(yLabel, 0.6);
   yTitle.position.set(-2.2, CHART_HEIGHT / 2, 0);
   axesGroup.add(yTitle);
 }

@@ -63,9 +63,16 @@
         <input id="nl-goto-input" class="hidden" type="text" inputmode="numeric" placeholder="#" autocomplete="off" />
       </div>
 
-      <!-- Clear button for time series / spiral -->
+      <!-- Clear/flip button for time series / spiral -->
       <div id="chart-controls" class="hidden">
         <button id="chart-clear" class="nl-btn">Clear</button>
+        <button id="chart-flip" class="nl-btn ts-only">Flip X/Y</button>
+      </div>
+
+      <!-- Time series progressive slider -->
+      <div id="ts-slider-wrap" class="hidden">
+        <label for="ts-slider">Fill to: <span id="ts-slider-val">0</span></label>
+        <input id="ts-slider" type="range" min="0" max="100" value="0" step="1" />
       </div>
 
       <div id="input-area">
