@@ -17,6 +17,7 @@ import {
 import {
   showTimeSeries, hideTimeSeries, addTimeSeriesNumber,
   clearTimeSeries, getTimeSeriesCameraTarget,
+  toggleFlip, setVisibleMax,
 } from './timeseries.js';
 import {
   showSpiral, hideSpiral, isSpiralActive,
@@ -149,13 +150,27 @@ export function initUI(onSubmit) {
     btnFill.textContent = '0%';
     legend.classList.remove('hidden');
 
+    // Pick the right dispatcher for the current mode
+    function dispatch(i) {
+      if (numberLineMode) return;                 // numberline doesn't batch-fill
+      if (timeSeriesMode) return addTimeSeriesNumber(i);
+      if (spiralMode)     return addSpiralNumber(i);
+      return onSubmit(i);                          // graph modes
+    }
+    if (numberLineMode) {
+      showFillError('Fill not supported in Number Line.');
+      btnFill.disabled = false;
+      btnFill.textContent = 'Fill';
+      return;
+    }
+
     // Stagger additions in batches
     let current = 2;
-    const total = n - 1; // 2 through n
+    const total = n - 1;
     fillTimer = setInterval(() => {
       const end = Math.min(current + FILL_BATCH - 1, n);
       for (let i = current; i <= end; i++) {
-        onSubmit(i);
+        dispatch(i);
       }
       current = end + 1;
       const pct = Math.round(((current - 2) / total) * 100);
@@ -166,8 +181,8 @@ export function initUI(onSubmit) {
         fillTimer = null;
         btnFill.disabled = false;
         btnFill.textContent = 'Fill';
-        addRecent(n);
-        setTimeout(() => autoFrame(), 400);
+        if (!timeSeriesMode && !spiralMode) addRecent(n);
+        if (!timeSeriesMode && !spiralMode) setTimeout(() => autoFrame(), 400);
       }
     }, FILL_INTERVAL);
   }
@@ -186,6 +201,10 @@ export function initUI(onSubmit) {
   const subBtns = document.querySelectorAll('.sub-btn');
   const nlControls = document.getElementById('nl-controls');
   const chartControls = document.getElementById('chart-controls');
+  const tsSliderWrap = document.getElementById('ts-slider-wrap');
+  const tsSlider = document.getElementById('ts-slider');
+  const tsSliderVal = document.getElementById('ts-slider-val');
+  const chartFlipBtn = document.getElementById('chart-flip');
   const mathBar = document.getElementById('math-bar');
   const graphGroup = getGroup();
 
@@ -201,6 +220,8 @@ export function initUI(onSubmit) {
       timeSeriesMode = false;
       hideTimeSeries();
       chartControls.classList.add('hidden');
+      tsSliderWrap.classList.add('hidden');
+      chartFlipBtn.classList.add('hidden');
     }
     if (spiralMode) {
       spiralMode = false;
@@ -226,6 +247,8 @@ export function initUI(onSubmit) {
     showTimeSeries();
     if (graphGroup) graphGroup.visible = false;
     chartControls.classList.remove('hidden');
+    tsSliderWrap.classList.remove('hidden');
+    chartFlipBtn.classList.remove('hidden');
     input.placeholder = 'Try 27';
     frameTimeSeriesCamera();
   }
@@ -350,8 +373,26 @@ export function initUI(onSubmit) {
 
   // Clear for chart modes (time series + spiral)
   document.getElementById('chart-clear').addEventListener('click', () => {
-    if (timeSeriesMode) clearTimeSeries();
+    if (timeSeriesMode) {
+      clearTimeSeries();
+      tsSlider.value = 0;
+      tsSliderVal.textContent = '0';
+    }
     if (spiralMode) clearSpiral();
+  });
+
+  // Flip X/Y for time series
+  chartFlipBtn.addEventListener('click', () => {
+    toggleFlip();
+    frameTimeSeriesCamera();
+  });
+
+  // Progressive slider: drag right to add more numbers
+  tsSlider.addEventListener('input', (e) => {
+    const n = parseInt(e.target.value, 10) || 0;
+    tsSliderVal.textContent = String(n);
+    setVisibleMax(n);
+    frameTimeSeriesCamera();
   });
 
   // Mouse move for tooltip raycasting
