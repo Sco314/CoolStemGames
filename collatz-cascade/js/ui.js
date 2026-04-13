@@ -12,6 +12,8 @@ import { INPUT_MAX, RECENT_MAX } from './constants.js';
 // ── DOM refs ─────────────────────────────────────────────
 const input = document.getElementById('num-input');
 const btnGo = document.getElementById('btn-go');
+const fillInput = document.getElementById('fill-input');
+const btnFill = document.getElementById('btn-fill');
 const btnRecenter = document.getElementById('btn-recenter');
 const recentList = document.getElementById('recent-list');
 const tooltip = document.getElementById('tooltip');
@@ -70,6 +72,60 @@ export function initUI(onSubmit) {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submit();
     clearError();
+  });
+
+  // Fill 1–N
+  const FILL_MAX = 500;
+  const FILL_BATCH = 5;     // numbers added per tick
+  const FILL_INTERVAL = 80; // ms between batches
+  let fillTimer = null;
+
+  function submitFill() {
+    const raw = fillInput.value.trim();
+    const n = parseInt(raw, 10);
+
+    if (!raw || isNaN(n) || n < 2 || !Number.isInteger(Number(raw))) {
+      showFillError('Enter an integer ≥ 2.');
+      return;
+    }
+    if (n > FILL_MAX) {
+      showFillError(`Keep it under ${FILL_MAX} for fill.`);
+      return;
+    }
+
+    fillInput.value = '';
+    clearFillError();
+    btnFill.disabled = true;
+    btnFill.textContent = '0%';
+    legend.classList.remove('hidden');
+
+    // Stagger additions in batches
+    let current = 2;
+    const total = n - 1; // 2 through n
+    fillTimer = setInterval(() => {
+      const end = Math.min(current + FILL_BATCH - 1, n);
+      for (let i = current; i <= end; i++) {
+        onSubmit(i);
+      }
+      current = end + 1;
+      const pct = Math.round(((current - 2) / total) * 100);
+      btnFill.textContent = `${Math.min(pct, 100)}%`;
+
+      if (current > n) {
+        clearInterval(fillTimer);
+        fillTimer = null;
+        btnFill.disabled = false;
+        btnFill.textContent = 'Fill';
+        addRecent(n);
+        setTimeout(() => autoFrame(), 400);
+      }
+    }, FILL_INTERVAL);
+  }
+
+  btnFill.addEventListener('click', submitFill);
+  fillInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitFill();
+    clearFillError();
   });
 
   btnRecenter.addEventListener('click', () => recenter());
@@ -131,6 +187,19 @@ function showError(msg) {
 
 function clearError() {
   input.classList.remove('error');
+}
+
+function showFillError(msg) {
+  fillInput.classList.add('error');
+  fillInput.placeholder = msg;
+  setTimeout(() => {
+    fillInput.placeholder = 'Fill 1–N';
+    fillInput.classList.remove('error');
+  }, 2000);
+}
+
+function clearFillError() {
+  fillInput.classList.remove('error');
 }
 
 // ── Recent panel ─────────────────────────────────────────
