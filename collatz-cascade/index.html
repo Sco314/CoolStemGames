@@ -28,11 +28,13 @@
       </header>
 
       <nav id="mode-selector">
-        <button class="mode-btn active" data-mode="particles">Particles</button>
+        <button class="mode-btn active" data-mode="timeseries">Time Series</button>
+        <button class="mode-btn" data-mode="spiral">Spiral</button>
+        <button class="mode-btn" data-mode="numberline">Num Line</button>
+        <button class="mode-btn" data-mode="particles">Particles</button>
         <button class="mode-btn" data-mode="value">Value</button>
         <button class="mode-btn" data-mode="parity">Parity</button>
         <button class="mode-btn" data-mode="stopping">Stopping</button>
-        <button class="mode-btn" data-mode="numberline">Num Line</button>
       </nav>
 
       <div id="stopping-subs" class="sub-modes hidden">
@@ -52,12 +54,18 @@
 
       <!-- Number line controls (bottom-left) -->
       <div id="nl-controls" class="hidden">
+        <button id="nl-scale" class="nl-btn">Linear</button>
         <button id="nl-extents" class="nl-btn">Extents</button>
         <button id="nl-goto" class="nl-btn">Go To #</button>
         <button id="nl-low" class="nl-btn">Find Low</button>
         <button id="nl-high" class="nl-btn">Find High</button>
         <button id="nl-ff" class="nl-btn nl-ff">1x</button>
         <input id="nl-goto-input" class="hidden" type="text" inputmode="numeric" placeholder="#" autocomplete="off" />
+      </div>
+
+      <!-- Clear button for time series / spiral -->
+      <div id="chart-controls" class="hidden">
+        <button id="chart-clear" class="nl-btn">Clear</button>
       </div>
 
       <div id="input-area">

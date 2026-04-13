@@ -12,8 +12,16 @@ import {
   showNumberLine, hideNumberLine, isNumberLineActive, startSequence,
   getMathDisplay, getPlayState, zoomToExtents, zoomToNumber,
   findLowestUnvisited, findHighestUnvisited, formatValue,
-  setSpeed, getSpeed,
+  setSpeed, getSpeed, setScaleMode, getScaleMode,
 } from './numberline.js';
+import {
+  showTimeSeries, hideTimeSeries, addTimeSeriesNumber,
+  clearTimeSeries, getTimeSeriesCameraTarget,
+} from './timeseries.js';
+import {
+  showSpiral, hideSpiral, isSpiralActive,
+  addSpiralNumber, clearSpiral, getSpiralCameraTarget,
+} from './spiral.js';
 
 // ── DOM refs ─────────────────────────────────────────────
 const input = document.getElementById('num-input');
@@ -27,7 +35,9 @@ const legend = document.getElementById('legend');
 const stepInfo = document.getElementById('step-info');
 
 const recentEntries = []; // { value, stoppingTime, li }
-let numberLineMode = false; // module-level flag for numberline mode
+let numberLineMode = false;
+let timeSeriesMode = false;
+let spiralMode = false;
 
 // ── Tooltip state ────────────────────────────────────────
 let hoveredValue = null;
@@ -57,6 +67,28 @@ export function initUI(onSubmit) {
       input.value = '';
       clearError();
       startSequence(n);
+      return;
+    }
+
+    // Time series: add a line to the chart
+    if (timeSeriesMode) {
+      if (n === 1) { input.value = ''; return; }
+      input.value = '';
+      clearError();
+      addTimeSeriesNumber(n);
+      return;
+    }
+
+    // Spiral mode: add a spiral path
+    if (spiralMode) {
+      if (n === 1) { input.value = ''; return; }
+      input.value = '';
+      clearError();
+      addSpiralNumber(n);
+      // Reframe to fit new extent
+      const t = getSpiralCameraTarget();
+      getCamera().position.lerp(t.position, 0.5);
+      getControls().target.lerp(t.center, 0.5);
       return;
     }
 
@@ -153,25 +185,71 @@ export function initUI(onSubmit) {
   const stoppingSubs = document.getElementById('stopping-subs');
   const subBtns = document.querySelectorAll('.sub-btn');
   const nlControls = document.getElementById('nl-controls');
+  const chartControls = document.getElementById('chart-controls');
   const mathBar = document.getElementById('math-bar');
   const graphGroup = getGroup();
 
+  // Exit all special modes, return to graph
+  function exitAllSpecialModes() {
+    if (numberLineMode) {
+      numberLineMode = false;
+      hideNumberLine();
+      nlControls.classList.add('hidden');
+      mathBar.classList.add('hidden');
+    }
+    if (timeSeriesMode) {
+      timeSeriesMode = false;
+      hideTimeSeries();
+      chartControls.classList.add('hidden');
+    }
+    if (spiralMode) {
+      spiralMode = false;
+      hideSpiral();
+      chartControls.classList.add('hidden');
+    }
+    if (graphGroup) graphGroup.visible = true;
+    input.placeholder = 'Try 27';
+  }
+
   function enterNumberLine() {
+    exitAllSpecialModes();
     numberLineMode = true;
     showNumberLine();
     if (graphGroup) graphGroup.visible = false;
     nlControls.classList.remove('hidden');
-    // Change input placeholder
     input.placeholder = 'Enter number';
   }
 
-  function exitNumberLine() {
-    numberLineMode = false;
-    hideNumberLine();
-    if (graphGroup) graphGroup.visible = true;
-    nlControls.classList.add('hidden');
-    mathBar.classList.add('hidden');
+  function enterTimeSeries() {
+    exitAllSpecialModes();
+    timeSeriesMode = true;
+    showTimeSeries();
+    if (graphGroup) graphGroup.visible = false;
+    chartControls.classList.remove('hidden');
     input.placeholder = 'Try 27';
+    frameTimeSeriesCamera();
+  }
+
+  function enterSpiral() {
+    exitAllSpecialModes();
+    spiralMode = true;
+    showSpiral();
+    if (graphGroup) graphGroup.visible = false;
+    chartControls.classList.remove('hidden');
+    input.placeholder = 'Try 27';
+    frameSpiralCamera();
+  }
+
+  function frameTimeSeriesCamera() {
+    const t = getTimeSeriesCameraTarget();
+    getCamera().position.copy(t.position);
+    getControls().target.copy(t.center);
+  }
+
+  function frameSpiralCamera() {
+    const t = getSpiralCameraTarget();
+    getCamera().position.copy(t.position);
+    getControls().target.copy(t.center);
   }
 
   for (const btn of modeBtns) {
@@ -183,8 +261,14 @@ export function initUI(onSubmit) {
       if (mode === 'numberline') {
         stoppingSubs.classList.add('hidden');
         enterNumberLine();
+      } else if (mode === 'timeseries') {
+        stoppingSubs.classList.add('hidden');
+        enterTimeSeries();
+      } else if (mode === 'spiral') {
+        stoppingSubs.classList.add('hidden');
+        enterSpiral();
       } else {
-        if (numberLineMode) exitNumberLine();
+        exitAllSpecialModes();
         if (mode === 'stopping') {
           stoppingSubs.classList.remove('hidden');
           const activeSub = stoppingSubs.querySelector('.sub-btn.active');
@@ -255,6 +339,21 @@ export function initUI(onSubmit) {
     ffBtn.textContent = `${spd}x`;
   });
 
+  // Linear/Log scale toggle
+  const scaleBtn = document.getElementById('nl-scale');
+  scaleBtn.addEventListener('click', () => {
+    const next = getScaleMode() === 'linear' ? 'log' : 'linear';
+    setScaleMode(next);
+    scaleBtn.textContent = next === 'linear' ? 'Linear' : 'Log';
+    setTimeout(() => zoomToExtents(getCamera(), getControls()), 50);
+  });
+
+  // Clear for chart modes (time series + spiral)
+  document.getElementById('chart-clear').addEventListener('click', () => {
+    if (timeSeriesMode) clearTimeSeries();
+    if (spiralMode) clearSpiral();
+  });
+
   // Mouse move for tooltip raycasting
   document.addEventListener('mousemove', (e) => {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -287,6 +386,8 @@ export function initUI(onSubmit) {
   }
   requestAnimationFrame(updateMathBar);
 
+  // ── Default mode: Time Series ─────────────────────────
+  enterTimeSeries();
 }
 
 let tooltipScreenPos = { x: 0, y: 0 };

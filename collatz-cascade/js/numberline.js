@@ -52,6 +52,10 @@ let pauseTimer = 0;
 // User-controlled speed multiplier (1x, 2x, 4x, 8x)
 let userSpeed = 1;
 
+// Scale mode: 'linear' or 'log'
+let scaleMode = 'linear';
+const LOG_SCALE_UNIT = 3.0;  // world units per decade in log mode
+
 // Bounce during pause
 let pauseElapsed = 0;
 let pauseOrbY = 0;             // Y position of the target orb (to bounce above)
@@ -296,14 +300,15 @@ function getCameraTarget() {
 
 export function zoomToExtents(camera, controls) {
   if (maxOnLine === 0) return;
-  const midX = maxOnLine * SPACING * 0.5;
-  const dist = maxOnLine * SPACING * 0.6;
+  const endX = orbPosition(maxOnLine).x;
+  const midX = endX * 0.5;
+  const dist = endX * 0.6 + 3;
   camera.position.set(midX, dist * 0.3, dist);
   controls.target.set(midX, 0, 0);
 }
 
 export function zoomToNumber(n, camera, controls) {
-  const x = n * SPACING;
+  const x = orbPosition(n).x;
   camera.position.set(x, 2, 5);
   controls.target.set(x, 0, 0);
 }
@@ -325,8 +330,30 @@ export function findHighestUnvisited() {
 // ── Internal helpers ─────────────────────────────────────
 
 function orbPosition(value) {
-  return new THREE.Vector3(value * SPACING, LINE_Y, 0);
+  const x = scaleMode === 'log'
+    ? Math.log10(Math.max(value, 1)) * LOG_SCALE_UNIT
+    : value * SPACING;
+  return new THREE.Vector3(x, LINE_Y, 0);
 }
+
+/**
+ * Toggle between linear and log scale. Updates all orb and line positions.
+ */
+export function setScaleMode(mode) {
+  if (mode !== 'linear' && mode !== 'log') return;
+  scaleMode = mode;
+
+  // Reposition all existing orbs to their new scale positions
+  for (const [value, orb] of orbs) {
+    const pos = orbPosition(value);
+    orb.mesh.position.copy(pos);
+  }
+
+  // Rebuild the line/ticks to match new scale
+  rebuildLine();
+}
+
+export function getScaleMode() { return scaleMode; }
 
 /**
  * Set up a bezier arc from → to.
@@ -346,7 +373,8 @@ function setupArc(from, to) {
 
   // Travel time: proportional to distance, clamped 2s–4s
   // Short hops take 2s, long travels take up to 4s
-  const rawTime = 2.0 + (dist / (maxOnLine * SPACING || 1)) * 2.0;
+  const maxLineExtent = orbPosition(maxOnLine).x || 1;
+  const rawTime = 2.0 + (dist / maxLineExtent) * 2.0;
   travelDuration = Math.max(TRAVEL_MIN, Math.min(TRAVEL_MAX, rawTime));
 }
 
@@ -428,29 +456,45 @@ function rebuildLine() {
   }
   scaleLabels = [];
 
-  // Main axis line: brighter and uses a thin flat box so it's visible at any zoom
-  const lineLength = maxOnLine * SPACING + SPACING;
-  const boxGeo = new THREE.BoxGeometry(lineLength, 0.06, 0.06);
+  // Main axis line: length depends on scale mode
+  const lineEndX = orbPosition(maxOnLine).x + (scaleMode === 'log' ? 1.5 : SPACING);
+  const boxGeo = new THREE.BoxGeometry(lineEndX, 0.06, 0.06);
   const boxMat = new THREE.MeshBasicMaterial({ color: 0x5577aa, transparent: true, opacity: 0.8 });
   lineObj = new THREE.Mesh(boxGeo, boxMat);
-  lineObj.position.set(lineLength / 2, LINE_Y, 0);
+  lineObj.position.set(lineEndX / 2, LINE_Y, 0);
   nlGroup.add(lineObj);
 
   // Tick marks and scale labels
-  const interval = tickInterval(maxOnLine);
   const tickPoints = [];
-  const tickSize = Math.max(0.2, interval * SPACING * 0.1);
-  for (let i = 0; i <= maxOnLine; i += interval) {
-    const x = i * SPACING;
-    tickPoints.push(new THREE.Vector3(x, LINE_Y - tickSize, 0));
-    tickPoints.push(new THREE.Vector3(x, LINE_Y + tickSize, 0));
 
-    // Scale label below the tick — always visible via large sprite
-    if (i > 0) {
-      const labelSprite = makeScaleLabel(i, tickSize);
+  if (scaleMode === 'log') {
+    // Log scale: ticks at 1, 10, 100, 1000, etc.
+    const tickSize = 0.35;
+    for (let exp = 0; Math.pow(10, exp) <= maxOnLine; exp++) {
+      const val = Math.pow(10, exp);
+      const x = orbPosition(val).x;
+      tickPoints.push(new THREE.Vector3(x, LINE_Y - tickSize, 0));
+      tickPoints.push(new THREE.Vector3(x, LINE_Y + tickSize, 0));
+      const labelSprite = makeScaleLabel(val, tickSize);
       labelSprite.position.set(x, LINE_Y - tickSize * 2.5, 0);
       nlGroup.add(labelSprite);
       scaleLabels.push(labelSprite);
+    }
+  } else {
+    // Linear scale: ticks at interval
+    const interval = tickInterval(maxOnLine);
+    const tickSize = Math.max(0.2, interval * SPACING * 0.1);
+    for (let i = 0; i <= maxOnLine; i += interval) {
+      const x = i * SPACING;
+      tickPoints.push(new THREE.Vector3(x, LINE_Y - tickSize, 0));
+      tickPoints.push(new THREE.Vector3(x, LINE_Y + tickSize, 0));
+
+      if (i > 0) {
+        const labelSprite = makeScaleLabel(i, tickSize);
+        labelSprite.position.set(x, LINE_Y - tickSize * 2.5, 0);
+        nlGroup.add(labelSprite);
+        scaleLabels.push(labelSprite);
+      }
     }
   }
   if (tickPoints.length > 0) {
