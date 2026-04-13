@@ -158,8 +158,8 @@ html, body {
   gap: 8px;
 }
 
-#num-input {
-  width: 160px;
+#num-input, #fill-input {
+  width: 120px;
   padding: 10px 14px;
   border: 1px solid rgba(255,255,255,0.15);
   border-radius: 10px;
@@ -170,12 +170,19 @@ html, body {
   backdrop-filter: blur(12px);
   transition: border-color 0.2s;
 }
-#num-input:focus {
+#num-input:focus, #fill-input:focus {
   border-color: rgba(255,255,255,0.35);
 }
-#num-input.error {
+#num-input.error, #fill-input.error {
   border-color: #ff5a5a;
   animation: shake 0.3s ease-in-out;
+}
+
+.input-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: rgba(255,255,255,0.1);
 }
 
 @keyframes shake {
@@ -184,8 +191,8 @@ html, body {
   75% { transform: translateX(4px); }
 }
 
-#btn-go {
-  padding: 10px 20px;
+#btn-go, #btn-fill {
+  padding: 10px 16px;
   border: none;
   border-radius: 10px;
   background: linear-gradient(135deg, #d4a44a 0%, #c08830 100%);
@@ -195,8 +202,16 @@ html, body {
   cursor: pointer;
   transition: opacity 0.2s, transform 0.1s;
 }
-#btn-go:hover { opacity: 0.9; }
-#btn-go:active { transform: scale(0.97); }
+#btn-go:hover, #btn-fill:hover { opacity: 0.9; }
+#btn-go:active, #btn-fill:active { transform: scale(0.97); }
+#btn-fill {
+  background: linear-gradient(135deg, #4a8ad4 0%, #3070c0 100%);
+  color: #fff;
+}
+#btn-fill:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
 /* ── Step Info ──────────────────────────────────────────── */
 #step-info {
@@ -339,5 +354,8 @@ html, body {
 @media (max-width: 600px) {
   #recent-panel { display: none; }
   #legend { display: none; }
-  #num-input { width: 120px; }
+  #num-input, #fill-input { width: 90px; font-size: 14px; padding: 8px 10px; }
+  #btn-go, #btn-fill { padding: 8px 12px; font-size: 12px; }
+  #input-area { gap: 4px; }
+  .input-sep { margin: 4px 0; }
 }
