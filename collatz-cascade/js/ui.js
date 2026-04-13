@@ -12,6 +12,7 @@ import {
   showNumberLine, hideNumberLine, isNumberLineActive, startSequence,
   getMathDisplay, getPlayState, zoomToExtents, zoomToNumber,
   findLowestUnvisited, findHighestUnvisited, formatValue,
+  setSpeed, getSpeed,
 } from './numberline.js';
 
 // ── DOM refs ─────────────────────────────────────────────
@@ -152,7 +153,7 @@ export function initUI(onSubmit) {
   const stoppingSubs = document.getElementById('stopping-subs');
   const subBtns = document.querySelectorAll('.sub-btn');
   const nlControls = document.getElementById('nl-controls');
-  const mathOverlay = document.getElementById('math-overlay');
+  const mathBar = document.getElementById('math-bar');
   const graphGroup = getGroup();
 
   function enterNumberLine() {
@@ -169,7 +170,7 @@ export function initUI(onSubmit) {
     hideNumberLine();
     if (graphGroup) graphGroup.visible = true;
     nlControls.classList.add('hidden');
-    mathOverlay.classList.add('hidden');
+    mathBar.classList.add('hidden');
     input.placeholder = 'Try 27';
   }
 
@@ -243,7 +244,16 @@ export function initUI(onSubmit) {
     if (high) zoomToNumber(high, getCamera(), getControls());
   });
 
-  // ── Override submit behavior for number line mode ────────
+  // Fast-forward button: cycles through 1x → 2x → 4x → 8x → 1x
+  const ffBtn = document.getElementById('nl-ff');
+  const FF_SPEEDS = [1, 2, 4, 8];
+  let ffIndex = 0;
+  ffBtn.addEventListener('click', () => {
+    ffIndex = (ffIndex + 1) % FF_SPEEDS.length;
+    const spd = FF_SPEEDS[ffIndex];
+    setSpeed(spd);
+    ffBtn.textContent = `${spd}x`;
+  });
 
   // Mouse move for tooltip raycasting
   document.addEventListener('mousemove', (e) => {
@@ -258,7 +268,7 @@ export function initUI(onSubmit) {
     if (!numberLineMode) return;
     const data = getMathDisplay();
     if (data && data.label !== 'END') {
-      mathOverlay.classList.remove('hidden');
+      mathBar.classList.remove('hidden');
       const labelEl = document.getElementById('math-label');
       labelEl.textContent = data.label;
       labelEl.className = data.isEven ? 'even' : 'odd';
@@ -266,7 +276,7 @@ export function initUI(onSubmit) {
       document.getElementById('math-operation').textContent = data.operation;
       document.getElementById('math-result').textContent = '= ' + data.result;
     } else {
-      mathOverlay.classList.add('hidden');
+      mathBar.classList.add('hidden');
     }
     requestAnimationFrame(updateMathOverlay);
   }

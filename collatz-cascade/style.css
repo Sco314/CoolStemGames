@@ -148,42 +148,41 @@ html, body {
   font-weight: 600;
 }
 
-/* ── Math Overlay (number line mode) ───────────────────── */
-#math-overlay {
+/* ── Math Bar (bottom, persistent during number line) ──── */
+#math-bar {
   position: absolute;
-  top: 50%;
+  bottom: 80px;
   left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
   background: rgba(11,16,32,0.88);
   backdrop-filter: blur(14px);
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 16px;
-  padding: 16px 28px;
-  min-width: 200px;
+  border-radius: 10px;
+  padding: 8px 18px;
+  white-space: nowrap;
 }
 #math-label {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  margin-bottom: 4px;
 }
 #math-label.even { color: #4a9aff; }
 #math-label.odd  { color: #ff6b4a; }
 #math-rule {
   font-size: 11px;
   color: #667799;
-  margin-bottom: 10px;
 }
 #math-operation {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   color: #e0e6f0;
-  margin-bottom: 4px;
 }
 #math-result {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 700;
   color: #ffd866;
 }
@@ -225,6 +224,12 @@ html, body {
   color: #e0e6f0;
   font-size: 14px;
   outline: none;
+}
+
+.nl-ff {
+  font-weight: 700;
+  color: #ffd866 !important;
+  border-color: rgba(255,216,102,0.2) !important;
 }
 
 /* ── Input Area ─────────────────────────────────────────── */
