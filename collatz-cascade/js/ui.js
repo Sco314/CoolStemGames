@@ -262,12 +262,15 @@ export function initUI(onSubmit) {
     tooltipScreenPos = { x: e.clientX, y: e.clientY };
   });
 
-  // ── Math overlay update (called from render loop) ──────
-  // Exposed so main.js can call it, but we'll self-update via RAF
-  function updateMathOverlay() {
-    if (!numberLineMode) return;
+  // ── Math bar update (self-scheduling RAF loop) ─────────
+  function updateMathBar() {
+    requestAnimationFrame(updateMathBar);
+    if (!numberLineMode) {
+      mathBar.classList.add('hidden');
+      return;
+    }
     const data = getMathDisplay();
-    if (data && data.label !== 'END') {
+    if (data && data.label !== 'DONE') {
       mathBar.classList.remove('hidden');
       const labelEl = document.getElementById('math-label');
       labelEl.textContent = data.label;
@@ -275,12 +278,14 @@ export function initUI(onSubmit) {
       document.getElementById('math-rule').textContent = data.rule;
       document.getElementById('math-operation').textContent = data.operation;
       document.getElementById('math-result').textContent = '= ' + data.result;
-    } else {
+    }
+    // When data is null (during travel), bar stays showing the LAST values.
+    // When data.label === 'DONE', hide.
+    if (data && data.label === 'DONE') {
       mathBar.classList.add('hidden');
     }
-    requestAnimationFrame(updateMathOverlay);
   }
-  requestAnimationFrame(updateMathOverlay);
+  requestAnimationFrame(updateMathBar);
 
 }
 
