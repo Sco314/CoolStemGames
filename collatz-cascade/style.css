@@ -245,6 +245,15 @@ html, body {
   border-color: rgba(255,216,102,0.2) !important;
 }
 
+#chart-controls {
+  position: absolute;
+  bottom: 80px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 /* ── Input Area ─────────────────────────────────────────── */
 #input-area {
   position: absolute;

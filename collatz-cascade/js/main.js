@@ -3,11 +3,13 @@
  */
 
 import * as THREE from 'three';
-import { initGraph, layoutStep, updateAnchorPulse, isSettled, getGroup, getMode } from './graph.js';
+import { initGraph, layoutStep, updateAnchorPulse, isSettled, getGroup } from './graph.js';
 import { updateAnimations, hasActiveAnimations, addNumber } from './animate.js';
 import { initCamera, updateCamera, getCamera, getControls } from './camera.js';
 import { initUI, updateTooltip } from './ui.js';
 import { initNumberLine, updateNumberLine, isNumberLineActive } from './numberline.js';
+import { initTimeSeries, updateTimeSeries, isTimeSeriesActive } from './timeseries.js';
+import { initSpiral, updateSpiral, isSpiralActive } from './spiral.js';
 
 // ── Scene setup ──────────────────────────────────────────
 const canvas = document.getElementById('scene');
@@ -26,11 +28,11 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(8, 12, 5);
 scene.add(dirLight);
 
-// Initialize graph (creates gold "1" anchor)
+// Initialize all scenes
 initGraph(scene);
-
-// Initialize number line
 initNumberLine(scene);
+initTimeSeries(scene);
+initSpiral(scene);
 
 // ── UI ───────────────────────────────────────────────────
 initUI((n) => {
@@ -52,10 +54,16 @@ function animate() {
     // Number line mode: update playback and follow camera
     const camTarget = updateNumberLine(dt);
     if (camTarget) {
-      // Smoothly follow the operator ball
       camera.position.lerp(camTarget.position, 0.06);
       controls.target.lerp(camTarget.lookAt, 0.06);
     }
+    controls.update();
+  } else if (isTimeSeriesActive()) {
+    // Time series: just advance draw-in animation, user controls camera
+    updateTimeSeries(dt);
+    controls.update();
+  } else if (isSpiralActive()) {
+    updateSpiral(dt);
     controls.update();
   } else {
     // Graph modes
