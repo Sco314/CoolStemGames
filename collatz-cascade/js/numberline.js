@@ -23,11 +23,15 @@ const ORB_COLOR_VISITED = new THREE.Color(0.2, 0.45, 0.9);    // complement blue
 const OPERATOR_COLOR = new THREE.Color(1, 1, 1);
 
 // Timing (seconds)
-const TRAVEL_MIN = 2.0;          // minimum travel time
-const TRAVEL_MAX = 4.0;          // maximum travel time
-const PAUSE_DURATION = 1.0;      // pause on collision
+const TRAVEL_MIN = 1.2;          // minimum travel time (short hops)
+const TRAVEL_MAX = 4.0;          // maximum travel time (long travels)
+const PAUSE_DURATION = 0.5;      // pause on collision (half second)
 const ZOOM_IN_START = 0.7;       // progress fraction when zoom-in begins
 const EXTRA_CYCLES = 2;          // repeat 4→2→1 this many times
+
+// Bounce animation during pause
+const BOUNCE_HEIGHT = 0.4;       // max bounce height in world units
+const BOUNCE_FREQ = 8;           // bounces per second
 
 // ── State ────────────────────────────────────────────────
 let nlGroup = null;
@@ -47,6 +51,10 @@ let pauseTimer = 0;
 
 // User-controlled speed multiplier (1x, 2x, 4x, 8x)
 let userSpeed = 1;
+
+// Bounce during pause
+let pauseElapsed = 0;
+let pauseOrbY = 0;             // Y position of the target orb (to bounce above)
 
 // Positions for current travel arc
 let arcStart = new THREE.Vector3();
@@ -202,6 +210,8 @@ export function updateNumberLine(dt) {
 
       playState = 'paused';
       pauseTimer = PAUSE_DURATION;
+      pauseElapsed = 0;
+      pauseOrbY = arcEnd.y;
     } else {
       // Quadratic bezier interpolation
       const t = travelProgress;
@@ -216,6 +226,13 @@ export function updateNumberLine(dt) {
 
   if (playState === 'paused') {
     pauseTimer -= effectiveDt;
+    pauseElapsed += effectiveDt;
+
+    // Bounce animation: ball hops on the orb while paused
+    const bounceT = pauseElapsed * BOUNCE_FREQ;
+    const bounceY = Math.abs(Math.sin(bounceT * Math.PI)) * BOUNCE_HEIGHT;
+    operatorBall.position.y = pauseOrbY + OPERATOR_RADIUS + bounceY;
+
     if (pauseTimer <= 0) {
       stepIndex++;
 

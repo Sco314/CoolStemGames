@@ -151,7 +151,7 @@ html, body {
 /* ── Math Bar (bottom, persistent during number line) ──── */
 #math-bar {
   position: absolute;
-  bottom: 80px;
+  top: 50px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -163,6 +163,7 @@ html, body {
   border-radius: 10px;
   padding: 8px 18px;
   white-space: nowrap;
+  z-index: 15;
 }
 #math-label {
   font-size: 13px;
