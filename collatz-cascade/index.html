@@ -8,7 +8,6 @@
     <meta name="theme-color" content="#0a0f1e" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="style.css" />
-    <script async src="https://cdn.jsdelivr.net/npm/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
     <script type="importmap">
     {
       "imports": {
@@ -25,38 +24,39 @@
       <header id="top-bar">
         <a href="/" class="back-link">&larr; CoolStemGames</a>
         <span class="app-title">Collatz Cascade</span>
+        <button id="btn-menu" class="icon-btn" title="Toggle mode menu">&#9776;</button>
         <button id="btn-recenter" class="icon-btn" title="Recenter camera">&#8634;</button>
       </header>
 
-      <nav id="mode-selector">
-        <button class="mode-btn active" data-mode="particles" title="Force-directed layout">Particles</button>
-        <button class="mode-btn" data-mode="value" title="Y = log₂(value)">Value</button>
-        <button class="mode-btn" data-mode="parity" title="Even left, odd right">Parity</button>
-        <button class="mode-btn" data-mode="stopping" title="Rings by stopping time">Stopping Time</button>
+      <nav id="mode-selector" class="collapsed">
+        <button class="mode-btn active" data-mode="particles">Particles</button>
+        <button class="mode-btn" data-mode="value">Value</button>
+        <button class="mode-btn" data-mode="parity">Parity</button>
+        <button class="mode-btn" data-mode="stopping">Stopping Time</button>
         <div id="stopping-subs" class="sub-modes hidden">
-          <button class="sub-btn active" data-mode="stopping" title="Golden angle scatter">Scatter</button>
-          <button class="sub-btn" data-mode="stopping-value" title="Angle = log₂(value)">By Value</button>
-          <button class="sub-btn" data-mode="stopping-parity" title="Even left, odd right semicircles">By Parity</button>
-          <button class="sub-btn" data-mode="stopping-tree" title="Angle inherited from tree parent">By Tree</button>
+          <button class="sub-btn active" data-mode="stopping">Scatter</button>
+          <button class="sub-btn" data-mode="stopping-value">By Value</button>
+          <button class="sub-btn" data-mode="stopping-parity">By Parity</button>
+          <button class="sub-btn" data-mode="stopping-tree">By Tree</button>
         </div>
-        <button class="mode-btn" data-mode="numberline" title="Animated number line">Number Line</button>
+        <button class="mode-btn" data-mode="numberline">Number Line</button>
       </nav>
 
-      <!-- Math display bar (bottom, persistent until next collision) -->
+      <!-- Math display (right side, persistent until next collision) -->
       <div id="math-bar" class="hidden">
-        <span id="math-label"></span>
-        <span id="math-rule"></span>
-        <span id="math-operation"></span>
-        <span id="math-result"></span>
+        <div id="math-label"></div>
+        <div id="math-rule"></div>
+        <div id="math-operation"></div>
+        <div id="math-result"></div>
       </div>
 
       <!-- Number line controls (bottom-left) -->
       <div id="nl-controls" class="hidden">
-        <button id="nl-extents" class="nl-btn" title="Zoom to see full number line">Extents</button>
-        <button id="nl-goto" class="nl-btn" title="Zoom to a specific number">Go To #</button>
-        <button id="nl-low" class="nl-btn" title="Find lowest un-Collatzed number">Find Low</button>
-        <button id="nl-high" class="nl-btn" title="Find highest un-Collatzed number">Find High</button>
-        <button id="nl-ff" class="nl-btn nl-ff" title="Speed up animation">1x</button>
+        <button id="nl-extents" class="nl-btn">Extents</button>
+        <button id="nl-goto" class="nl-btn">Go To #</button>
+        <button id="nl-low" class="nl-btn">Find Low</button>
+        <button id="nl-high" class="nl-btn">Find High</button>
+        <button id="nl-ff" class="nl-btn nl-ff">1x</button>
         <input id="nl-goto-input" class="hidden" type="text" inputmode="numeric" placeholder="#" autocomplete="off" />
       </div>
 
