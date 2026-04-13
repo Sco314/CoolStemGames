@@ -66,13 +66,8 @@ export function updateCamera() {
 export function autoFrame() {
   const { center, radius } = getBounds();
   const fov = camera.fov * Math.PI / 180;
-  const desiredDist = radius / Math.sin(fov / 2) * 1.2;
-  const currentDist = camera.position.distanceTo(controls.target);
-
-  // Only zoom out, never zoom in automatically
-  if (desiredDist > currentDist) {
-    flyTo(center, desiredDist);
-  }
+  const desiredDist = radius / Math.sin(fov / 2) * 1.8;
+  flyTo(center, Math.max(desiredDist, CAMERA_INITIAL_DISTANCE));
 }
 
 /**

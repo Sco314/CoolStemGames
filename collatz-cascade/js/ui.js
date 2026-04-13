@@ -148,6 +148,12 @@ export function initUI(onSubmit) {
 
   btnRecenter.addEventListener('click', () => recenter());
 
+  // Menu toggle (hamburger)
+  const modeSelector = document.getElementById('mode-selector');
+  document.getElementById('btn-menu').addEventListener('click', () => {
+    modeSelector.classList.toggle('collapsed');
+  });
+
   // Mode selector
   const modeBtns = document.querySelectorAll('.mode-btn');
   const stoppingSubs = document.getElementById('stopping-subs');
@@ -178,6 +184,7 @@ export function initUI(onSubmit) {
     btn.addEventListener('click', () => {
       for (const b of modeBtns) b.classList.remove('active');
       btn.classList.add('active');
+      modeSelector.classList.add('collapsed'); // auto-close menu
 
       const mode = btn.dataset.mode;
       if (mode === 'numberline') {
