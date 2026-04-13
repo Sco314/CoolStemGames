@@ -76,12 +76,35 @@ export function initUI(onSubmit) {
 
   // Mode selector
   const modeBtns = document.querySelectorAll('.mode-btn');
+  const stoppingSubs = document.getElementById('stopping-subs');
+  const subBtns = document.querySelectorAll('.sub-btn');
+
   for (const btn of modeBtns) {
     btn.addEventListener('click', () => {
       for (const b of modeBtns) b.classList.remove('active');
       btn.classList.add('active');
+
+      const mode = btn.dataset.mode;
+      if (mode === 'stopping') {
+        // Show sub-modes, activate whichever sub-btn is currently active
+        stoppingSubs.classList.remove('hidden');
+        const activeSub = stoppingSubs.querySelector('.sub-btn.active');
+        setMode(activeSub ? activeSub.dataset.mode : 'stopping');
+      } else {
+        // Hide sub-modes for non-stopping modes
+        stoppingSubs.classList.add('hidden');
+        setMode(mode);
+      }
+      setTimeout(() => autoFrame(), 800);
+    });
+  }
+
+  // Stopping Time sub-mode buttons
+  for (const btn of subBtns) {
+    btn.addEventListener('click', () => {
+      for (const b of subBtns) b.classList.remove('active');
+      btn.classList.add('active');
       setMode(btn.dataset.mode);
-      // Re-frame after transition starts
       setTimeout(() => autoFrame(), 800);
     });
   }

@@ -32,7 +32,7 @@ let settled = true;
 let currentMode = 'particles';
 const MODE_TRANSITION_SPEED = 0.04;  // lerp factor per frame toward targets
 
-export const MODES = ['particles', 'value', 'parity', 'stopping'];
+export const MODES = ['particles', 'value', 'parity', 'stopping', 'stopping-value', 'stopping-parity', 'stopping-tree'];
 
 export function getMode() { return currentMode; }
 
@@ -257,15 +257,23 @@ function updateEdgeColors(edge) {
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)); // ~137.5°
 
 function computeTargets(mode) {
+  // Tree sub-mode needs a pre-pass to compute arc assignments
+  if (mode === 'stopping-tree') {
+    computeTreeArcs();
+  }
+
   for (const node of nodes.values()) {
     if (node.value === 1) {
       node.target = new THREE.Vector3(0, 0, 0);
       continue;
     }
     switch (mode) {
-      case 'value':    node.target = targetValue(node); break;
-      case 'parity':   node.target = targetParity(node); break;
-      case 'stopping': node.target = targetStopping(node); break;
+      case 'value':          node.target = targetValue(node); break;
+      case 'parity':         node.target = targetParity(node); break;
+      case 'stopping':       node.target = targetStopping(node); break;
+      case 'stopping-value': node.target = targetStoppingValue(node); break;
+      case 'stopping-parity':node.target = targetStoppingParity(node); break;
+      case 'stopping-tree':  node.target = targetStoppingTree(node); break;
     }
   }
 }
@@ -319,6 +327,126 @@ function targetStopping(node) {
   const z = Math.sin(angle) * ringRadius;
   const y = st * 0.3;  // gentle rise so rings separate in 3D
   return new THREE.Vector3(x, y, z);
+}
+
+/**
+ * Sub-mode: Stopping Time + Value angle
+ * Same rings as stopping time, but angle = log2(value) normalized to [0, 2π].
+ * Small numbers cluster on one side of each ring, large numbers on the other.
+ * Both distance AND angle now encode real math.
+ */
+function targetStoppingValue(node) {
+  const st = node.stoppingTime;
+  const ringRadius = st * 0.8 + 0.5;
+  // Angle from log2(value), scaled so the full range of values in the graph
+  // spans roughly 0 to 2π. Using log2 keeps it readable.
+  const maxLog = Math.log2(getMaxValueInGraph() || 2);
+  const angle = (Math.log2(node.value) / maxLog) * Math.PI * 2;
+  const x = Math.cos(angle) * ringRadius;
+  const z = Math.sin(angle) * ringRadius;
+  const y = st * 0.3;
+  return new THREE.Vector3(x, y, z);
+}
+
+/**
+ * Sub-mode: Stopping Time + Parity angle
+ * Even nodes on the left semicircle (π to 2π), odd on the right (0 to π).
+ * Within each semicircle, spread by golden angle.
+ * Shows the even/odd split on every ring.
+ */
+function targetStoppingParity(node) {
+  const st = node.stoppingTime;
+  const ringRadius = st * 0.8 + 0.5;
+  const even = node.value % 2 === 0;
+  // Map into a semicircle: even = [π, 2π], odd = [0, π]
+  const baseAngle = even ? Math.PI : 0;
+  // Spread within the semicircle using golden angle, but constrained to π range
+  const withinHalf = ((node.value * GOLDEN_ANGLE) % Math.PI + Math.PI) % Math.PI;
+  const angle = baseAngle + withinHalf;
+  const x = Math.cos(angle) * ringRadius;
+  const z = Math.sin(angle) * ringRadius;
+  const y = st * 0.3;
+  return new THREE.Vector3(x, y, z);
+}
+
+/**
+ * Sub-mode: Stopping Time + Tree Position angle
+ * Angle is inherited from parent in the Collatz tree (sunburst layout).
+ * Node 1 owns the full circle [0, 2π]. Each parent divides its arc
+ * among its children. The result is a radial tree where connected
+ * nodes always sit in the same angular wedge.
+ */
+
+// Pre-computed arc assignments: value → { arcStart, arcEnd }
+const treeArcs = new Map();
+
+function computeTreeArcs() {
+  treeArcs.clear();
+  treeArcs.set(1, { arcStart: 0, arcEnd: Math.PI * 2 });
+
+  // Build reverse Collatz tree: for each node, find its children
+  // (nodes whose Collatz successor is this node)
+  const children = new Map(); // parent value → [child values]
+  for (const node of nodes.values()) {
+    if (node.value === 1) continue;
+    // Parent in the tree = this node's Collatz successor (next step toward 1)
+    const parent = findCollatzSuccessor(node.value);
+    if (!children.has(parent)) children.set(parent, []);
+    children.get(parent).push(node.value);
+  }
+
+  // BFS from node 1, assigning arcs
+  const queue = [1];
+  while (queue.length > 0) {
+    const parentVal = queue.shift();
+    const parentArc = treeArcs.get(parentVal);
+    if (!parentArc) continue;
+
+    const kids = children.get(parentVal);
+    if (!kids || kids.length === 0) continue;
+
+    // Sort children for deterministic layout (smaller values first)
+    kids.sort((a, b) => a - b);
+
+    // Divide the parent's arc among children
+    const arcWidth = parentArc.arcEnd - parentArc.arcStart;
+    const childArc = arcWidth / kids.length;
+
+    for (let i = 0; i < kids.length; i++) {
+      const start = parentArc.arcStart + i * childArc;
+      treeArcs.set(kids[i], { arcStart: start, arcEnd: start + childArc });
+      queue.push(kids[i]);
+    }
+  }
+}
+
+// Find the Collatz successor of a value (next step toward 1)
+function findCollatzSuccessor(value) {
+  if (value === 1) return 1;
+  return value % 2 === 0 ? value / 2 : 3 * value + 1;
+}
+
+function targetStoppingTree(node) {
+  const st = node.stoppingTime;
+  const ringRadius = st * 0.8 + 0.5;
+  const arc = treeArcs.get(node.value);
+  // Place at the midpoint of the arc
+  const angle = arc
+    ? (arc.arcStart + arc.arcEnd) / 2
+    : node.value * GOLDEN_ANGLE; // fallback
+  const x = Math.cos(angle) * ringRadius;
+  const z = Math.sin(angle) * ringRadius;
+  const y = st * 0.3;
+  return new THREE.Vector3(x, y, z);
+}
+
+// Helper: find max value among all nodes in graph
+function getMaxValueInGraph() {
+  let max = 1;
+  for (const node of nodes.values()) {
+    if (node.value > max) max = node.value;
+  }
+  return max;
 }
 
 // ═══════════════════════════════════════════════════════════
