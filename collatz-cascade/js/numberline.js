@@ -29,13 +29,13 @@ const PAUSE_DURATION = 0.5;      // pause on collision (half second)
 const ZOOM_IN_START = 0.7;       // progress fraction when zoom-in begins
 const EXTRA_CYCLES = 2;          // repeat 4→2→1 this many times
 
-// Bounce animation during pause
-const BOUNCE_HEIGHT = 0.4;       // max bounce height in world units
-const BOUNCE_FREQ = 8;           // bounces per second
+// Bounce animation during pause: single dramatic upward hop
+const BOUNCE_HEIGHT = 1.5;       // max height of the bounce arc
 
 // ── State ────────────────────────────────────────────────
 let nlGroup = null;
 let lineObj = null;
+let scaleLabels = [];            // array of sprite labels at major ticks
 let orbs = new Map();
 let operatorBall = null;
 let operatorLight = null;
@@ -228,9 +228,11 @@ export function updateNumberLine(dt) {
     pauseTimer -= effectiveDt;
     pauseElapsed += effectiveDt;
 
-    // Bounce animation: ball hops on the orb while paused
-    const bounceT = pauseElapsed * BOUNCE_FREQ;
-    const bounceY = Math.abs(Math.sin(bounceT * Math.PI)) * BOUNCE_HEIGHT;
+    // Single dramatic upward bounce: goes up and comes back in one arc
+    // t goes from 0 → 1 over the pause duration
+    const t = Math.min(1, pauseElapsed / PAUSE_DURATION);
+    // sin(t * π) = parabolic arc: 0 → 1 → 0
+    const bounceY = Math.sin(t * Math.PI) * BOUNCE_HEIGHT;
     operatorBall.position.y = pauseOrbY + OPERATOR_RADIUS + bounceY;
 
     if (pauseTimer <= 0) {
@@ -419,28 +421,67 @@ function rebuildLine() {
     tickMarks.geometry.dispose();
     tickMarks.material.dispose();
   }
+  for (const sprite of scaleLabels) {
+    nlGroup.remove(sprite);
+    sprite.material.map?.dispose();
+    sprite.material.dispose();
+  }
+  scaleLabels = [];
 
-  const lineGeo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(0, LINE_Y, 0),
-    new THREE.Vector3(maxOnLine * SPACING + SPACING, LINE_Y, 0),
-  ]);
-  const lineMat = new THREE.LineBasicMaterial({ color: 0x334466, transparent: true, opacity: 0.5 });
-  lineObj = new THREE.Line(lineGeo, lineMat);
+  // Main axis line: brighter and uses a thin flat box so it's visible at any zoom
+  const lineLength = maxOnLine * SPACING + SPACING;
+  const boxGeo = new THREE.BoxGeometry(lineLength, 0.06, 0.06);
+  const boxMat = new THREE.MeshBasicMaterial({ color: 0x5577aa, transparent: true, opacity: 0.8 });
+  lineObj = new THREE.Mesh(boxGeo, boxMat);
+  lineObj.position.set(lineLength / 2, LINE_Y, 0);
   nlGroup.add(lineObj);
 
+  // Tick marks and scale labels
   const interval = tickInterval(maxOnLine);
   const tickPoints = [];
+  const tickSize = Math.max(0.2, interval * SPACING * 0.1);
   for (let i = 0; i <= maxOnLine; i += interval) {
     const x = i * SPACING;
-    tickPoints.push(new THREE.Vector3(x, LINE_Y - 0.08, 0));
-    tickPoints.push(new THREE.Vector3(x, LINE_Y + 0.08, 0));
+    tickPoints.push(new THREE.Vector3(x, LINE_Y - tickSize, 0));
+    tickPoints.push(new THREE.Vector3(x, LINE_Y + tickSize, 0));
+
+    // Scale label below the tick — always visible via large sprite
+    if (i > 0) {
+      const labelSprite = makeScaleLabel(i, tickSize);
+      labelSprite.position.set(x, LINE_Y - tickSize * 2.5, 0);
+      nlGroup.add(labelSprite);
+      scaleLabels.push(labelSprite);
+    }
   }
   if (tickPoints.length > 0) {
     const tickGeo = new THREE.BufferGeometry().setFromPoints(tickPoints);
-    const tickMat = new THREE.LineBasicMaterial({ color: 0x334466, transparent: true, opacity: 0.3 });
+    const tickMat = new THREE.LineBasicMaterial({ color: 0x5577aa, transparent: true, opacity: 0.7 });
     tickMarks = new THREE.LineSegments(tickGeo, tickMat);
     nlGroup.add(tickMarks);
   }
+}
+
+// Scale label: scales with tick interval so it's readable at any zoom
+function makeScaleLabel(value, tickSize) {
+  const text = formatValue(value);
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#889abb';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 36px -apple-system, sans-serif';
+  ctx.fillText(text, 128, 32);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  // Scale proportional to tick interval so label stays proportional to the line section
+  const labelScale = Math.max(1.0, tickSize * 6);
+  sprite.scale.set(labelScale * 2, labelScale * 0.5, 1);
+  sprite.renderOrder = 2;
+  return sprite;
 }
 
 function tickInterval(max) {
