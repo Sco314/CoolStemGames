@@ -24,23 +24,23 @@
       <header id="top-bar">
         <a href="/" class="back-link">&larr; CoolStemGames</a>
         <span class="app-title">Collatz Cascade</span>
-        <button id="btn-menu" class="icon-btn" title="Toggle mode menu">&#9776;</button>
         <button id="btn-recenter" class="icon-btn" title="Recenter camera">&#8634;</button>
       </header>
 
-      <nav id="mode-selector" class="collapsed">
+      <nav id="mode-selector">
         <button class="mode-btn active" data-mode="particles">Particles</button>
         <button class="mode-btn" data-mode="value">Value</button>
         <button class="mode-btn" data-mode="parity">Parity</button>
-        <button class="mode-btn" data-mode="stopping">Stopping Time</button>
-        <div id="stopping-subs" class="sub-modes hidden">
-          <button class="sub-btn active" data-mode="stopping">Scatter</button>
-          <button class="sub-btn" data-mode="stopping-value">By Value</button>
-          <button class="sub-btn" data-mode="stopping-parity">By Parity</button>
-          <button class="sub-btn" data-mode="stopping-tree">By Tree</button>
-        </div>
-        <button class="mode-btn" data-mode="numberline">Number Line</button>
+        <button class="mode-btn" data-mode="stopping">Stopping</button>
+        <button class="mode-btn" data-mode="numberline">Num Line</button>
       </nav>
+
+      <div id="stopping-subs" class="sub-modes hidden">
+        <button class="sub-btn active" data-mode="stopping">Scatter</button>
+        <button class="sub-btn" data-mode="stopping-value">By Value</button>
+        <button class="sub-btn" data-mode="stopping-parity">By Parity</button>
+        <button class="sub-btn" data-mode="stopping-tree">By Tree</button>
+      </div>
 
       <!-- Math display (right side, persistent until next collision) -->
       <div id="math-bar" class="hidden">
