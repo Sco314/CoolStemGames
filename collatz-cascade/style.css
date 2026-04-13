@@ -354,8 +354,13 @@ html, body {
 @media (max-width: 600px) {
   #recent-panel { display: none; }
   #legend { display: none; }
-  #num-input, #fill-input { width: 90px; font-size: 14px; padding: 8px 10px; }
-  #btn-go, #btn-fill { padding: 8px 12px; font-size: 12px; }
-  #input-area { gap: 4px; }
-  .input-sep { margin: 4px 0; }
+  #input-area {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    max-width: 280px;
+  }
+  .input-sep { display: none; }
+  #num-input, #fill-input { width: 120px; font-size: 14px; padding: 8px 10px; }
+  #btn-go, #btn-fill { padding: 8px 14px; font-size: 13px; }
 }
