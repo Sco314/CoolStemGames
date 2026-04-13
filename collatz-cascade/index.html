@@ -42,12 +42,12 @@
         <button class="mode-btn" data-mode="numberline" title="Animated number line">Number Line</button>
       </nav>
 
-      <!-- Math overlay for number line mode -->
-      <div id="math-overlay" class="hidden">
-        <div id="math-label"></div>
-        <div id="math-rule"></div>
-        <div id="math-operation"></div>
-        <div id="math-result"></div>
+      <!-- Math display bar (bottom, persistent until next collision) -->
+      <div id="math-bar" class="hidden">
+        <span id="math-label"></span>
+        <span id="math-rule"></span>
+        <span id="math-operation"></span>
+        <span id="math-result"></span>
       </div>
 
       <!-- Number line controls (bottom-left) -->
@@ -56,6 +56,7 @@
         <button id="nl-goto" class="nl-btn" title="Zoom to a specific number">Go To #</button>
         <button id="nl-low" class="nl-btn" title="Find lowest un-Collatzed number">Find Low</button>
         <button id="nl-high" class="nl-btn" title="Find highest un-Collatzed number">Find High</button>
+        <button id="nl-ff" class="nl-btn nl-ff" title="Speed up animation">1x</button>
         <input id="nl-goto-input" class="hidden" type="text" inputmode="numeric" placeholder="#" autocomplete="off" />
       </div>
 

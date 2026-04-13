@@ -1,10 +1,6 @@
 /**
  * Number Line mode: horizontal number line with animated operator ball
  * that bounces through Collatz sequences.
- *
- * Numbers sit on a line going right. An operator sphere launches toward
- * a target, shows the math (Even/Odd + operation), then missiles to the
- * next value. Orbs turn blue when visited. Camera follows the ball.
  */
 
 import * as THREE from 'three';
@@ -15,8 +11,11 @@ const SPACING = 0.3;          // world units per integer
 const ORB_RADIUS = 0.12;
 const OPERATOR_RADIUS = 0.18;
 const LINE_Y = 0;
-const ARC_HEIGHT_FACTOR = 0.3; // arc height = travel distance * this
 const LABEL_SCALE = 0.45;
+
+// Arc: minimum height so close numbers still arc visibly
+const ARC_MIN_HEIGHT = 0.8;
+const ARC_HEIGHT_FACTOR = 0.3;
 
 // Colors
 const ORB_COLOR_DEFAULT = new THREE.Color(0.85, 0.35, 0.15);  // reddish orange
@@ -24,36 +23,38 @@ const ORB_COLOR_VISITED = new THREE.Color(0.2, 0.45, 0.9);    // complement blue
 const OPERATOR_COLOR = new THREE.Color(1, 1, 1);
 
 // Timing (seconds)
-const PAUSE_DURATION = 1.8;       // pause on collision to show math
-const TRAVEL_BASE_SPEED = 8.0;    // units per second base
-const FAST_MULTIPLIER = 4.0;      // speed multiplier for 20+ step sequences
-const ZOOM_IN_START = 0.7;        // progress fraction when zoom-in begins
-const STEPS_FAST_THRESHOLD = 20;
-const EXTRA_CYCLES = 2;           // repeat 4→2→1 this many times
+const TRAVEL_MIN = 2.0;          // minimum travel time
+const TRAVEL_MAX = 4.0;          // maximum travel time
+const PAUSE_DURATION = 1.0;      // pause on collision
+const ZOOM_IN_START = 0.7;       // progress fraction when zoom-in begins
+const EXTRA_CYCLES = 2;          // repeat 4→2→1 this many times
 
 // ── State ────────────────────────────────────────────────
 let nlGroup = null;
 let lineObj = null;
-let orbs = new Map();         // value → { mesh, label, visited }
+let orbs = new Map();
 let operatorBall = null;
 let operatorLight = null;
 let tickMarks = null;
 
 // Sequence playback
-let sequence = [];            // full sequence including extra 4→2→1 cycles
+let sequence = [];
 let stepIndex = 0;
 let playState = 'idle';       // idle | traveling | paused | complete
-let travelProgress = 0;       // 0→1 along current arc
+let travelProgress = 0;
+let travelDuration = 2;       // computed per-arc
 let pauseTimer = 0;
-let speedMultiplier = 1;
+
+// User-controlled speed multiplier (1x, 2x, 4x, 8x)
+let userSpeed = 1;
 
 // Positions for current travel arc
 let arcStart = new THREE.Vector3();
 let arcEnd = new THREE.Vector3();
 let arcControl = new THREE.Vector3();
 
-// Display data for math overlay
-let mathDisplay = null;       // { value, isEven, operation, result } or null
+// Display data for math overlay — persists until next number reached
+let mathDisplay = null;
 
 // Visited tracking across all runs
 const allVisited = new Set();
@@ -69,7 +70,6 @@ export function initNumberLine(scene) {
   nlGroup.visible = false;
   scene.add(nlGroup);
 
-  // Operator ball
   const geo = new THREE.SphereGeometry(OPERATOR_RADIUS, 20, 14);
   const mat = new THREE.MeshStandardMaterial({
     color: OPERATOR_COLOR,
@@ -82,7 +82,6 @@ export function initNumberLine(scene) {
   operatorBall.visible = false;
   nlGroup.add(operatorBall);
 
-  // Point light on operator ball
   operatorLight = new THREE.PointLight(0xffeedd, 1.0, 8, 2);
   operatorBall.add(operatorLight);
 }
@@ -104,6 +103,9 @@ export function isNumberLineActive() { return active; }
 export function getMathDisplay() { return mathDisplay; }
 export function getPlayState() { return playState; }
 
+export function setSpeed(mult) { userSpeed = mult; }
+export function getSpeed() { return userSpeed; }
+
 /**
  * Format a number for display. Scientific notation above 999,999.
  */
@@ -116,18 +118,16 @@ export function formatValue(n) {
  * Start a Collatz sequence from number n on the number line.
  */
 export function startSequence(n) {
-  // Compute sequence
   const values = collatzValues(n);
 
-  // Add extra 4→2→1 cycles
+  // Build full sequence with extra 4→2→1 cycles
   sequence = [...values];
   for (let c = 0; c < EXTRA_CYCLES; c++) {
     sequence.push(4, 2, 1);
   }
 
-  // Determine speed
-  const baseSteps = values.length - 1;
-  speedMultiplier = baseSteps > STEPS_FAST_THRESHOLD ? FAST_MULTIPLIER : 1;
+  // Reset user speed
+  userSpeed = 1;
 
   // Find max value to size the line
   let newMax = maxOnLine;
@@ -135,67 +135,56 @@ export function startSequence(n) {
     if (v > newMax) newMax = v;
   }
 
-  // Rebuild line if range expanded
   if (newMax > maxOnLine) {
     maxOnLine = newMax;
     rebuildLine();
   }
 
-  // Ensure orbs exist for all sequence values
   for (const v of sequence) {
     ensureOrb(v);
   }
 
   // Reset playback
   stepIndex = 0;
-  playState = 'idle';
   mathDisplay = null;
 
-  // Launch: operator starts from below the first target
+  // Launch from below the first target
   const firstPos = orbPosition(sequence[0]);
   operatorBall.position.set(firstPos.x, firstPos.y - 4, 2);
   operatorBall.visible = true;
 
-  // Set up first travel arc (launch from below)
-  setupArc(
-    operatorBall.position.clone(),
-    firstPos,
-    1.5 // exaggerated arc for launch
-  );
+  setupArc(operatorBall.position.clone(), firstPos);
   travelProgress = 0;
   playState = 'traveling';
 }
 
 /**
  * Update the number line each frame. Returns desired camera target info.
- * @returns {{ position: Vector3, lookAt: Vector3, fov: number } | null}
  */
 export function updateNumberLine(dt) {
   if (!active || playState === 'idle' || playState === 'complete') return null;
 
-  const speed = TRAVEL_BASE_SPEED * speedMultiplier;
+  const effectiveDt = dt * userSpeed;
 
   if (playState === 'traveling') {
-    // Advance along arc
-    const dist = arcStart.distanceTo(arcEnd);
-    const travelTime = Math.max(dist / speed, 0.3);
-    travelProgress += dt / travelTime;
+    travelProgress += effectiveDt / travelDuration;
 
     if (travelProgress >= 1) {
       travelProgress = 1;
-      // Snap to target
       operatorBall.position.copy(arcEnd);
 
-      // Mark visited, change color
+      // Mark visited
       const targetVal = sequence[stepIndex];
       markVisited(targetVal);
 
-      // Build math display
+      // Build math display — stays visible until next collision
       if (stepIndex < sequence.length - 1) {
         const val = targetVal;
         const isEven = val % 2 === 0;
         const next = sequence[stepIndex + 1];
-        const op = isEven ? `${formatValue(val)} ÷ 2` : `${formatValue(val)} × 3 + 1`;
+        const op = isEven
+          ? `${formatValue(val)} ÷ 2`
+          : `${formatValue(val)} × 3 + 1`;
         mathDisplay = {
           value: val,
           isEven,
@@ -205,14 +194,16 @@ export function updateNumberLine(dt) {
           result: formatValue(next),
         };
       } else {
-        mathDisplay = { value: targetVal, isEven: false, label: 'END', rule: '', operation: '', result: '' };
+        mathDisplay = {
+          value: targetVal, isEven: false,
+          label: 'DONE', rule: '', operation: '', result: '',
+        };
       }
 
-      // Pause
       playState = 'paused';
-      pauseTimer = speedMultiplier > 1 ? PAUSE_DURATION * 0.4 : PAUSE_DURATION;
+      pauseTimer = PAUSE_DURATION;
     } else {
-      // Interpolate along bezier arc
+      // Quadratic bezier interpolation
       const t = travelProgress;
       const invT = 1 - t;
       operatorBall.position.set(
@@ -224,10 +215,11 @@ export function updateNumberLine(dt) {
   }
 
   if (playState === 'paused') {
-    pauseTimer -= dt;
+    pauseTimer -= effectiveDt;
     if (pauseTimer <= 0) {
       stepIndex++;
-      mathDisplay = null;
+
+      // NOTE: mathDisplay stays visible — it persists until next collision
 
       if (stepIndex >= sequence.length - 1) {
         playState = 'complete';
@@ -237,7 +229,7 @@ export function updateNumberLine(dt) {
       // Set up next arc
       const from = orbPosition(sequence[stepIndex]);
       const to = orbPosition(sequence[stepIndex + 1]);
-      setupArc(from, to, ARC_HEIGHT_FACTOR);
+      setupArc(from, to);
       travelProgress = 0;
       playState = 'traveling';
     }
@@ -247,18 +239,15 @@ export function updateNumberLine(dt) {
 }
 
 /**
- * Get camera target for the current state.
+ * Camera target for the current state.
  */
 function getCameraTarget() {
   const ballPos = operatorBall.position.clone();
 
   if (playState === 'traveling') {
-    // During travel: zoom out to see both start and end
-    const mid = arcStart.clone().add(arcEnd).multiplyScalar(0.5);
     const dist = arcStart.distanceTo(arcEnd);
     const zoomOut = Math.max(3, dist * 0.8);
 
-    // As we approach the target (last 30%), start zooming in
     let camDist = zoomOut;
     if (travelProgress > ZOOM_IN_START) {
       const zoomInT = (travelProgress - ZOOM_IN_START) / (1 - ZOOM_IN_START);
@@ -272,14 +261,12 @@ function getCameraTarget() {
   }
 
   if (playState === 'paused') {
-    // Zoomed in on the target
     return {
       position: new THREE.Vector3(ballPos.x + 0.5, ballPos.y + 1.5, 3),
       lookAt: ballPos,
     };
   }
 
-  // Default / complete
   return {
     position: new THREE.Vector3(ballPos.x, ballPos.y + 3, 8),
     lookAt: ballPos,
@@ -322,12 +309,26 @@ function orbPosition(value) {
   return new THREE.Vector3(value * SPACING, LINE_Y, 0);
 }
 
-function setupArc(from, to, heightFactor) {
+/**
+ * Set up a bezier arc from → to.
+ * Arc height: max(ARC_MIN_HEIGHT, distance * ARC_HEIGHT_FACTOR).
+ * Close numbers get a tall arc relative to distance so the ball visibly rises.
+ * Travel time: clamped between TRAVEL_MIN and TRAVEL_MAX.
+ */
+function setupArc(from, to) {
   arcStart.copy(from);
   arcEnd.copy(to);
-  const mid = from.clone().add(to).multiplyScalar(0.5);
   const dist = from.distanceTo(to);
-  arcControl.set(mid.x, mid.y + dist * heightFactor, mid.z);
+
+  // Arc height: minimum ensures close numbers still arc up
+  const height = Math.max(ARC_MIN_HEIGHT, dist * ARC_HEIGHT_FACTOR);
+  const mid = from.clone().add(to).multiplyScalar(0.5);
+  arcControl.set(mid.x, mid.y + height, mid.z);
+
+  // Travel time: proportional to distance, clamped 2s–4s
+  // Short hops take 2s, long travels take up to 4s
+  const rawTime = 2.0 + (dist / (maxOnLine * SPACING || 1)) * 2.0;
+  travelDuration = Math.max(TRAVEL_MIN, Math.min(TRAVEL_MAX, rawTime));
 }
 
 function markVisited(value) {
@@ -360,7 +361,6 @@ function ensureOrb(value) {
   mesh.userData.collatzValue = value;
   nlGroup.add(mesh);
 
-  // Label
   const label = makeLabel(value);
   label.position.set(0, ORB_RADIUS + 0.15, 0);
   mesh.add(label);
@@ -392,7 +392,6 @@ function makeLabel(value) {
 }
 
 function rebuildLine() {
-  // Remove old line
   if (lineObj) {
     nlGroup.remove(lineObj);
     lineObj.geometry.dispose();
@@ -404,7 +403,6 @@ function rebuildLine() {
     tickMarks.material.dispose();
   }
 
-  // Main axis line
   const lineGeo = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(0, LINE_Y, 0),
     new THREE.Vector3(maxOnLine * SPACING + SPACING, LINE_Y, 0),
@@ -413,7 +411,6 @@ function rebuildLine() {
   lineObj = new THREE.Line(lineGeo, lineMat);
   nlGroup.add(lineObj);
 
-  // Tick marks at regular intervals
   const interval = tickInterval(maxOnLine);
   const tickPoints = [];
   for (let i = 0; i <= maxOnLine; i += interval) {
