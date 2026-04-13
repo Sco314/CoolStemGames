@@ -55,8 +55,8 @@ export const RECENT_MAX = 15;
 
 // ── Camera ───────────────────────────────────────────────
 export const CAMERA_NEAR = 0.1;
-export const CAMERA_FAR = 500;
+export const CAMERA_FAR = 50000;
 export const CAMERA_FOV = 55;
 export const CAMERA_INITIAL_DISTANCE = 18;
 export const CAMERA_MIN_DISTANCE = 4;
-export const CAMERA_MAX_DISTANCE = 200;
+export const CAMERA_MAX_DISTANCE = 10000;
