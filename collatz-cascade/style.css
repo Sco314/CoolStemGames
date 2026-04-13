@@ -148,6 +148,85 @@ html, body {
   font-weight: 600;
 }
 
+/* ── Math Overlay (number line mode) ───────────────────── */
+#math-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  background: rgba(11,16,32,0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 16px 28px;
+  min-width: 200px;
+}
+#math-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+#math-label.even { color: #4a9aff; }
+#math-label.odd  { color: #ff6b4a; }
+#math-rule {
+  font-size: 11px;
+  color: #667799;
+  margin-bottom: 10px;
+}
+#math-operation {
+  font-size: 20px;
+  font-weight: 600;
+  color: #e0e6f0;
+  margin-bottom: 4px;
+}
+#math-result {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffd866;
+}
+
+/* ── Number Line Controls (bottom-left) ───────────────── */
+#nl-controls {
+  position: absolute;
+  bottom: 24px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nl-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(11,16,32,0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #8899bb;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s, color 0.2s;
+  -webkit-tap-highlight-color: rgba(255,255,255,0.1);
+}
+.nl-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #c0d0f0;
+}
+#nl-goto-input {
+  width: 80px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  background: rgba(11,16,32,0.9);
+  color: #e0e6f0;
+  font-size: 14px;
+  outline: none;
+}
+
 /* ── Input Area ─────────────────────────────────────────── */
 #input-area {
   position: absolute;

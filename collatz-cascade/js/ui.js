@@ -4,10 +4,15 @@
 
 import * as THREE from 'three';
 import { stoppingTime } from './collatz.js';
-import { colorHexForStoppingTime, getNodes, getNodePosition, setMode } from './graph.js';
+import { colorHexForStoppingTime, getNodes, getNodePosition, setMode, getGroup } from './graph.js';
 import { pulseAnchor } from './animate.js';
-import { autoFrame, flyToNode, recenter } from './camera.js';
+import { autoFrame, flyToNode, recenter, getCamera, getControls } from './camera.js';
 import { INPUT_MAX, RECENT_MAX } from './constants.js';
+import {
+  showNumberLine, hideNumberLine, isNumberLineActive, startSequence,
+  getMathDisplay, getPlayState, zoomToExtents, zoomToNumber,
+  findLowestUnvisited, findHighestUnvisited, formatValue,
+} from './numberline.js';
 
 // ── DOM refs ─────────────────────────────────────────────
 const input = document.getElementById('num-input');
@@ -21,6 +26,7 @@ const legend = document.getElementById('legend');
 const stepInfo = document.getElementById('step-info');
 
 const recentEntries = []; // { value, stoppingTime, li }
+let numberLineMode = false; // module-level flag for numberline mode
 
 // ── Tooltip state ────────────────────────────────────────
 let hoveredValue = null;
@@ -43,6 +49,17 @@ export function initUI(onSubmit) {
       showError('Enter a positive integer.');
       return;
     }
+
+    // Number line mode: no upper limit, start sequence
+    if (numberLineMode) {
+      if (n === 1) { input.value = ''; return; }
+      input.value = '';
+      clearError();
+      startSequence(n);
+      return;
+    }
+
+    // Graph mode: enforce limit
     if (n > INPUT_MAX) {
       showError(`Keep it under ${INPUT_MAX.toLocaleString()} so the layout stays readable.`);
       return;
@@ -134,6 +151,27 @@ export function initUI(onSubmit) {
   const modeBtns = document.querySelectorAll('.mode-btn');
   const stoppingSubs = document.getElementById('stopping-subs');
   const subBtns = document.querySelectorAll('.sub-btn');
+  const nlControls = document.getElementById('nl-controls');
+  const mathOverlay = document.getElementById('math-overlay');
+  const graphGroup = getGroup();
+
+  function enterNumberLine() {
+    numberLineMode = true;
+    showNumberLine();
+    if (graphGroup) graphGroup.visible = false;
+    nlControls.classList.remove('hidden');
+    // Change input placeholder
+    input.placeholder = 'Enter number';
+  }
+
+  function exitNumberLine() {
+    numberLineMode = false;
+    hideNumberLine();
+    if (graphGroup) graphGroup.visible = true;
+    nlControls.classList.add('hidden');
+    mathOverlay.classList.add('hidden');
+    input.placeholder = 'Try 27';
+  }
 
   for (const btn of modeBtns) {
     btn.addEventListener('click', () => {
@@ -141,17 +179,21 @@ export function initUI(onSubmit) {
       btn.classList.add('active');
 
       const mode = btn.dataset.mode;
-      if (mode === 'stopping') {
-        // Show sub-modes, activate whichever sub-btn is currently active
-        stoppingSubs.classList.remove('hidden');
-        const activeSub = stoppingSubs.querySelector('.sub-btn.active');
-        setMode(activeSub ? activeSub.dataset.mode : 'stopping');
-      } else {
-        // Hide sub-modes for non-stopping modes
+      if (mode === 'numberline') {
         stoppingSubs.classList.add('hidden');
-        setMode(mode);
+        enterNumberLine();
+      } else {
+        if (numberLineMode) exitNumberLine();
+        if (mode === 'stopping') {
+          stoppingSubs.classList.remove('hidden');
+          const activeSub = stoppingSubs.querySelector('.sub-btn.active');
+          setMode(activeSub ? activeSub.dataset.mode : 'stopping');
+        } else {
+          stoppingSubs.classList.add('hidden');
+          setMode(mode);
+        }
+        setTimeout(() => autoFrame(), 800);
       }
-      setTimeout(() => autoFrame(), 800);
     });
   }
 
@@ -165,12 +207,71 @@ export function initUI(onSubmit) {
     });
   }
 
+  // ── Number line controls ─────────────────────────────────
+  const nlGotoInput = document.getElementById('nl-goto-input');
+  let gotoVisible = false;
+
+  document.getElementById('nl-extents').addEventListener('click', () => {
+    zoomToExtents(getCamera(), getControls());
+  });
+
+  document.getElementById('nl-goto').addEventListener('click', () => {
+    gotoVisible = !gotoVisible;
+    nlGotoInput.classList.toggle('hidden', !gotoVisible);
+    if (gotoVisible) nlGotoInput.focus();
+  });
+
+  nlGotoInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const n = parseInt(nlGotoInput.value.trim(), 10);
+      if (n > 0) {
+        zoomToNumber(n, getCamera(), getControls());
+        nlGotoInput.value = '';
+        nlGotoInput.classList.add('hidden');
+        gotoVisible = false;
+      }
+    }
+  });
+
+  document.getElementById('nl-low').addEventListener('click', () => {
+    const low = findLowestUnvisited();
+    if (low) zoomToNumber(low, getCamera(), getControls());
+  });
+
+  document.getElementById('nl-high').addEventListener('click', () => {
+    const high = findHighestUnvisited();
+    if (high) zoomToNumber(high, getCamera(), getControls());
+  });
+
+  // ── Override submit behavior for number line mode ────────
+
   // Mouse move for tooltip raycasting
   document.addEventListener('mousemove', (e) => {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     tooltipScreenPos = { x: e.clientX, y: e.clientY };
   });
+
+  // ── Math overlay update (called from render loop) ──────
+  // Exposed so main.js can call it, but we'll self-update via RAF
+  function updateMathOverlay() {
+    if (!numberLineMode) return;
+    const data = getMathDisplay();
+    if (data && data.label !== 'END') {
+      mathOverlay.classList.remove('hidden');
+      const labelEl = document.getElementById('math-label');
+      labelEl.textContent = data.label;
+      labelEl.className = data.isEven ? 'even' : 'odd';
+      document.getElementById('math-rule').textContent = data.rule;
+      document.getElementById('math-operation').textContent = data.operation;
+      document.getElementById('math-result').textContent = '= ' + data.result;
+    } else {
+      mathOverlay.classList.add('hidden');
+    }
+    requestAnimationFrame(updateMathOverlay);
+  }
+  requestAnimationFrame(updateMathOverlay);
+
 }
 
 let tooltipScreenPos = { x: 0, y: 0 };

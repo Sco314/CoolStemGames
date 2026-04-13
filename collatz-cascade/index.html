@@ -39,7 +39,25 @@
           <button class="sub-btn" data-mode="stopping-parity" title="Even left, odd right semicircles">By Parity</button>
           <button class="sub-btn" data-mode="stopping-tree" title="Angle inherited from tree parent">By Tree</button>
         </div>
+        <button class="mode-btn" data-mode="numberline" title="Animated number line">Number Line</button>
       </nav>
+
+      <!-- Math overlay for number line mode -->
+      <div id="math-overlay" class="hidden">
+        <div id="math-label"></div>
+        <div id="math-rule"></div>
+        <div id="math-operation"></div>
+        <div id="math-result"></div>
+      </div>
+
+      <!-- Number line controls (bottom-left) -->
+      <div id="nl-controls" class="hidden">
+        <button id="nl-extents" class="nl-btn" title="Zoom to see full number line">Extents</button>
+        <button id="nl-goto" class="nl-btn" title="Zoom to a specific number">Go To #</button>
+        <button id="nl-low" class="nl-btn" title="Find lowest un-Collatzed number">Find Low</button>
+        <button id="nl-high" class="nl-btn" title="Find highest un-Collatzed number">Find High</button>
+        <input id="nl-goto-input" class="hidden" type="text" inputmode="numeric" placeholder="#" autocomplete="off" />
+      </div>
 
       <div id="input-area">
         <input id="num-input" type="text" inputmode="numeric" placeholder="Try 27" autocomplete="off" />
