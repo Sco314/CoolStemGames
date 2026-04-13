@@ -33,6 +33,12 @@
         <button class="mode-btn" data-mode="value" title="Y = log₂(value)">Value</button>
         <button class="mode-btn" data-mode="parity" title="Even left, odd right">Parity</button>
         <button class="mode-btn" data-mode="stopping" title="Rings by stopping time">Stopping Time</button>
+        <div id="stopping-subs" class="sub-modes hidden">
+          <button class="sub-btn active" data-mode="stopping" title="Golden angle scatter">Scatter</button>
+          <button class="sub-btn" data-mode="stopping-value" title="Angle = log₂(value)">By Value</button>
+          <button class="sub-btn" data-mode="stopping-parity" title="Even left, odd right semicircles">By Parity</button>
+          <button class="sub-btn" data-mode="stopping-tree" title="Angle inherited from tree parent">By Tree</button>
+        </div>
       </nav>
 
       <div id="input-area">
