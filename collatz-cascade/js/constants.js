@@ -28,7 +28,7 @@ export const EDGE_OPACITY = 0.35;
 export const REPULSION_STRENGTH = 2.8;
 export const SPRING_LENGTH = 3.0;
 export const SPRING_STIFFNESS = 0.04;
-export const GRAVITY_STRENGTH = 0.002;
+export const GRAVITY_STRENGTH = 0.012;
 export const LAYOUT_DAMPING = 0.88;       // velocity damping per frame
 export const LAYOUT_MIN_VELOCITY = 0.001; // threshold to "settle"
 

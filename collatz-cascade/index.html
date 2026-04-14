@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>Collatz Cascade | Cool STEM Games</title>
     <meta name="description" content="Explore the Collatz conjecture as a living 3D graph. Type numbers and watch every path fall home to 1." />
     <meta name="theme-color" content="#0a0f1e" />
@@ -18,41 +18,43 @@
     </script>
   </head>
   <body>
-    <canvas id="scene"></canvas>
+    <!-- TOP: always visible -->
+    <header id="top-bar">
+      <a href="/" class="back-link">&larr; CoolStemGames</a>
+      <span class="app-title">Collatz Cascade</span>
+      <button id="btn-recenter" class="icon-btn" title="Recenter camera">&#8634;</button>
+    </header>
 
-    <div id="ui-root">
-      <header id="top-bar">
-        <a href="/" class="back-link">&larr; CoolStemGames</a>
-        <span class="app-title">Collatz Cascade</span>
-        <button id="btn-recenter" class="icon-btn" title="Recenter camera">&#8634;</button>
-      </header>
+    <nav id="mode-selector">
+      <button class="mode-btn active" data-mode="timeseries">Time Series</button>
+      <button class="mode-btn" data-mode="spiral">Spiral</button>
+      <button class="mode-btn" data-mode="numberline">Num Line</button>
+      <button class="mode-btn" data-mode="particles">Particles</button>
+      <button class="mode-btn" data-mode="value">Value</button>
+      <button class="mode-btn" data-mode="parity">Parity</button>
+      <button class="mode-btn" data-mode="stopping">Stopping</button>
+    </nav>
 
-      <nav id="mode-selector">
-        <button class="mode-btn active" data-mode="timeseries">Time Series</button>
-        <button class="mode-btn" data-mode="spiral">Spiral</button>
-        <button class="mode-btn" data-mode="numberline">Num Line</button>
-        <button class="mode-btn" data-mode="particles">Particles</button>
-        <button class="mode-btn" data-mode="value">Value</button>
-        <button class="mode-btn" data-mode="parity">Parity</button>
-        <button class="mode-btn" data-mode="stopping">Stopping</button>
-      </nav>
+    <div id="stopping-subs" class="sub-modes hidden">
+      <button class="sub-btn active" data-mode="stopping">Scatter</button>
+      <button class="sub-btn" data-mode="stopping-value">By Value</button>
+      <button class="sub-btn" data-mode="stopping-parity">By Parity</button>
+      <button class="sub-btn" data-mode="stopping-tree">By Tree</button>
+    </div>
 
-      <div id="stopping-subs" class="sub-modes hidden">
-        <button class="sub-btn active" data-mode="stopping">Scatter</button>
-        <button class="sub-btn" data-mode="stopping-value">By Value</button>
-        <button class="sub-btn" data-mode="stopping-parity">By Parity</button>
-        <button class="sub-btn" data-mode="stopping-tree">By Tree</button>
-      </div>
+    <!-- MIDDLE: the 3D canvas and any overlays that float above it -->
+    <main id="scene-wrap">
+      <canvas id="scene"></canvas>
 
-      <!-- Math display (right side, persistent until next collision) -->
+      <!-- Math display (number line mode) -->
       <div id="math-bar" class="hidden">
-        <div id="math-label"></div>
-        <div id="math-rule"></div>
-        <div id="math-operation"></div>
-        <div id="math-result"></div>
+        <span id="math-label"></span>
+        <span id="math-rule"></span>
+        <span id="math-operation"></span>
+        <span id="math-result"></span>
       </div>
 
-      <!-- Number line controls (bottom-left) -->
+      <!-- Number line controls -->
       <div id="nl-controls" class="hidden">
         <button id="nl-scale" class="nl-btn">Linear</button>
         <button id="nl-extents" class="nl-btn">Extents</button>
@@ -63,13 +65,34 @@
         <input id="nl-goto-input" class="hidden" type="text" inputmode="numeric" placeholder="#" autocomplete="off" />
       </div>
 
-      <!-- Clear/flip button for time series / spiral -->
+      <!-- Chart controls (time series + spiral) -->
       <div id="chart-controls" class="hidden">
         <button id="chart-clear" class="nl-btn">Clear</button>
         <button id="chart-flip" class="nl-btn ts-only">Flip X/Y</button>
       </div>
 
-      <!-- Time series progressive slider -->
+      <div id="tooltip" class="hidden"></div>
+      <div id="legend" class="hidden">
+        <div class="legend-bar"></div>
+        <div class="legend-labels">
+          <span>shallow</span>
+          <span>deep</span>
+        </div>
+      </div>
+
+      <aside id="recent-panel">
+        <h3>Recent</h3>
+        <ul id="recent-list"></ul>
+      </aside>
+
+      <div id="step-info" class="hidden">
+        <span id="step-value"></span>
+        <span id="step-detail"></span>
+      </div>
+    </main>
+
+    <!-- BOTTOM: always visible -->
+    <footer id="bottom-bar">
       <div id="ts-slider-wrap" class="hidden">
         <label for="ts-slider">Fill to: <span id="ts-slider-val">0</span></label>
         <input id="ts-slider" type="range" min="0" max="300" value="0" step="1" />
@@ -82,27 +105,7 @@
         <input id="fill-input" type="text" inputmode="numeric" placeholder="Fill 1–N" autocomplete="off" />
         <button id="btn-fill">Fill</button>
       </div>
-
-      <div id="step-info" class="hidden">
-        <span id="step-value"></span>
-        <span id="step-detail"></span>
-      </div>
-
-      <aside id="recent-panel">
-        <h3>Recent</h3>
-        <ul id="recent-list"></ul>
-      </aside>
-
-      <div id="tooltip" class="hidden"></div>
-
-      <div id="legend" class="hidden">
-        <div class="legend-bar"></div>
-        <div class="legend-labels">
-          <span>shallow</span>
-          <span>deep</span>
-        </div>
-      </div>
-    </div>
+    </footer>
 
     <script type="module" src="js/main.js"></script>
   </body>
