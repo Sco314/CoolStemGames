@@ -173,16 +173,21 @@ export function toggleFlip() {
 export function isFlipped() { return flipped; }
 
 // ── Visibility control for slider ───────────────────────
+// Hard cap to prevent WebGL OOM on mobile. Each TubeGeometry line uses
+// ~100-800KB of GPU memory depending on sequence length.
+const MAX_TIME_SERIES_LINES = 300;
+
 export function setVisibleMax(n) {
-  // Ensure sequences exist for 2..n
-  for (let i = 2; i <= n; i++) {
+  const capped = Math.min(n, MAX_TIME_SERIES_LINES);
+  // Ensure sequences exist for 2..capped
+  for (let i = 2; i <= capped; i++) {
     if (!sequences.some(s => s.startValue === i)) {
       addTimeSeriesNumber(i);
     }
   }
   // Show/hide based on threshold
   for (const seq of sequences) {
-    const visible = seq.startValue <= n;
+    const visible = seq.startValue <= capped;
     if (seq.mesh) seq.mesh.visible = visible;
     if (seq.label) seq.label.visible = visible;
   }
@@ -207,8 +212,8 @@ function rebuildLineFor(seq) {
   if (points.length < 2) return;
 
   const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.4);
-  const segments = Math.max(points.length * 3, 32);
-  const geo = new THREE.TubeGeometry(curve, segments, LINE_RADIUS, 8, false);
+  const segments = Math.min(Math.max(points.length * 2, 24), 300);
+  const geo = new THREE.TubeGeometry(curve, segments, LINE_RADIUS, 4, false);
 
   // Start with the mesh fully hidden, reveal via drawRange
   geo.setDrawRange(0, Math.floor(seq.drawProgress * geo.index.count));

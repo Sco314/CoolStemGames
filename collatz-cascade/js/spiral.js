@@ -163,8 +163,8 @@ export function getSpiralCameraTarget() {
 function buildMesh(seq) {
   if (seq.points.length < 2) return;
   const curve = new THREE.CatmullRomCurve3(seq.points, false, 'catmullrom', 0.3);
-  const segments = Math.max(seq.points.length * 3, 32);
-  const geo = new THREE.TubeGeometry(curve, segments, LINE_RADIUS, 6, false);
+  const segments = Math.min(Math.max(seq.points.length * 2, 24), 300);
+  const geo = new THREE.TubeGeometry(curve, segments, LINE_RADIUS, 4, false);
   geo.setDrawRange(0, 0);
 
   const mat = new THREE.MeshStandardMaterial({
