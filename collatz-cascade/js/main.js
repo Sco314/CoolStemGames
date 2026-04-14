@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { initGraph, layoutStep, updateAnchorPulse, isSettled, getGroup } from './graph.js';
 import { updateAnimations, hasActiveAnimations, addNumber } from './animate.js';
-import { initCamera, updateCamera, getCamera, getControls } from './camera.js';
+import { initCamera, updateCamera, getCamera, getControls, trackAutoFrame } from './camera.js';
 import { initUI, updateTooltip } from './ui.js';
 import { initNumberLine, updateNumberLine, isNumberLineActive } from './numberline.js';
 import { initTimeSeries, updateTimeSeries, isTimeSeriesActive } from './timeseries.js';
@@ -69,6 +69,9 @@ function animate() {
     // Graph modes
     if (!isSettled() || hasActiveAnimations()) {
       layoutStep(dt);
+      // Continuously track the graph's center and extents so nodes
+      // can't grow off-screen. Very gentle — doesn't fight user orbit.
+      trackAutoFrame(0.015);
     }
     updateAnimations(now);
     updateAnchorPulse(now);

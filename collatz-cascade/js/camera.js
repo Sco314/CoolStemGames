@@ -101,11 +101,44 @@ export function updateCamera() {
 /**
  * Smoothly zoom out to fit the entire graph if new nodes extend beyond view.
  */
-export function autoFrame() {
+export function autoFrame(smooth = true) {
   const { center, radius } = getBounds();
-  const fov = camera.fov * Math.PI / 180;
-  const desiredDist = radius / Math.sin(fov / 2) * 1.8;
-  flyTo(center, Math.max(desiredDist, CAMERA_INITIAL_DISTANCE));
+  const vFov = camera.fov * Math.PI / 180;
+  const aspect = camera.aspect || 1;
+  // Distance so the graph fits in both axes of the frustum
+  const distByH = radius / Math.tan(vFov / 2);
+  const distByW = radius / (Math.tan(vFov / 2) * Math.max(aspect, 0.3));
+  const desiredDist = Math.max(distByH, distByW) * 1.5;
+  const target = Math.max(desiredDist, CAMERA_INITIAL_DISTANCE);
+  if (smooth) {
+    flyTo(center, target);
+  } else {
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    camera.position.copy(center).add(dir.multiplyScalar(target));
+    controls.target.copy(center);
+  }
+}
+
+// Softly pull the camera toward auto-framed position each frame.
+// Call this in the render loop so the graph stays centered as it grows.
+export function trackAutoFrame(lerpFactor = 0.02) {
+  const { center, radius } = getBounds();
+  const vFov = camera.fov * Math.PI / 180;
+  const aspect = camera.aspect || 1;
+  const distByH = radius / Math.tan(vFov / 2);
+  const distByW = radius / (Math.tan(vFov / 2) * Math.max(aspect, 0.3));
+  const desiredDist = Math.max(Math.max(distByH, distByW) * 1.5, CAMERA_INITIAL_DISTANCE);
+
+  // Smoothly move controls.target toward center
+  controls.target.lerp(center, lerpFactor);
+
+  // Only push camera back if current distance is too small; don't zoom in automatically
+  const currentDist = camera.position.distanceTo(controls.target);
+  if (currentDist < desiredDist * 0.95) {
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    const targetPos = controls.target.clone().add(dir.multiplyScalar(desiredDist));
+    camera.position.lerp(targetPos, lerpFactor);
+  }
 }
 
 /**

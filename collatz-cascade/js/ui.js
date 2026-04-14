@@ -271,8 +271,9 @@ export function initUI(onSubmit) {
   }
 
   function frameTimeSeriesCamera() {
-    const t = getTimeSeriesCameraTarget();
-    getCamera().position.copy(t.position);
+    const cam = getCamera();
+    const t = getTimeSeriesCameraTarget(cam.aspect);
+    cam.position.copy(t.position);
     getControls().target.copy(t.center);
   }
 
