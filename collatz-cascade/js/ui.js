@@ -390,12 +390,20 @@ export function initUI(onSubmit) {
     frameTimeSeriesCamera();
   });
 
-  // Progressive slider: drag right to add more numbers
+  // Progressive slider: drag right to add more numbers.
+  // Debounce via rAF — no matter how fast the user drags, we do at
+  // most one setVisibleMax per frame.
+  let sliderPending = null;
   tsSlider.addEventListener('input', (e) => {
     const n = parseInt(e.target.value, 10) || 0;
     tsSliderVal.textContent = String(n);
-    setVisibleMax(n);
-    frameTimeSeriesCamera();
+    if (sliderPending != null) return;
+    sliderPending = requestAnimationFrame(() => {
+      sliderPending = null;
+      const val = parseInt(tsSlider.value, 10) || 0;
+      setVisibleMax(val);
+      frameTimeSeriesCamera();
+    });
   });
 
   // Mouse move for tooltip raycasting

@@ -85,13 +85,40 @@ export function clearTimeSeries() {
   rebuildAxes();
 }
 
+// ── Batch mode ───────────────────────────────────────────
+// During batch mode, addTimeSeriesNumber skips the O(N²) cascade rebuild
+// of all existing lines. endBatch() does one final rebuild.
+// Critical for fill operations — without this, fill to 800 triggers
+// ~320,000 TubeGeometry creations and crashes the browser.
+let inBatch = false;
+let batchNeedsRebuild = false;
+
+export function beginBatch() {
+  inBatch = true;
+  batchNeedsRebuild = false;
+}
+
+export function endBatch() {
+  if (!inBatch) return;
+  inBatch = false;
+  if (batchNeedsRebuild) {
+    rebuildAxes();
+    for (const s of sequences) rebuildLineFor(s);
+  } else {
+    // Just create any lines that were deferred
+    for (const s of sequences) {
+      if (!s.mesh) rebuildLineFor(s);
+    }
+  }
+  batchNeedsRebuild = false;
+}
+
 /**
  * Add a new Collatz sequence to the chart. Returns true if added,
  * false if already present.
  */
 export function addTimeSeriesNumber(n) {
   const nKey = valueKey(n);
-  // Skip duplicates (BigInt-safe)
   if (sequences.some(s => valueKey(s.startValue) === nKey)) return false;
 
   const values = collatzValues(n);
@@ -99,7 +126,6 @@ export function addTimeSeriesNumber(n) {
   const color = COLORS[sequences.length % COLORS.length];
 
   const newStepMax = Math.max(stepMax, values.length - 1);
-  // Track max via log2 (BigInt-safe); store log for axis scaling
   let newValueLogMax = Math.max(valueLogMax, 1);
   for (const v of values) {
     const lg = bigLog2(v);
@@ -120,11 +146,21 @@ export function addTimeSeriesNumber(n) {
   };
   sequences.push(seq);
 
-  if (rescale) {
-    rebuildAxes();
-    for (const s of sequences) rebuildLineFor(s);
+  if (inBatch) {
+    // Defer expensive work. Mark that a full rebuild is needed if
+    // scale changed; else just note that this line needs creation.
+    if (rescale) batchNeedsRebuild = true;
+    // Don't create mesh yet if we'll rebuild everything at end.
+    // But if no rescale, we could create now — even then, defer
+    // to avoid interleaving mesh creates mid-batch (keep GPU allocs
+    // lumped at end for cache coherency).
   } else {
-    rebuildLineFor(seq);
+    if (rescale) {
+      rebuildAxes();
+      for (const s of sequences) rebuildLineFor(s);
+    } else {
+      rebuildLineFor(seq);
+    }
   }
   return true;
 }
@@ -206,19 +242,23 @@ export function isFlipped() { return flipped; }
 // ── Visibility control for slider ───────────────────────
 // Hard cap to prevent WebGL OOM on mobile. Each TubeGeometry line uses
 // ~100-800KB of GPU memory depending on sequence length.
-const MAX_TIME_SERIES_LINES = 300;
+const MAX_TIME_SERIES_LINES = 200;
 
 export function setVisibleMax(n) {
   const capped = Math.min(n, MAX_TIME_SERIES_LINES);
-  // Ensure sequences exist for 2..capped
+  // Use batch mode so we don't rebuild all existing lines on every add
+  beginBatch();
   for (let i = 2; i <= capped; i++) {
-    if (!sequences.some(s => s.startValue === i)) {
+    const k = valueKey(i);
+    if (!sequences.some(s => valueKey(s.startValue) === k)) {
       addTimeSeriesNumber(i);
     }
   }
+  endBatch();
   // Show/hide based on threshold
   for (const seq of sequences) {
-    const visible = seq.startValue <= capped;
+    const sv = typeof seq.startValue === 'bigint' ? Number(seq.startValue) : seq.startValue;
+    const visible = sv <= capped;
     if (seq.mesh) seq.mesh.visible = visible;
     if (seq.label) seq.label.visible = visible;
   }
