@@ -5,6 +5,10 @@
 
 import * as THREE from 'three';
 import { collatzValues } from './collatz.js';
+import {
+  isBig, isEven, isOne, log10 as bigLog10,
+  valueKey, formatValue as fmtValue,
+} from './valueUtils.js';
 
 // ── Constants ────────────────────────────────────────────
 const SPACING = 0.3;          // world units per integer
@@ -119,11 +123,10 @@ export function setSpeed(mult) { userSpeed = mult; }
 export function getSpeed() { return userSpeed; }
 
 /**
- * Format a number for display. Scientific notation above 999,999.
+ * Format a value (Number or BigInt) for display.
  */
 export function formatValue(n) {
-  if (n > 999999) return n.toExponential(2);
-  return n.toLocaleString();
+  return fmtValue(n);
 }
 
 /**
@@ -141,13 +144,19 @@ export function startSequence(n) {
   // Reset user speed
   userSpeed = 1;
 
-  // Find max value to size the line
+  // Find max value to size the line. Use BigInt-safe max comparison via log.
   let newMax = maxOnLine;
+  let curMaxLog = bigLog10(typeof maxOnLine === 'number' && maxOnLine > 0 ? maxOnLine : 1);
   for (const v of sequence) {
-    if (v > newMax) newMax = v;
+    const lg = bigLog10(v);
+    if (lg > curMaxLog) {
+      curMaxLog = lg;
+      newMax = v;
+    }
   }
-
-  if (newMax > maxOnLine) {
+  // Compare using log to avoid Number/BigInt direct comparison issues
+  if (bigLog10(typeof newMax === 'number' ? Math.max(newMax, 1) : newMax) >
+      bigLog10(typeof maxOnLine === 'number' ? Math.max(maxOnLine, 1) : maxOnLine)) {
     maxOnLine = newMax;
     rebuildLine();
   }
@@ -299,7 +308,7 @@ function getCameraTarget() {
 // ── Zoom / Navigation Controls ───────────────────────────
 
 export function zoomToExtents(camera, controls) {
-  if (maxOnLine === 0) return;
+  if (!maxOnLine || (typeof maxOnLine === 'number' && maxOnLine === 0)) return;
   const endX = orbPosition(maxOnLine).x;
   const midX = endX * 0.5;
   const dist = endX * 0.6 + 3;
@@ -314,15 +323,18 @@ export function zoomToNumber(n, camera, controls) {
 }
 
 export function findLowestUnvisited() {
-  for (let i = 2; i <= maxOnLine; i++) {
-    if (!allVisited.has(i)) return i;
+  // maxOnLine is a Number for iteration purposes; only matters for small N
+  const cap = typeof maxOnLine === 'number' ? maxOnLine : 100000;
+  for (let i = 2; i <= cap; i++) {
+    if (!allVisited.has(valueKey(i))) return i;
   }
   return null;
 }
 
 export function findHighestUnvisited() {
-  for (let i = maxOnLine; i >= 2; i--) {
-    if (!allVisited.has(i)) return i;
+  const cap = typeof maxOnLine === 'number' ? maxOnLine : 100000;
+  for (let i = cap; i >= 2; i--) {
+    if (!allVisited.has(valueKey(i))) return i;
   }
   return null;
 }
@@ -330,9 +342,18 @@ export function findHighestUnvisited() {
 // ── Internal helpers ─────────────────────────────────────
 
 function orbPosition(value) {
-  const x = scaleMode === 'log'
-    ? Math.log10(Math.max(value, 1)) * LOG_SCALE_UNIT
-    : value * SPACING;
+  let x;
+  if (scaleMode === 'log') {
+    x = Math.max(0, bigLog10(value)) * LOG_SCALE_UNIT;
+  } else {
+    // Linear scale — for BigInt values that exceed Number range, fall
+    // back to log10 * large multiplier so it still lands on-screen.
+    if (isBig(value) && value > BigInt(Number.MAX_SAFE_INTEGER)) {
+      x = bigLog10(value) * LOG_SCALE_UNIT * 4;  // effectively log mode for huge
+    } else {
+      x = Number(value) * SPACING;
+    }
+  }
   return new THREE.Vector3(x, LINE_Y, 0);
 }
 
@@ -344,8 +365,8 @@ export function setScaleMode(mode) {
   scaleMode = mode;
 
   // Reposition all existing orbs to their new scale positions
-  for (const [value, orb] of orbs) {
-    const pos = orbPosition(value);
+  for (const orb of orbs.values()) {
+    const pos = orbPosition(orb.value);
     orb.mesh.position.copy(pos);
   }
 
@@ -379,8 +400,9 @@ function setupArc(from, to) {
 }
 
 function markVisited(value) {
-  allVisited.add(value);
-  const orb = orbs.get(value);
+  const key = valueKey(value);
+  allVisited.add(key);
+  const orb = orbs.get(key);
   if (orb && !orb.visited) {
     orb.visited = true;
     orb.mesh.material.color.copy(ORB_COLOR_VISITED);
@@ -390,11 +412,12 @@ function markVisited(value) {
 }
 
 function ensureOrb(value) {
-  if (orbs.has(value)) return;
+  const key = valueKey(value);
+  if (orbs.has(key)) return;
 
   const pos = orbPosition(value);
   const geo = new THREE.SphereGeometry(ORB_RADIUS, 16, 12);
-  const visited = allVisited.has(value);
+  const visited = allVisited.has(key);
   const col = visited ? ORB_COLOR_VISITED.clone() : ORB_COLOR_DEFAULT.clone();
   const mat = new THREE.MeshStandardMaterial({
     color: col,
@@ -412,7 +435,7 @@ function ensureOrb(value) {
   label.position.set(0, ORB_RADIUS + 0.15, 0);
   mesh.add(label);
 
-  orbs.set(value, { mesh, label, visited });
+  orbs.set(key, { mesh, label, visited, value });
 }
 
 function makeLabel(value) {
@@ -467,11 +490,16 @@ function rebuildLine() {
   // Tick marks and scale labels
   const tickPoints = [];
 
-  if (scaleMode === 'log') {
-    // Log scale: ticks at 1, 10, 100, 1000, etc.
+  // Use log decade as the iteration limit so this works for BigInt too
+  const maxLog10 = bigLog10(typeof maxOnLine === 'number' && maxOnLine > 0 ? maxOnLine : maxOnLine);
+  const numericMax = isBig(maxOnLine) ? Number.MAX_SAFE_INTEGER : maxOnLine;
+
+  if (scaleMode === 'log' || isBig(maxOnLine)) {
+    // Log scale: ticks at 1, 10, 100, 1000, ..., up to ⌈log10(max)⌉
     const tickSize = 0.35;
-    for (let exp = 0; Math.pow(10, exp) <= maxOnLine; exp++) {
-      const val = Math.pow(10, exp);
+    const maxExp = Math.ceil(maxLog10);
+    for (let exp = 0; exp <= maxExp; exp++) {
+      const val = exp <= 15 ? Math.pow(10, exp) : (10n ** BigInt(exp));
       const x = orbPosition(val).x;
       tickPoints.push(new THREE.Vector3(x, LINE_Y - tickSize, 0));
       tickPoints.push(new THREE.Vector3(x, LINE_Y + tickSize, 0));
@@ -482,9 +510,9 @@ function rebuildLine() {
     }
   } else {
     // Linear scale: ticks at interval
-    const interval = tickInterval(maxOnLine);
+    const interval = tickInterval(numericMax);
     const tickSize = Math.max(0.2, interval * SPACING * 0.1);
-    for (let i = 0; i <= maxOnLine; i += interval) {
+    for (let i = 0; i <= numericMax; i += interval) {
       const x = i * SPACING;
       tickPoints.push(new THREE.Vector3(x, LINE_Y - tickSize, 0));
       tickPoints.push(new THREE.Vector3(x, LINE_Y + tickSize, 0));

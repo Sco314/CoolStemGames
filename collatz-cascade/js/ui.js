@@ -3,7 +3,9 @@
  */
 
 import * as THREE from 'three';
-import { stoppingTime, SAFE_MAX } from './collatz.js';
+import { stoppingTime } from './collatz.js';
+import { parseValueExpression, isBig, formatValue as fmtValue, SAFE_MAX } from './valueUtils.js';
+import { scheduleBatch, cancelAll } from './scheduler.js';
 import { colorHexForStoppingTime, getNodes, getNodePosition, setMode, getGroup } from './graph.js';
 import { pulseAnchor } from './animate.js';
 import { autoFrame, flyToNode, recenter, getCamera, getControls } from './camera.js';
@@ -55,56 +57,52 @@ export function initUI(onSubmit) {
 
   function submit() {
     const raw = input.value.trim();
-    const n = parseInt(raw, 10);
+    if (!raw) { showError('Enter a positive integer.'); return; }
 
-    if (!raw || isNaN(n) || n < 1 || !Number.isInteger(Number(raw))) {
+    // Parse the input — supports plain digits ("12345"), expressions ("27^27"),
+    // and scientific notation ("1.5e30"). Returns Number or BigInt.
+    const n = parseValueExpression(raw);
+    if (n == null || (typeof n === 'number' && (n < 1 || !Number.isFinite(n)))) {
+      showError('Enter a positive integer (or "27^27").');
+      return;
+    }
+    if (typeof n === 'bigint' && n < 1n) {
       showError('Enter a positive integer.');
       return;
     }
 
-    // Precision safety: JavaScript Number is exact only to 2^53.
-    // Beyond ~3e15, 3n+1 overflows and the sequence computation
-    // would loop forever and crash the browser.
-    if (n > SAFE_MAX) {
-      showError(`Max ${SAFE_MAX.toLocaleString()} (browser precision limit).`);
-      return;
-    }
+    const isOne = (typeof n === 'bigint') ? n === 1n : n === 1;
 
-    // Number line mode: no upper limit, start sequence
+    // Chart modes (Time Series, Spiral, Number Line) support BigInt
     if (numberLineMode) {
-      if (n === 1) { input.value = ''; return; }
+      if (isOne) { input.value = ''; return; }
       input.value = '';
       clearError();
       startSequence(n);
       return;
     }
-
-    // Time series: add a line to the chart
     if (timeSeriesMode) {
-      if (n === 1) { input.value = ''; return; }
+      if (isOne) { input.value = ''; return; }
       input.value = '';
       clearError();
       addTimeSeriesNumber(n);
       frameTimeSeriesCamera();
       return;
     }
-
-    // Spiral mode: add a spiral path
     if (spiralMode) {
-      if (n === 1) { input.value = ''; return; }
+      if (isOne) { input.value = ''; return; }
       input.value = '';
       clearError();
       addSpiralNumber(n);
-      // Reframe to fit new extent
       const t = getSpiralCameraTarget();
       getCamera().position.lerp(t.position, 0.5);
       getControls().target.lerp(t.center, 0.5);
       return;
     }
 
-    // Graph mode: enforce limit
-    if (n > INPUT_MAX) {
-      showError(`Keep it under ${INPUT_MAX.toLocaleString()} so the layout stays readable.`);
+    // Graph modes use Number values internally — reject BigInt
+    if (isBig(n) || n > INPUT_MAX) {
+      showError(`Graph modes need a number ≤ ${INPUT_MAX.toLocaleString()}. Try a chart mode for huge numbers.`);
       return;
     }
 
@@ -116,15 +114,9 @@ export function initUI(onSubmit) {
       return;
     }
 
-    const result = onSubmit(n);
-
-    // Add to recent panel
+    onSubmit(n);
     addRecent(n);
-
-    // Show legend after first input
     legend.classList.remove('hidden');
-
-    // Auto-frame after a short delay to let nodes spawn
     setTimeout(() => autoFrame(), 600);
   }
 
@@ -135,9 +127,8 @@ export function initUI(onSubmit) {
   });
 
   // Fill 1–N: no hard upper limit. Batch size scales with N for responsiveness.
-  const FILL_INTERVAL = 60; // ms between batches
-  let fillTimer = null;
-
+  // Fill uses the frame-budgeted scheduler — work spreads across frames
+  // so the renderer never blocks long enough to be killed by the browser.
   function submitFill() {
     const raw = fillInput.value.trim();
     const n = parseInt(raw, 10);
@@ -146,7 +137,6 @@ export function initUI(onSubmit) {
       showFillError('Enter an integer ≥ 2.');
       return;
     }
-    // Very large fill = millions of sequences = WebGL OOM. Cap at 10000.
     if (n > 10000) {
       showFillError('Max 10,000 for fill.');
       return;
@@ -155,7 +145,6 @@ export function initUI(onSubmit) {
     fillInput.value = '';
     clearFillError();
 
-    // Number line: no sensible fill behavior
     if (numberLineMode) {
       showFillError('Fill not supported in Number Line.');
       return;
@@ -165,8 +154,7 @@ export function initUI(onSubmit) {
     btnFill.textContent = '0%';
     legend.classList.remove('hidden');
 
-    // Fast path: time series can use setVisibleMax directly (no staggering needed,
-    // since sequences share the same animated draw-in).
+    // Time series fast path: setVisibleMax flips visibility flags only
     if (timeSeriesMode) {
       setVisibleMax(n);
       frameTimeSeriesCamera();
@@ -175,36 +163,27 @@ export function initUI(onSubmit) {
       return;
     }
 
-    // Batch size scales with N so large fills finish in reasonable time
-    const FILL_BATCH = Math.max(5, Math.ceil(n / 200));
-
-    // Pick the right dispatcher for the current mode
-    function dispatch(i) {
+    const dispatch = (i) => {
       if (spiralMode) return addSpiralNumber(i);
-      return onSubmit(i);                         // graph modes
-    }
+      return onSubmit(i);
+    };
 
-    // Stagger additions in batches
-    let current = 2;
-    const total = n - 1;
-    fillTimer = setInterval(() => {
-      const end = Math.min(current + FILL_BATCH - 1, n);
-      for (let i = current; i <= end; i++) {
-        dispatch(i);
-      }
-      current = end + 1;
-      const pct = Math.round(((current - 2) / total) * 100);
-      btnFill.textContent = `${Math.min(pct, 100)}%`;
+    // Build the work list and stage it via the scheduler.
+    const items = [];
+    for (let i = 2; i <= n; i++) items.push(i);
 
-      if (current > n) {
-        clearInterval(fillTimer);
-        fillTimer = null;
-        btnFill.disabled = false;
-        btnFill.textContent = 'Fill';
-        if (!timeSeriesMode && !spiralMode) addRecent(n);
-        if (!timeSeriesMode && !spiralMode) setTimeout(() => autoFrame(), 400);
-      }
-    }, FILL_INTERVAL);
+    scheduleBatch(items, (i) => dispatch(i), {
+      priority: 5,
+      onProgress: (done, total) => {
+        const pct = Math.round((done / total) * 100);
+        btnFill.textContent = `${Math.min(pct, 100)}%`;
+      },
+    }).then(() => {
+      btnFill.disabled = false;
+      btnFill.textContent = 'Fill';
+      if (!spiralMode) addRecent(n);
+      if (!spiralMode) setTimeout(() => autoFrame(), 400);
+    });
   }
 
   btnFill.addEventListener('click', submitFill);
@@ -394,6 +373,9 @@ export function initUI(onSubmit) {
 
   // Clear for chart modes (time series + spiral)
   document.getElementById('chart-clear').addEventListener('click', () => {
+    cancelAll();  // cancel any in-flight fill scheduler work
+    btnFill.disabled = false;
+    btnFill.textContent = 'Fill';
     if (timeSeriesMode) {
       clearTimeSeries();
       tsSlider.value = 0;

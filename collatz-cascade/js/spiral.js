@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { collatzValues } from './collatz.js';
+import { isEven, valueKey, formatValue } from './valueUtils.js';
 
 // ── Constants ────────────────────────────────────────────
 const SEGMENT_LENGTH = 0.4;
@@ -78,7 +79,8 @@ export function clearSpiral() {
  * and terminating at the origin (value 1).
  */
 export function addSpiralNumber(n) {
-  if (sequences.some(s => s.startValue === n)) return;
+  const nKey = valueKey(n);
+  if (sequences.some(s => valueKey(s.startValue) === nKey)) return;
 
   const values = collatzValues(n);
   if (values.length < 2) return;
@@ -101,8 +103,7 @@ export function addSpiralNumber(n) {
     // (equivalent: parity of this step's transition)
     // When walking backwards, going from 1 → 2 was a "even step" (2 was the predecessor via n/2)
     // Use parity of `next` to decide turn direction
-    const isEven = next % 2 === 0;
-    heading += isEven ? TURN_EVEN : TURN_ODD;
+    heading += isEven(next) ? TURN_EVEN : TURN_ODD;
 
     x += Math.cos(heading) * SEGMENT_LENGTH;
     y += Math.sin(heading) * SEGMENT_LENGTH;
