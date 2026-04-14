@@ -132,13 +132,22 @@ export function updateTimeSeries(dt) {
 
 /**
  * Suggested camera target for time series view.
+ * Shifts center slightly so axis labels (which extend beyond the chart
+ * on the left/bottom) are fully visible, and pulls back far enough
+ * that the whole labeled chart fits on screen.
  */
 export function getTimeSeriesCameraTarget() {
-  const cx = CHART_WIDTH / 2;
-  const cy = CHART_HEIGHT / 2;
+  // Center between chart box and label regions (labels go to -2.5 on both axes)
+  const cx = CHART_WIDTH / 2 - 1.5;
+  const cy = CHART_HEIGHT / 2 - 1;
+  // Pull back enough to frame the chart + labels comfortably.
+  // Chart is 24 wide × 14 tall + ~3 units of labels on left/bottom, so
+  // effective bounds are ~27 × 18. FOV 55° needs distance ≈ (27/2)/tan(27.5°) ≈ 26
+  // for the width; add padding.
+  const dist = 28;
   return {
     center: new THREE.Vector3(cx, cy, 0),
-    position: new THREE.Vector3(cx, cy, CHART_WIDTH * 1.1),
+    position: new THREE.Vector3(cx, cy, dist),
   };
 }
 
