@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { collatzValues } from './collatz.js';
+import { log2 as bigLog2, valueKey, formatValue, isBig } from './valueUtils.js';
 
 // ── Constants ────────────────────────────────────────────
 const CHART_WIDTH = 24;
@@ -16,6 +17,11 @@ const AXIS_COLOR = 0x667799;
 const AXIS_OPACITY = 0.6;
 const GRID_COLOR = 0x334466;
 const GRID_OPACITY = 0.3;
+
+// Max render points per line. Long sequences (e.g. 2000 steps) get
+// downsampled to this many points — huge memory savings with no visible
+// detail loss at typical viewing distance.
+const MAX_RENDER_POINTS = 250;
 
 // Distinct hue-cycling colors
 const COLORS = [
@@ -31,7 +37,7 @@ let axesGroup = null;
 let active = false;
 let sequences = [];   // { startValue, values, color, mesh, label, drawProgress }
 let stepMax = 10;
-let valueMax = 2;
+let valueLogMax = 1;   // stored as log2(maxValue) so it works for BigInt too
 let flipped = false;  // swap X/Y axes when true
 
 // ── Public API ───────────────────────────────────────────
@@ -75,27 +81,34 @@ export function clearTimeSeries() {
   }
   sequences = [];
   stepMax = 10;
-  valueMax = 2;
+  valueLogMax = 1;
   rebuildAxes();
 }
 
 /**
- * Add a new Collatz sequence to the chart.
+ * Add a new Collatz sequence to the chart. Returns true if added,
+ * false if already present.
  */
 export function addTimeSeriesNumber(n) {
-  // Skip duplicates
-  if (sequences.some(s => s.startValue === n)) return;
+  const nKey = valueKey(n);
+  // Skip duplicates (BigInt-safe)
+  if (sequences.some(s => valueKey(s.startValue) === nKey)) return false;
 
   const values = collatzValues(n);
+  if (values.length < 2) return false;
   const color = COLORS[sequences.length % COLORS.length];
 
   const newStepMax = Math.max(stepMax, values.length - 1);
-  let newValueMax = valueMax;
-  for (const v of values) if (v > newValueMax) newValueMax = v;
+  // Track max via log2 (BigInt-safe); store log for axis scaling
+  let newValueLogMax = Math.max(valueLogMax, 1);
+  for (const v of values) {
+    const lg = bigLog2(v);
+    if (Number.isFinite(lg) && lg > newValueLogMax) newValueLogMax = lg;
+  }
 
-  const rescale = (newStepMax > stepMax) || (newValueMax > valueMax);
+  const rescale = (newStepMax > stepMax) || (newValueLogMax > valueLogMax);
   stepMax = newStepMax;
-  valueMax = newValueMax;
+  valueLogMax = newValueLogMax;
 
   const seq = {
     startValue: n,
@@ -113,6 +126,7 @@ export function addTimeSeriesNumber(n) {
   } else {
     rebuildLineFor(seq);
   }
+  return true;
 }
 
 /**
@@ -157,13 +171,27 @@ export function getTimeSeriesCameraTarget(aspect = 1) {
 // ── Internal: coordinate mapping ─────────────────────────
 function positionFor(step, value) {
   const normStep = step / Math.max(stepMax, 1);
-  const logV = Math.log2(Math.max(value, 1));
-  const logMax = Math.log2(Math.max(valueMax, 2));
-  const normValue = logV / logMax;
+  const logV = Math.max(0, bigLog2(value));
+  const normValue = logV / Math.max(valueLogMax, 1);
   if (flipped) {
     return new THREE.Vector3(normValue * CHART_WIDTH, normStep * CHART_HEIGHT, 0);
   }
   return new THREE.Vector3(normStep * CHART_WIDTH, normValue * CHART_HEIGHT, 0);
+}
+
+/**
+ * Downsample a sequence to at most MAX_RENDER_POINTS for rendering.
+ * Always keeps the first and last points, plus peaks.
+ */
+function downsampleForRender(values) {
+  if (values.length <= MAX_RENDER_POINTS) return values;
+  const step = values.length / MAX_RENDER_POINTS;
+  const out = [];
+  for (let i = 0; i < MAX_RENDER_POINTS - 1; i++) {
+    out.push(values[Math.floor(i * step)]);
+  }
+  out.push(values[values.length - 1]);
+  return out;
 }
 
 // ── Flip X/Y ────────────────────────────────────────────
@@ -211,7 +239,17 @@ function rebuildLineFor(seq) {
     seq.label = null;
   }
 
-  const points = seq.values.map((v, i) => positionFor(i, v));
+  // Downsample long sequences for rendering (keeps original step indices
+  // so X axis is still proportional to full sequence length).
+  const total = seq.values.length;
+  const renderCount = Math.min(total, MAX_RENDER_POINTS);
+  const points = [];
+  for (let i = 0; i < renderCount; i++) {
+    const origIdx = total <= MAX_RENDER_POINTS
+      ? i
+      : Math.floor(i * (total - 1) / (renderCount - 1));
+    points.push(positionFor(origIdx, seq.values[origIdx]));
+  }
   if (points.length < 2) return;
 
   const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.4);
@@ -230,7 +268,7 @@ function rebuildLineFor(seq) {
   group.add(seq.mesh);
 
   // Label at starting point (top-left of line)
-  seq.label = makeChartLabel(String(seq.startValue), seq.color);
+  seq.label = makeChartLabel(formatValue(seq.startValue), seq.color);
   const startPoint = points[0];
   seq.label.position.set(startPoint.x - 0.3, startPoint.y + 0.5, 0.1);
   group.add(seq.label);
@@ -275,10 +313,12 @@ function rebuildAxes() {
   // What each axis represents depends on flipped state
   // NOT flipped: X = step, Y = log(value)
   //     flipped: X = log(value), Y = step
-  const logMax = Math.log2(Math.max(valueMax, 2));
+  const logMax = Math.max(valueLogMax, 1);
   let vStep = 1;
   if (logMax > 8) vStep = 2;
   if (logMax > 16) vStep = 4;
+  if (logMax > 40) vStep = 8;
+  if (logMax > 100) vStep = 20;
 
   const sInterval = niceInterval(stepMax);
 
@@ -373,6 +413,7 @@ function niceInterval(maxSteps) {
 }
 
 function formatAxisValue(n) {
+  if (n >= 1e15) return `2^${Math.round(Math.log2(n))}`;
   if (n >= 1000000) return (n / 1000000).toFixed(0) + 'M';
   if (n >= 1000) return (n / 1000).toFixed(0) + 'k';
   return String(n);

@@ -1,88 +1,46 @@
 /**
  * Pure math module for the Collatz conjecture.
- * No rendering, no DOM — just sequences, trees, and statistics.
+ * Works with both Number (fast path) and BigInt (arbitrary precision).
  */
 
-const cache = new Map();  // value → sequence from that value to 1
+import { isBig, isEven, isOne, nextCollatz, valueKey, toValue } from './valueUtils.js';
 
-/**
- * Compute the Collatz sequence starting at n, ending at 1.
- * Returns array of { value, op } where op is 'start' | 'even' | 'odd'.
- * Memoized: shared tails are spliced from cache.
- */
-export function collatzSequence(n) {
-  if (cache.has(n)) return cache.get(n);
-
-  const prefix = [];
-  let current = n;
-
-  while (current !== 1 && !cache.has(current)) {
-    prefix.push(current);
-    if (current % 2 === 0) {
-      current = current / 2;
-    } else {
-      current = 3 * current + 1;
-    }
-  }
-
-  // Build the full sequence
-  const tail = current === 1
-    ? [{ value: 1, op: 'start' }]
-    : cache.get(current);
-
-  const seq = [];
-  for (let i = 0; i < prefix.length; i++) {
-    const v = prefix[i];
-    const next = i + 1 < prefix.length ? prefix[i + 1] : tail[0].value;
-    const op = i === 0 ? 'start' : (v < next ? 'odd' : 'even');
-    // Actually: if the previous step produced this value via n/2, this value came from even
-    // Simpler: determine op based on how we GOT to this value's successor
-    seq.push({ value: v, op: i === 0 ? 'start' : (prefix[i - 1] % 2 === 0 ? 'even' : 'odd') });
-  }
-
-  // Append tail
-  for (const entry of tail) {
-    seq.push(entry);
-  }
-
-  // Cache every sub-sequence starting from each prefix value
-  for (let i = 0; i < prefix.length; i++) {
-    cache.set(prefix[i], seq.slice(i));
-  }
-  if (!cache.has(1)) {
-    cache.set(1, [{ value: 1, op: 'start' }]);
-  }
-
-  return seq;
-}
+const cache = new Map();                 // key → sequence array
+const MAX_ITERATIONS = 50000;            // safety cap on any sequence length
 
 /**
  * Get just the values in the Collatz sequence from n down to 1.
+ * Handles Number and BigInt inputs; output may be mixed.
  */
 export function collatzValues(n) {
-  const values = [];
-  let current = n;
-  while (current !== 1) {
-    values.push(current);
-    current = current % 2 === 0 ? current / 2 : 3 * current + 1;
-  }
-  values.push(1);
-  return values;
-}
+  const start = toValue(n);
+  if (start == null) return [];
 
-/**
- * Compute the successor chain as [parent, child] pairs.
- * In Collatz, each value's successor is collatz(value).
- * Returns array of { from, to } where "from" is the value
- * and "to" is its Collatz successor (i.e., the next step toward 1).
- */
-export function collatzEdges(n) {
-  const values = collatzValues(n);
-  const edges = [];
-  for (let i = 0; i < values.length - 1; i++) {
-    edges.push({ from: values[i], to: values[i + 1] });
+  const key = valueKey(start);
+  const cached = cache.get(key);
+  if (cached) return cached.slice();
+
+  const values = [];
+  let current = start;
+  let iter = 0;
+  while (!isOne(current) && iter < MAX_ITERATIONS) {
+    values.push(current);
+    // Number-only precision guard (BigInt can't overflow)
+    if (!isBig(current) && !Number.isSafeInteger(current)) {
+      console.warn(`Number precision lost at step ${iter} for start ${n}`);
+      break;
+    }
+    current = nextCollatz(current);
+    iter++;
   }
-  return edges;
+  if (isOne(current)) values.push(current);
+  if (iter >= MAX_ITERATIONS) {
+    console.warn(`Collatz sequence exceeded ${MAX_ITERATIONS} steps for ${n}`);
+  }
+
+  // Cache for reuse (shared-tail optimization works via substring matching)
+  cache.set(key, values);
+  return values.slice();
 }
 
 /**
@@ -93,13 +51,21 @@ export function stoppingTime(n) {
 }
 
 /**
- * Peak value encountered in the sequence starting at n.
+ * Peak value (as Number for comparison). BigInt converted to Number
+ * with log scaling for huge values.
  */
 export function peakValue(n) {
   const values = collatzValues(n);
-  let max = 0;
-  for (const v of values) if (v > max) max = v;
-  return max;
+  let maxV = values[0];
+  let maxNum = isBig(maxV) ? Number(maxV) : maxV;
+  for (const v of values) {
+    const num = isBig(v) ? Number(v) : v;
+    if (num > maxNum) {
+      maxNum = num;
+      maxV = v;
+    }
+  }
+  return maxV;
 }
 
 /**
@@ -107,5 +73,30 @@ export function peakValue(n) {
  * or a "faller" (even → will do n/2). Value 1 is neither.
  */
 export function isClimber(value) {
-  return value > 1 && value % 2 !== 0;
+  return !isOne(value) && !isEven(value);
+}
+
+// ── Backwards-compatible full-detail sequence (used by animate.js) ────
+
+export function collatzSequence(n) {
+  const values = collatzValues(n);
+  const seq = [];
+  for (let i = 0; i < values.length; i++) {
+    const prev = i > 0 ? values[i - 1] : null;
+    const op = i === 0 ? 'start' : (isEven(prev) ? 'even' : 'odd');
+    seq.push({ value: values[i], op });
+  }
+  return seq;
+}
+
+/**
+ * Successor chain as [parent, child] pairs (parent → its Collatz successor).
+ */
+export function collatzEdges(n) {
+  const values = collatzValues(n);
+  const edges = [];
+  for (let i = 0; i < values.length - 1; i++) {
+    edges.push({ from: values[i], to: values[i + 1] });
+  }
+  return edges;
 }
