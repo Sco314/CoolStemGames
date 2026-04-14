@@ -33,10 +33,26 @@ export function initCamera(canvas) {
   camera.position.set(0, 2, CAMERA_INITIAL_DISTANCE);
   camera.lookAt(0, 0, 0);
 
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(w, h, false);   // false: don't set CSS, let CSS positioning handle it
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: false,
+    powerPreference: 'high-performance',
+  });
+  // Cap at 1.5x on mobile to reduce memory pressure (was 2x)
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setSize(w, h, false);
   renderer.setClearColor(0x0a0f1e, 1);
+
+  // Handle WebGL context loss gracefully (iOS Safari kills contexts under
+  // memory pressure; without handling, the page appears frozen/crashes).
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    console.warn('WebGL context lost');
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    console.warn('WebGL context restored');
+  });
 
   controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
@@ -47,20 +63,31 @@ export function initCamera(canvas) {
   controls.autoRotate = false;
   controls.target.set(0, 0, 0);
 
-  window.addEventListener('resize', onResize);
-  // Also observe canvas size changes (Safari chrome show/hide)
-  if (typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(onResize).observe(canvas);
+  window.addEventListener('resize', debouncedResize);
+  // iOS Safari: visualViewport fires more reliably when chrome hides/shows
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', debouncedResize);
   }
 
   return renderer;
 }
 
+let resizeTimer = null;
+function debouncedResize() {
+  if (resizeTimer) return;
+  resizeTimer = requestAnimationFrame(() => {
+    resizeTimer = null;
+    onResize();
+  });
+}
+
 function onResize() {
   const { w, h } = getCanvasSize();
-  camera.aspect = w / h;
+  const W = Math.floor(w), H = Math.floor(h);
+  if (W < 1 || H < 1) return;
+  camera.aspect = W / H;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h, false);
+  renderer.setSize(W, H, false);
 }
 
 export function updateCamera() {
