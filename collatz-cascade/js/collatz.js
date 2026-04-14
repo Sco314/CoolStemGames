@@ -5,6 +5,12 @@
 
 const cache = new Map();  // value → sequence from that value to 1
 
+// Safety caps: prevent infinite loops from integer overflow.
+// JavaScript Numbers are exact only up to 2^53. Once 3n+1 exceeds
+// that, parity checks break and the loop runs forever.
+export const SAFE_MAX = Math.floor(Number.MAX_SAFE_INTEGER / 3) - 1;  // ~3e15
+const MAX_ITERATIONS = 20000;  // hard cap on any sequence length
+
 /**
  * Compute the Collatz sequence starting at n, ending at 1.
  * Returns array of { value, op } where op is 'start' | 'even' | 'odd'.
@@ -15,37 +21,34 @@ export function collatzSequence(n) {
 
   const prefix = [];
   let current = n;
+  let iter = 0;
 
-  while (current !== 1 && !cache.has(current)) {
+  while (current !== 1 && !cache.has(current) && iter < MAX_ITERATIONS) {
     prefix.push(current);
+    if (!Number.isSafeInteger(current)) break;  // overflow detected
     if (current % 2 === 0) {
       current = current / 2;
     } else {
       current = 3 * current + 1;
     }
+    iter++;
   }
 
   // Build the full sequence
   const tail = current === 1
     ? [{ value: 1, op: 'start' }]
-    : cache.get(current);
+    : (cache.get(current) || [{ value: current, op: 'start' }]);
 
   const seq = [];
   for (let i = 0; i < prefix.length; i++) {
     const v = prefix[i];
-    const next = i + 1 < prefix.length ? prefix[i + 1] : tail[0].value;
-    const op = i === 0 ? 'start' : (v < next ? 'odd' : 'even');
-    // Actually: if the previous step produced this value via n/2, this value came from even
-    // Simpler: determine op based on how we GOT to this value's successor
     seq.push({ value: v, op: i === 0 ? 'start' : (prefix[i - 1] % 2 === 0 ? 'even' : 'odd') });
   }
 
-  // Append tail
   for (const entry of tail) {
     seq.push(entry);
   }
 
-  // Cache every sub-sequence starting from each prefix value
   for (let i = 0; i < prefix.length; i++) {
     cache.set(prefix[i], seq.slice(i));
   }
@@ -58,23 +61,31 @@ export function collatzSequence(n) {
 
 /**
  * Get just the values in the Collatz sequence from n down to 1.
+ * Protected against overflow and runaway loops.
  */
 export function collatzValues(n) {
   const values = [];
   let current = n;
-  while (current !== 1) {
+  let iter = 0;
+  while (current !== 1 && iter < MAX_ITERATIONS) {
     values.push(current);
+    // Detect integer precision overflow; stop before arithmetic goes wrong
+    if (!Number.isSafeInteger(current) || current < 1) {
+      console.warn(`Collatz overflow at step ${iter} for starting value ${n}; truncating sequence.`);
+      return values;
+    }
     current = current % 2 === 0 ? current / 2 : 3 * current + 1;
+    iter++;
   }
-  values.push(1);
+  if (current === 1) values.push(1);
+  if (iter >= MAX_ITERATIONS) {
+    console.warn(`Collatz sequence exceeded ${MAX_ITERATIONS} steps for ${n}; truncating.`);
+  }
   return values;
 }
 
 /**
  * Compute the successor chain as [parent, child] pairs.
- * In Collatz, each value's successor is collatz(value).
- * Returns array of { from, to } where "from" is the value
- * and "to" is its Collatz successor (i.e., the next step toward 1).
  */
 export function collatzEdges(n) {
   const values = collatzValues(n);

@@ -3,7 +3,7 @@
  */
 
 import * as THREE from 'three';
-import { stoppingTime } from './collatz.js';
+import { stoppingTime, SAFE_MAX } from './collatz.js';
 import { colorHexForStoppingTime, getNodes, getNodePosition, setMode, getGroup } from './graph.js';
 import { pulseAnchor } from './animate.js';
 import { autoFrame, flyToNode, recenter, getCamera, getControls } from './camera.js';
@@ -59,6 +59,14 @@ export function initUI(onSubmit) {
 
     if (!raw || isNaN(n) || n < 1 || !Number.isInteger(Number(raw))) {
       showError('Enter a positive integer.');
+      return;
+    }
+
+    // Precision safety: JavaScript Number is exact only to 2^53.
+    // Beyond ~3e15, 3n+1 overflows and the sequence computation
+    // would loop forever and crash the browser.
+    if (n > SAFE_MAX) {
+      showError(`Max ${SAFE_MAX.toLocaleString()} (browser precision limit).`);
       return;
     }
 
@@ -136,6 +144,11 @@ export function initUI(onSubmit) {
 
     if (!raw || isNaN(n) || n < 2 || !Number.isInteger(Number(raw))) {
       showFillError('Enter an integer ≥ 2.');
+      return;
+    }
+    // Very large fill = millions of sequences = WebGL OOM. Cap at 10000.
+    if (n > 10000) {
+      showFillError('Max 10,000 for fill.');
       return;
     }
 
