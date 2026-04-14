@@ -11,6 +11,29 @@ import { initNumberLine, updateNumberLine, isNumberLineActive } from './numberli
 import { initTimeSeries, updateTimeSeries, isTimeSeriesActive } from './timeseries.js';
 import { initSpiral, updateSpiral, isSpiralActive } from './spiral.js';
 
+// ── Block iOS Safari's page-level pinch-zoom gestures ───
+// touch-action: none should handle this, but iOS fires legacy
+// 'gesturestart'/'gesturechange'/'gestureend' events that ignore
+// touch-action. Cancel them unless they're on the canvas (where
+// OrbitControls handles pinch to zoom the camera).
+function blockPageGesture(e) {
+  if (!e.target || e.target.id !== 'scene') {
+    e.preventDefault();
+  }
+}
+document.addEventListener('gesturestart', blockPageGesture, { passive: false });
+document.addEventListener('gesturechange', blockPageGesture, { passive: false });
+document.addEventListener('gestureend', blockPageGesture, { passive: false });
+// Block double-tap-to-zoom at the document level
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 300 && e.target && e.target.id !== 'scene') {
+    e.preventDefault();
+  }
+  lastTouchEnd = now;
+}, { passive: false });
+
 // ── Scene setup ──────────────────────────────────────────
 const canvas = document.getElementById('scene');
 const renderer = initCamera(canvas);

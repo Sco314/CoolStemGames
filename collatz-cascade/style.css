@@ -9,6 +9,10 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   overflow: hidden;
   overscroll-behavior: none;
+  /* Block browser pinch-zoom and double-tap zoom on the whole app.
+     OrbitControls still receives touches on the canvas. */
+  touch-action: none;
+  -webkit-text-size-adjust: 100%;
   margin: 0;
   padding: 0;
 }
@@ -72,6 +76,7 @@ body {
   border-bottom: 1px solid rgba(255,255,255,0.06);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;   /* allow horizontal scroll but no pinch-zoom */
   z-index: 19;
 }
 
@@ -105,6 +110,7 @@ body {
   border-bottom: 1px solid rgba(255,255,255,0.04);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
   z-index: 18;
 }
 
