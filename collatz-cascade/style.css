@@ -16,9 +16,10 @@ html, body {
 
 #scene {
   position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: calc(90px + env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  bottom: calc(72px + env(safe-area-inset-bottom));
   display: block;
   z-index: 0;
 }
@@ -171,8 +172,8 @@ html, body {
 
 /* ── Math Bar (top center, number line mode) ──────────── */
 #math-bar {
-  position: absolute;
-  top: 84px;
+  position: fixed;
+  top: calc(96px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   display: flex;

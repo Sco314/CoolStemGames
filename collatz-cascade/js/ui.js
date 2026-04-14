@@ -77,6 +77,7 @@ export function initUI(onSubmit) {
       input.value = '';
       clearError();
       addTimeSeriesNumber(n);
+      frameTimeSeriesCamera();
       return;
     }
 
@@ -125,10 +126,8 @@ export function initUI(onSubmit) {
     clearError();
   });
 
-  // Fill 1–N
-  const FILL_MAX = 500;
-  const FILL_BATCH = 5;     // numbers added per tick
-  const FILL_INTERVAL = 80; // ms between batches
+  // Fill 1–N: no hard upper limit. Batch size scales with N for responsiveness.
+  const FILL_INTERVAL = 60; // ms between batches
   let fillTimer = null;
 
   function submitFill() {
@@ -139,29 +138,37 @@ export function initUI(onSubmit) {
       showFillError('Enter an integer ≥ 2.');
       return;
     }
-    if (n > FILL_MAX) {
-      showFillError(`Keep it under ${FILL_MAX} for fill.`);
-      return;
-    }
 
     fillInput.value = '';
     clearFillError();
+
+    // Number line: no sensible fill behavior
+    if (numberLineMode) {
+      showFillError('Fill not supported in Number Line.');
+      return;
+    }
+
     btnFill.disabled = true;
     btnFill.textContent = '0%';
     legend.classList.remove('hidden');
 
-    // Pick the right dispatcher for the current mode
-    function dispatch(i) {
-      if (numberLineMode) return;                 // numberline doesn't batch-fill
-      if (timeSeriesMode) return addTimeSeriesNumber(i);
-      if (spiralMode)     return addSpiralNumber(i);
-      return onSubmit(i);                          // graph modes
-    }
-    if (numberLineMode) {
-      showFillError('Fill not supported in Number Line.');
+    // Fast path: time series can use setVisibleMax directly (no staggering needed,
+    // since sequences share the same animated draw-in).
+    if (timeSeriesMode) {
+      setVisibleMax(n);
+      frameTimeSeriesCamera();
       btnFill.disabled = false;
       btnFill.textContent = 'Fill';
       return;
+    }
+
+    // Batch size scales with N so large fills finish in reasonable time
+    const FILL_BATCH = Math.max(5, Math.ceil(n / 200));
+
+    // Pick the right dispatcher for the current mode
+    function dispatch(i) {
+      if (spiralMode) return addSpiralNumber(i);
+      return onSubmit(i);                         // graph modes
     }
 
     // Stagger additions in batches

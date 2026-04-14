@@ -17,19 +17,25 @@ let flyAnim = null; // active fly-to animation
 export function getCamera() { return camera; }
 export function getControls() { return controls; }
 
+let canvasEl = null;
+
+function getCanvasSize() {
+  if (!canvasEl) return { w: window.innerWidth, h: window.innerHeight };
+  const rect = canvasEl.getBoundingClientRect();
+  return { w: Math.max(1, rect.width), h: Math.max(1, rect.height) };
+}
+
 export function initCamera(canvas) {
-  camera = new THREE.PerspectiveCamera(
-    CAMERA_FOV,
-    window.innerWidth / window.innerHeight,
-    CAMERA_NEAR,
-    CAMERA_FAR,
-  );
+  canvasEl = canvas;
+  const { w, h } = getCanvasSize();
+
+  camera = new THREE.PerspectiveCamera(CAMERA_FOV, w / h, CAMERA_NEAR, CAMERA_FAR);
   camera.position.set(0, 2, CAMERA_INITIAL_DISTANCE);
   camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(w, h, false);   // false: don't set CSS, let CSS positioning handle it
   renderer.setClearColor(0x0a0f1e, 1);
 
   controls = new OrbitControls(camera, canvas);
@@ -42,14 +48,19 @@ export function initCamera(canvas) {
   controls.target.set(0, 0, 0);
 
   window.addEventListener('resize', onResize);
+  // Also observe canvas size changes (Safari chrome show/hide)
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(onResize).observe(canvas);
+  }
 
   return renderer;
 }
 
 function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  const { w, h } = getCanvasSize();
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(w, h, false);
 }
 
 export function updateCamera() {
