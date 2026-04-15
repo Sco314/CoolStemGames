@@ -24,7 +24,7 @@ import {
 import {
   showTimeSeries, hideTimeSeries, addTimeSeriesNumber,
   clearTimeSeries, getTimeSeriesCameraTarget,
-  toggleFlip, setVisibleMax,
+  toggleFlip, setVisibleMax, MAX_TIME_SERIES_LINES,
 } from './timeseries.js';
 import {
   showSpiral, hideSpiral, isSpiralActive,
@@ -465,26 +465,18 @@ export function initUI(onSubmit) {
     frameTimeSeriesCamera();
   });
 
-  // Progressive slider: drag right to add more numbers.
-  // Debounce via rAF — no matter how fast the user drags, we do at
-  // most one setVisibleMax per frame.
-  let sliderPending = null;
-  tsSlider.addEventListener('input', (e) => {
-    const n = parseInt(e.target.value, 10) || 0;
-    tsSliderVal.textContent = String(n);
-    if (sliderPending != null) return;
-    sliderPending = requestAnimationFrame(() => {
-      sliderPending = null;
-      const val = parseInt(tsSlider.value, 10) || 0;
-      setVisibleMax(val);
-      frameTimeSeriesCamera();
-    });
-  });
-
   // Rubberband sliders — drag right to push the per-mode ceiling up.
   // On release past 75% of the current range, the range extends so the
   // slider re-centers and more headroom is available. Capped at the
   // per-mode hardware safety max.
+  makeRubberbandSlider({
+    sliderEl: tsSlider, valEl: tsSliderVal,
+    initialMax: 200, initialValue: 0, safetyMax: MAX_TIME_SERIES_LINES,
+    onChange: (n) => {
+      setVisibleMax(n);
+      frameTimeSeriesCamera();
+    },
+  });
   makeRubberbandSlider({
     sliderEl: graphSlider, valEl: graphSliderVal,
     initialMax: 200, initialValue: 100, safetyMax: MAX_VISIBLE_NODES,
