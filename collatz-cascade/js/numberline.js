@@ -9,6 +9,11 @@ import {
   isBig, isEven, isOne, log10 as bigLog10,
   valueKey, formatValue as fmtValue,
 } from './valueUtils.js';
+import { scheduleBatch } from './scheduler.js';
+
+// ── Memory ceilings ──────────────────────────────────────
+export const MAX_ORBS = 5000;
+let visibleMax = 250;
 
 // ── Constants ────────────────────────────────────────────
 const SPACING = 0.3;          // world units per integer
@@ -161,8 +166,12 @@ export function startSequence(n) {
     rebuildLine();
   }
 
-  for (const v of sequence) {
-    ensureOrb(v);
+  // First orb must exist synchronously so the launch arc has a target.
+  // Remaining orbs are staged across frames via the scheduler so huge
+  // sequences (e.g. 27^27 ≈ 10k steps) don't freeze the main thread.
+  ensureOrb(sequence[0]);
+  if (sequence.length > 1) {
+    scheduleBatch(sequence.slice(1), (v) => ensureOrb(v), { priority: 6 });
   }
 
   // Reset playback
@@ -177,6 +186,68 @@ export function startSequence(n) {
   setupArc(operatorBall.position.clone(), firstPos);
   travelProgress = 0;
   playState = 'traveling';
+}
+
+/**
+ * Fully dispose the number line state. Called on mode-switch away
+ * from Number Line to keep VRAM from accumulating across modes.
+ */
+export function clearNumberLine() {
+  for (const orb of orbs.values()) {
+    if (orb.mesh) {
+      nlGroup.remove(orb.mesh);
+      if (orb.label) {
+        orb.mesh.remove(orb.label);
+        orb.label.material.map?.dispose();
+        orb.label.material.dispose();
+      }
+      orb.mesh.geometry.dispose();
+      orb.mesh.material.dispose();
+    }
+  }
+  orbs.clear();
+  allVisited.clear();
+  maxOnLine = 0;
+  sequence = [];
+  stepIndex = 0;
+  playState = 'idle';
+  mathDisplay = null;
+  if (operatorBall) operatorBall.visible = false;
+  rebuildLine();
+}
+
+/**
+ * Set the soft ceiling on visible orbs. Capped at MAX_ORBS.
+ */
+export function setOrbVisibleMax(n) {
+  visibleMax = Math.max(1, Math.min(n | 0, MAX_ORBS));
+  evictOldestOrbs();
+}
+
+export function getOrbVisibleMax() { return visibleMax; }
+
+function evictOldestOrbs() {
+  if (orbs.size <= visibleMax) return;
+  // Build a set of keys we must keep: still-upcoming values in the
+  // current sequence (from stepIndex onwards).
+  const pinned = new Set();
+  for (let i = stepIndex; i < sequence.length; i++) {
+    pinned.add(valueKey(sequence[i]));
+  }
+  // Walk insertion order (oldest first), evict if not pinned.
+  for (const [key, orb] of orbs) {
+    if (orbs.size <= visibleMax) break;
+    if (pinned.has(key)) continue;
+    nlGroup.remove(orb.mesh);
+    if (orb.label) {
+      orb.mesh.remove(orb.label);
+      orb.label.material.map?.dispose();
+      orb.label.material.dispose();
+    }
+    orb.mesh.geometry.dispose();
+    orb.mesh.material.dispose();
+    orbs.delete(key);
+  }
 }
 
 /**
@@ -436,6 +507,9 @@ function ensureOrb(value) {
   mesh.add(label);
 
   orbs.set(key, { mesh, label, visited, value });
+
+  // Keep orb count bounded via LRU.
+  if (orbs.size > visibleMax) evictOldestOrbs();
 }
 
 function makeLabel(value) {

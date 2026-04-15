@@ -5,8 +5,12 @@
 import * as THREE from 'three';
 import { stoppingTime } from './collatz.js';
 import { parseValueExpression, isBig, formatValue as fmtValue, SAFE_MAX } from './valueUtils.js';
-import { scheduleBatch, cancelAll } from './scheduler.js';
-import { colorHexForStoppingTime, getNodes, getNodePosition, setMode, getGroup } from './graph.js';
+import { scheduleBatch, cancelAll, pending } from './scheduler.js';
+import {
+  colorHexForStoppingTime, getNodePosition, setMode, getGroup,
+  setGraphVisibleMax, getGraphVisibleMax, MAX_VISIBLE_NODES,
+  getRaycastCandidates, getNodes,
+} from './graph.js';
 import { pulseAnchor } from './animate.js';
 import { autoFrame, flyToNode, recenter, getCamera, getControls } from './camera.js';
 import { INPUT_MAX, RECENT_MAX } from './constants.js';
@@ -15,6 +19,7 @@ import {
   getMathDisplay, getPlayState, zoomToExtents, zoomToNumber,
   findLowestUnvisited, findHighestUnvisited, formatValue,
   setSpeed, getSpeed, setScaleMode, getScaleMode,
+  clearNumberLine, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
 } from './numberline.js';
 import {
   showTimeSeries, hideTimeSeries, addTimeSeriesNumber,
@@ -24,6 +29,7 @@ import {
 import {
   showSpiral, hideSpiral, isSpiralActive,
   addSpiralNumber, clearSpiral, getSpiralCameraTarget,
+  setSpiralVisibleMax, getSpiralVisibleMax, MAX_SPIRAL_LINES,
 } from './spiral.js';
 
 // ── DOM refs ─────────────────────────────────────────────
@@ -31,11 +37,55 @@ const input = document.getElementById('num-input');
 const btnGo = document.getElementById('btn-go');
 const fillInput = document.getElementById('fill-input');
 const btnFill = document.getElementById('btn-fill');
+const btnAbort = document.getElementById('btn-abort');
 const btnRecenter = document.getElementById('btn-recenter');
 const recentList = document.getElementById('recent-list');
 const tooltip = document.getElementById('tooltip');
 const legend = document.getElementById('legend');
 const stepInfo = document.getElementById('step-info');
+
+/**
+ * Rubberband slider: the user drags right to push the ceiling up.
+ * When released past 75% of the current range, the range extends so
+ * the released value becomes roughly the new midpoint — giving the
+ * user room to keep dragging right indefinitely, up to a hardware
+ * safety cap.
+ *
+ * onChange is rAF-debounced so fast drags don't flood the renderer.
+ */
+function makeRubberbandSlider({ sliderEl, valEl, onChange, safetyMax, initialMax, initialValue }) {
+  let rangeMax = initialMax;
+  sliderEl.min = 0;
+  sliderEl.max = rangeMax;
+  sliderEl.value = initialValue;
+  valEl.textContent = String(initialValue);
+
+  let rafPending = null;
+  sliderEl.addEventListener('input', () => {
+    const n = parseInt(sliderEl.value, 10) || 0;
+    valEl.textContent = String(n);
+    if (rafPending != null) return;
+    rafPending = requestAnimationFrame(() => {
+      rafPending = null;
+      onChange(parseInt(sliderEl.value, 10) || 0);
+    });
+  });
+
+  sliderEl.addEventListener('change', () => {
+    const val = parseInt(sliderEl.value, 10) || 0;
+    // Already at safety cap — can't extend further.
+    if (rangeMax >= safetyMax) return;
+    // Rubberband: if released in the upper 25% of the range, extend
+    // so the released value ≈ midpoint of the new range.
+    if (val > rangeMax * 0.75) {
+      const newMax = Math.min(Math.max(val * 2, val + 1), safetyMax);
+      rangeMax = newMax;
+      sliderEl.max = rangeMax;
+      sliderEl.value = val;   // effective ceiling stays where user put it
+      valEl.textContent = String(val);
+    }
+  });
+}
 
 const recentEntries = []; // { value, stoppingTime, li }
 let numberLineMode = false;
@@ -204,6 +254,15 @@ export function initUI(onSubmit) {
   const tsSliderWrap = document.getElementById('ts-slider-wrap');
   const tsSlider = document.getElementById('ts-slider');
   const tsSliderVal = document.getElementById('ts-slider-val');
+  const graphSliderWrap = document.getElementById('graph-slider-wrap');
+  const graphSlider = document.getElementById('graph-slider');
+  const graphSliderVal = document.getElementById('graph-slider-val');
+  const spiralSliderWrap = document.getElementById('spiral-slider-wrap');
+  const spiralSlider = document.getElementById('spiral-slider');
+  const spiralSliderVal = document.getElementById('spiral-slider-val');
+  const nlSliderWrap = document.getElementById('nl-slider-wrap');
+  const nlSlider = document.getElementById('nl-slider');
+  const nlSliderVal = document.getElementById('nl-slider-val');
   const chartFlipBtn = document.getElementById('chart-flip');
   const mathBar = document.getElementById('math-bar');
   const graphGroup = getGroup();
@@ -213,7 +272,11 @@ export function initUI(onSubmit) {
     if (numberLineMode) {
       numberLineMode = false;
       hideNumberLine();
+      // Full dispose on mode-switch away — keeps VRAM from accumulating
+      // across Graph → NumberLine → Spiral cycles.
+      clearNumberLine();
       nlControls.classList.add('hidden');
+      nlSliderWrap.classList.add('hidden');
       mathBar.classList.add('hidden');
     }
     if (timeSeriesMode) {
@@ -227,7 +290,9 @@ export function initUI(onSubmit) {
       spiralMode = false;
       hideSpiral();
       chartControls.classList.add('hidden');
+      spiralSliderWrap.classList.add('hidden');
     }
+    graphSliderWrap.classList.add('hidden');
     if (graphGroup) graphGroup.visible = true;
     input.placeholder = 'Try 27';
   }
@@ -238,6 +303,7 @@ export function initUI(onSubmit) {
     showNumberLine();
     if (graphGroup) graphGroup.visible = false;
     nlControls.classList.remove('hidden');
+    nlSliderWrap.classList.remove('hidden');
     input.placeholder = 'Enter number';
   }
 
@@ -259,8 +325,15 @@ export function initUI(onSubmit) {
     showSpiral();
     if (graphGroup) graphGroup.visible = false;
     chartControls.classList.remove('hidden');
+    spiralSliderWrap.classList.remove('hidden');
     input.placeholder = 'Try 27';
     frameSpiralCamera();
+  }
+
+  function enterGraphMode() {
+    // Called when a graph-based mode (particles/value/parity/stopping)
+    // is selected. Shows the graph visibility slider.
+    graphSliderWrap.classList.remove('hidden');
   }
 
   function frameTimeSeriesCamera() {
@@ -293,6 +366,7 @@ export function initUI(onSubmit) {
         enterSpiral();
       } else {
         exitAllSpecialModes();
+        enterGraphMode();
         if (mode === 'stopping') {
           stoppingSubs.classList.remove('hidden');
           const activeSub = stoppingSubs.querySelector('.sub-btn.active');
@@ -407,6 +481,54 @@ export function initUI(onSubmit) {
     });
   });
 
+  // Rubberband sliders — drag right to push the per-mode ceiling up.
+  // On release past 75% of the current range, the range extends so the
+  // slider re-centers and more headroom is available. Capped at the
+  // per-mode hardware safety max.
+  makeRubberbandSlider({
+    sliderEl: graphSlider, valEl: graphSliderVal,
+    initialMax: 200, initialValue: 100, safetyMax: MAX_VISIBLE_NODES,
+    onChange: (n) => setGraphVisibleMax(n),
+  });
+  makeRubberbandSlider({
+    sliderEl: spiralSlider, valEl: spiralSliderVal,
+    initialMax: 100, initialValue: 50, safetyMax: MAX_SPIRAL_LINES,
+    onChange: (n) => setSpiralVisibleMax(n),
+  });
+  makeRubberbandSlider({
+    sliderEl: nlSlider, valEl: nlSliderVal,
+    initialMax: 500, initialValue: 250, safetyMax: MAX_ORBS,
+    onChange: (n) => setOrbVisibleMax(n),
+  });
+
+  // ── Abort button + Escape key ─────────────────────────
+  function abortWork() {
+    cancelAll();
+    btnFill.disabled = false;
+    btnFill.textContent = 'Fill';
+    btnAbort.classList.add('hidden');
+  }
+  btnAbort.addEventListener('click', abortWork);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && pending() > 0) {
+      abortWork();
+    }
+  });
+
+  // Self-scheduling RAF loop: show the Abort button only while the
+  // scheduler has pending work. Throttled to every 10 frames — the
+  // check is a cheap array-length read but there's no reason to
+  // re-touch the DOM 60 times/sec.
+  let abortFrame = 0;
+  function updateAbortVisibility() {
+    requestAnimationFrame(updateAbortVisibility);
+    abortFrame = (abortFrame + 1) % 10;
+    if (abortFrame !== 0) return;
+    const busy = pending() > 0;
+    btnAbort.classList.toggle('hidden', !busy);
+  }
+  requestAnimationFrame(updateAbortVisibility);
+
   // Mouse move for tooltip raycasting
   document.addEventListener('mousemove', (e) => {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -519,11 +641,9 @@ export function updateRecentColors() {
 export function updateTooltip(camera, scene) {
   raycaster.setFromCamera(mouse, camera);
 
-  // Collect all node meshes
-  const meshes = [];
-  for (const node of getNodes().values()) {
-    meshes.push(node.mesh);
-  }
+  // Raycast only against recently-added nodes (ring buffer of ≤200).
+  // Keeps hover cost bounded even with thousands of nodes in the scene.
+  const meshes = getRaycastCandidates();
 
   const intersects = raycaster.intersectObjects(meshes, false);
 

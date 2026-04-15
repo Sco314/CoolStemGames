@@ -98,12 +98,28 @@
         <input id="ts-slider" type="range" min="0" max="200" value="0" step="1" />
       </div>
 
+      <div id="graph-slider-wrap" class="hidden">
+        <label for="graph-slider">Visible: <span id="graph-slider-val">100</span></label>
+        <input id="graph-slider" type="range" min="1" max="200" value="100" step="1" />
+      </div>
+
+      <div id="spiral-slider-wrap" class="hidden">
+        <label for="spiral-slider">Visible: <span id="spiral-slider-val">50</span></label>
+        <input id="spiral-slider" type="range" min="1" max="100" value="50" step="1" />
+      </div>
+
+      <div id="nl-slider-wrap" class="hidden">
+        <label for="nl-slider">Orbs: <span id="nl-slider-val">250</span></label>
+        <input id="nl-slider" type="range" min="1" max="500" value="250" step="1" />
+      </div>
+
       <div id="input-area">
         <input id="num-input" type="text" inputmode="text" placeholder="Try 27 or 27^27" autocomplete="off" />
         <button id="btn-go">Add</button>
         <span class="input-sep"></span>
         <input id="fill-input" type="text" inputmode="numeric" placeholder="Fill 1–N" autocomplete="off" />
         <button id="btn-fill">Fill</button>
+        <button id="btn-abort" class="hidden">Abort</button>
       </div>
     </footer>
 

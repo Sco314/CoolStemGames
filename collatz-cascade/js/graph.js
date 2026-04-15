@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { isClimber } from './collatz.js';
+import { log2 } from './valueUtils.js';
 import {
   NODE_BASE_RADIUS, NODE_SCALE_LOG_BASE, NODE_MIN_RADIUS, NODE_MAX_RADIUS,
   ANCHOR_RADIUS, ANCHOR_COLOR, EDGE_OPACITY,
@@ -22,11 +23,21 @@ import {
 } from './constants.js';
 
 // ── State ────────────────────────────────────────────────
-const nodes = new Map();   // value → node object
+const nodes = new Map();   // value → node object (insertion order = age, oldest first)
 const edges = new Map();   // "from-to" → edge object
 let group = null;
 let maxStoppingTime = 0;
 let settled = true;
+
+// ── Memory ceilings ──────────────────────────────────────
+// Hardware safety cap: the rubberband slider cannot exceed this.
+// Picked conservatively for mid-tier mobile GPUs.
+export const MAX_VISIBLE_NODES = 2000;
+let visibleMax = 100;   // current soft ceiling (user-controlled via slider)
+
+// Recent-nodes ring buffer for raycast candidates (keeps tooltip O(small-N)).
+const RECENT_RING_SIZE = 200;
+const recentNodes = [];  // [value, value, ...] — most recent at end
 
 // ── Layout mode ──────────────────────────────────────────
 let currentMode = 'particles';
@@ -91,7 +102,10 @@ export function colorHexForStoppingTime(st) {
 // ── Node size ────────────────────────────────────────────
 function radiusForValue(value) {
   if (value === 1) return ANCHOR_RADIUS;
-  const r = NODE_BASE_RADIUS * (1 + Math.log(value) / Math.log(NODE_SCALE_LOG_BASE) * 0.012);
+  // Use log2 helper so BigInt values don't silently coerce to Infinity
+  // through Number(v) above 2^53.
+  const lg = log2(value);  // ≈ log2
+  const r = NODE_BASE_RADIUS * (1 + (lg * Math.LN2) / Math.log(NODE_SCALE_LOG_BASE) * 0.012);
   return Math.max(NODE_MIN_RADIUS, Math.min(NODE_MAX_RADIUS, r));
 }
 
@@ -179,6 +193,7 @@ export function addNode(value, stoppingTime, immediate = false) {
   }
 
   nodes.set(value, node);
+  pushRecent(value);
   settled = false;
 
   // If we're in a deterministic mode, compute target for the new node
@@ -186,7 +201,90 @@ export function addNode(value, stoppingTime, immediate = false) {
     computeTargets(currentMode);
   }
 
+  // Evict oldest (LRU) if we've exceeded the soft ceiling. The anchor
+  // (value === 1) is pinned and never evicted.
+  evictOldestIfOverCap();
+
   return node;
+}
+
+// ── LRU eviction ─────────────────────────────────────────
+function evictOldestIfOverCap() {
+  if (nodes.size <= visibleMax) return;
+  // Map preserves insertion order. Walk oldest first, skip anchor.
+  const iter = nodes.keys();
+  while (nodes.size > visibleMax) {
+    const next = iter.next();
+    if (next.done) break;
+    const val = next.value;
+    if (val === 1) continue;   // never evict anchor
+    removeNode(val);
+  }
+}
+
+function pushRecent(value) {
+  recentNodes.push(value);
+  if (recentNodes.length > RECENT_RING_SIZE) {
+    recentNodes.splice(0, recentNodes.length - RECENT_RING_SIZE);
+  }
+}
+
+/**
+ * Remove a node and all its edges. Disposes GPU resources.
+ */
+export function removeNode(value) {
+  const node = nodes.get(value);
+  if (!node) return;
+  if (node.mesh) {
+    group.remove(node.mesh);
+    // Label is a child sprite on the mesh
+    if (node.label) {
+      node.mesh.remove(node.label);
+      node.label.material.map?.dispose();
+      node.label.material.dispose();
+    }
+    node.mesh.geometry.dispose();
+    node.mesh.material.dispose();
+  }
+  // Dispose edges touching this node
+  for (const [key, edge] of edges) {
+    if (edge.fromVal === value || edge.toVal === value) {
+      group.remove(edge.line);
+      edge.line.geometry.dispose();
+      edge.line.material.dispose();
+      edges.delete(key);
+    }
+  }
+  treeArcs.delete(value);
+  nodes.delete(value);
+  // Remove from recent ring buffer if present
+  for (let i = recentNodes.length - 1; i >= 0; i--) {
+    if (recentNodes[i] === value) recentNodes.splice(i, 1);
+  }
+}
+
+/**
+ * Set the soft ceiling on visible nodes. Capped at MAX_VISIBLE_NODES
+ * for hardware safety. Evicts oldest nodes immediately if over cap.
+ */
+export function setGraphVisibleMax(n) {
+  visibleMax = Math.max(1, Math.min(n | 0, MAX_VISIBLE_NODES));
+  evictOldestIfOverCap();
+}
+
+export function getGraphVisibleMax() { return visibleMax; }
+
+/**
+ * Raycast candidate list. Returns the most recently added meshes so
+ * hover tooltip work is O(recent) not O(all-nodes).
+ */
+export function getRaycastCandidates() {
+  const out = [];
+  for (const v of recentNodes) {
+    const n = nodes.get(v);
+    if (n && n.mesh) out.push(n.mesh);
+  }
+  return out;
 }
 
 // ── Add edge ─────────────────────────────────────────────
@@ -440,11 +538,14 @@ function targetStoppingTree(node) {
   return new THREE.Vector3(x, y, z);
 }
 
-// Helper: find max value among all nodes in graph
+// Helper: find max value among all nodes in graph.
+// Compare via log2 to avoid Number/BigInt direct comparison issues.
 function getMaxValueInGraph() {
   let max = 1;
+  let maxLg = 0;
   for (const node of nodes.values()) {
-    if (node.value > max) max = node.value;
+    const lg = log2(node.value);
+    if (lg > maxLg) { maxLg = lg; max = node.value; }
   }
   return max;
 }
