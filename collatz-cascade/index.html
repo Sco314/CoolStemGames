@@ -27,6 +27,7 @@
 
     <nav id="mode-selector">
       <button class="mode-btn active" data-mode="timeseries">Time Series</button>
+      <button class="mode-btn" data-mode="flatchart">Flat Chart</button>
       <button class="mode-btn" data-mode="spiral">Spiral</button>
       <button class="mode-btn" data-mode="numberline">Num Line</button>
       <button class="mode-btn" data-mode="particles">Particles</button>
@@ -111,6 +112,11 @@
       <div id="nl-slider-wrap" class="hidden">
         <label for="nl-slider">Orbs: <span id="nl-slider-val">250</span></label>
         <input id="nl-slider" type="range" min="1" max="500" value="250" step="1" />
+      </div>
+
+      <div id="flat-slider-wrap" class="hidden">
+        <label for="flat-slider">Fill to: <span id="flat-slider-val">0</span></label>
+        <input id="flat-slider" type="range" min="0" max="500" value="0" step="1" />
       </div>
 
       <div id="input-area">

@@ -31,6 +31,12 @@ import {
   addSpiralNumber, clearSpiral, getSpiralCameraTarget,
   setSpiralVisibleMax, getSpiralVisibleMax, MAX_SPIRAL_LINES,
 } from './spiral.js';
+import {
+  showFlatChart, hideFlatChart, isFlatChartActive,
+  addFlatChartNumber, clearFlatChart, getFlatChartCameraTarget,
+  setFlatChartVisibleMax, toggleFlatChartFlip,
+  MAX_FLAT_CHART_LINES,
+} from './flatchart.js';
 
 // ── DOM refs ─────────────────────────────────────────────
 const input = document.getElementById('num-input');
@@ -91,6 +97,7 @@ const recentEntries = []; // { value, stoppingTime, li }
 let numberLineMode = false;
 let timeSeriesMode = false;
 let spiralMode = false;
+let flatChartMode = false;
 
 // ── Tooltip state ────────────────────────────────────────
 let hoveredValue = null;
@@ -147,6 +154,14 @@ export function initUI(onSubmit) {
       const t = getSpiralCameraTarget();
       getCamera().position.lerp(t.position, 0.5);
       getControls().target.lerp(t.center, 0.5);
+      return;
+    }
+    if (flatChartMode) {
+      if (isOne) { input.value = ''; return; }
+      input.value = '';
+      clearError();
+      addFlatChartNumber(n);
+      frameFlatChartCamera();
       return;
     }
 
@@ -214,6 +229,15 @@ export function initUI(onSubmit) {
       return;
     }
 
+    // Flat chart fast path: single canvas redraw pass via batch mode
+    if (flatChartMode) {
+      setFlatChartVisibleMax(n);
+      frameFlatChartCamera();
+      btnFill.disabled = false;
+      btnFill.textContent = 'Fill';
+      return;
+    }
+
     const dispatch = (i) => {
       if (spiralMode) return addSpiralNumber(i);
       return onSubmit(i);
@@ -263,6 +287,9 @@ export function initUI(onSubmit) {
   const nlSliderWrap = document.getElementById('nl-slider-wrap');
   const nlSlider = document.getElementById('nl-slider');
   const nlSliderVal = document.getElementById('nl-slider-val');
+  const flatSliderWrap = document.getElementById('flat-slider-wrap');
+  const flatSlider = document.getElementById('flat-slider');
+  const flatSliderVal = document.getElementById('flat-slider-val');
   const chartFlipBtn = document.getElementById('chart-flip');
   const mathBar = document.getElementById('math-bar');
   const graphGroup = getGroup();
@@ -291,6 +318,13 @@ export function initUI(onSubmit) {
       hideSpiral();
       chartControls.classList.add('hidden');
       spiralSliderWrap.classList.add('hidden');
+    }
+    if (flatChartMode) {
+      flatChartMode = false;
+      hideFlatChart();
+      chartControls.classList.add('hidden');
+      flatSliderWrap.classList.add('hidden');
+      chartFlipBtn.classList.add('hidden');
     }
     graphSliderWrap.classList.add('hidden');
     if (graphGroup) graphGroup.visible = true;
@@ -330,6 +364,18 @@ export function initUI(onSubmit) {
     frameSpiralCamera();
   }
 
+  function enterFlatChart() {
+    exitAllSpecialModes();
+    flatChartMode = true;
+    showFlatChart();
+    if (graphGroup) graphGroup.visible = false;
+    chartControls.classList.remove('hidden');
+    flatSliderWrap.classList.remove('hidden');
+    chartFlipBtn.classList.remove('hidden');
+    input.placeholder = 'Try 27 or 27^27';
+    frameFlatChartCamera();
+  }
+
   function enterGraphMode() {
     // Called when a graph-based mode (particles/value/parity/stopping)
     // is selected. Shows the graph visibility slider.
@@ -349,6 +395,13 @@ export function initUI(onSubmit) {
     getControls().target.copy(t.center);
   }
 
+  function frameFlatChartCamera() {
+    const cam = getCamera();
+    const t = getFlatChartCameraTarget(cam.aspect);
+    cam.position.copy(t.position);
+    getControls().target.copy(t.center);
+  }
+
   for (const btn of modeBtns) {
     btn.addEventListener('click', () => {
       for (const b of modeBtns) b.classList.remove('active');
@@ -364,6 +417,9 @@ export function initUI(onSubmit) {
       } else if (mode === 'spiral') {
         stoppingSubs.classList.add('hidden');
         enterSpiral();
+      } else if (mode === 'flatchart') {
+        stoppingSubs.classList.add('hidden');
+        enterFlatChart();
       } else {
         exitAllSpecialModes();
         enterGraphMode();
@@ -457,12 +513,22 @@ export function initUI(onSubmit) {
       tsSliderVal.textContent = '0';
     }
     if (spiralMode) clearSpiral();
+    if (flatChartMode) {
+      clearFlatChart();
+      flatSlider.value = 0;
+      flatSliderVal.textContent = '0';
+    }
   });
 
-  // Flip X/Y for time series
+  // Flip X/Y for the active chart mode (time series OR flat chart)
   chartFlipBtn.addEventListener('click', () => {
-    toggleFlip();
-    frameTimeSeriesCamera();
+    if (timeSeriesMode) {
+      toggleFlip();
+      frameTimeSeriesCamera();
+    } else if (flatChartMode) {
+      toggleFlatChartFlip();
+      frameFlatChartCamera();
+    }
   });
 
   // Rubberband sliders — drag right to push the per-mode ceiling up.
@@ -491,6 +557,14 @@ export function initUI(onSubmit) {
     sliderEl: nlSlider, valEl: nlSliderVal,
     initialMax: 500, initialValue: 250, safetyMax: MAX_ORBS,
     onChange: (n) => setOrbVisibleMax(n),
+  });
+  makeRubberbandSlider({
+    sliderEl: flatSlider, valEl: flatSliderVal,
+    initialMax: 500, initialValue: 0, safetyMax: MAX_FLAT_CHART_LINES,
+    onChange: (n) => {
+      setFlatChartVisibleMax(n);
+      frameFlatChartCamera();
+    },
   });
 
   // ── Abort button + Escape key ─────────────────────────
