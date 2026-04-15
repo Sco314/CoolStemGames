@@ -25,6 +25,10 @@ const COLORS = [
   0xaa66cc, 0xff9a4a, 0x6ad4e0, 0xd04a88,
 ];
 
+// ── Memory ceilings ──────────────────────────────────────
+export const MAX_SPIRAL_LINES = 500;
+let visibleMax = 50;
+
 // ── State ────────────────────────────────────────────────
 let group = null;
 let active = false;
@@ -62,16 +66,39 @@ export function hideSpiral() {
 export function isSpiralActive() { return active; }
 export function getSpiralGroup() { return group; }
 
-export function clearSpiral() {
-  for (const seq of sequences) {
-    if (seq.mesh) {
-      group.remove(seq.mesh);
-      seq.mesh.geometry.dispose();
-      seq.mesh.material.dispose();
-    }
+function disposeSeq(seq) {
+  if (seq.mesh) {
+    group.remove(seq.mesh);
+    seq.mesh.geometry.dispose();
+    seq.mesh.material.dispose();
   }
+}
+
+export function clearSpiral() {
+  for (const seq of sequences) disposeSeq(seq);
   sequences = [];
 }
+
+/**
+ * LRU evict the oldest sequences when we exceed the soft ceiling.
+ */
+function evictOldest() {
+  while (sequences.length > visibleMax) {
+    const gone = sequences.shift();
+    disposeSeq(gone);
+  }
+}
+
+/**
+ * Set the soft ceiling on visible spiral lines. Capped at
+ * MAX_SPIRAL_LINES for hardware safety.
+ */
+export function setSpiralVisibleMax(n) {
+  visibleMax = Math.max(1, Math.min(n | 0, MAX_SPIRAL_LINES));
+  evictOldest();
+}
+
+export function getSpiralVisibleMax() { return visibleMax; }
 
 /**
  * Add a Collatz sequence to the spiral visualization.
@@ -121,6 +148,9 @@ export function addSpiralNumber(n) {
   sequences.push(seq);
 
   buildMesh(seq);
+
+  // LRU evict oldest on overflow so mesh count stays bounded.
+  evictOldest();
 }
 
 /**
