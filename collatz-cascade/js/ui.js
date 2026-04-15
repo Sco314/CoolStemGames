@@ -137,10 +137,11 @@ export function initUI(onSubmit) {
       showFillError('Enter an integer ≥ 2.');
       return;
     }
-    if (n > 10000) {
-      showFillError('Max 10,000 for fill.');
-      return;
-    }
+    // No upper cap. Shared-tail caching keeps the Collatz computation
+    // cheap even for huge N, and rendering work is staged across frames
+    // by the scheduler. The per-mode visual ceiling is enforced in
+    // setVisibleMax (Time Series) — Fill computes everything but only
+    // shows what the device can render.
 
     fillInput.value = '';
     clearFillError();

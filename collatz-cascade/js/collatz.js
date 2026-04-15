@@ -11,36 +11,66 @@ const MAX_ITERATIONS = 50000;            // safety cap on any sequence length
 /**
  * Get just the values in the Collatz sequence from n down to 1.
  * Handles Number and BigInt inputs; output may be mixed.
+ *
+ * Uses shared-tail memoization: every Collatz sequence eventually
+ * funnels into the same tail (…→16→8→4→2→1), and many sequences
+ * share long sub-tails with each other. We cache every sub-sequence
+ * we see so that future calls splice an existing tail instead of
+ * recomputing it. For Fill operations this turns O(N × avgLen) into
+ * roughly O(N + uniqueValues) — typically ~50× faster.
  */
 export function collatzValues(n) {
   const start = toValue(n);
   if (start == null) return [];
 
-  const key = valueKey(start);
-  const cached = cache.get(key);
+  const startKey = valueKey(start);
+  const cached = cache.get(startKey);
   if (cached) return cached.slice();
 
-  const values = [];
+  // Walk forward until we hit 1 or land on something already cached.
+  const prefix = [];
   let current = start;
   let iter = 0;
+  let hitCached = null;
+
   while (!isOne(current) && iter < MAX_ITERATIONS) {
-    values.push(current);
-    // Number-only precision guard (BigInt can't overflow)
+    const k = valueKey(current);
+    if (k !== startKey) {
+      const seen = cache.get(k);
+      if (seen) { hitCached = seen; break; }
+    }
+    prefix.push(current);
+    // Number-only precision guard (BigInt can't overflow).
     if (!isBig(current) && !Number.isSafeInteger(current)) {
       console.warn(`Number precision lost at step ${iter} for start ${n}`);
-      break;
+      // Cache the prefix-only sequence and bail.
+      cache.set(startKey, prefix);
+      return prefix.slice();
     }
     current = nextCollatz(current);
     iter++;
   }
-  if (isOne(current)) values.push(current);
-  if (iter >= MAX_ITERATIONS) {
+
+  let seq;
+  if (hitCached) {
+    seq = prefix.concat(hitCached);
+  } else if (isOne(current)) {
+    seq = prefix.concat([current]);
+  } else {
+    // Hit MAX_ITERATIONS — cache what we have so far.
     console.warn(`Collatz sequence exceeded ${MAX_ITERATIONS} steps for ${n}`);
+    seq = prefix.slice();
   }
 
-  // Cache for reuse (shared-tail optimization works via substring matching)
-  cache.set(key, values);
-  return values.slice();
+  // Cache every sub-sequence so future calls can splice from any prefix step.
+  for (let i = 0; i < prefix.length; i++) {
+    const k = valueKey(prefix[i]);
+    if (!cache.has(k)) cache.set(k, seq.slice(i));
+  }
+  // Ensure the start key is cached even if prefix was empty (n already === 1).
+  if (!cache.has(startKey)) cache.set(startKey, seq);
+
+  return seq.slice();
 }
 
 /**

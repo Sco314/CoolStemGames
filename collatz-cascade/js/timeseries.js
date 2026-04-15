@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { collatzValues } from './collatz.js';
 import { log2 as bigLog2, valueKey, formatValue, isBig } from './valueUtils.js';
+import { scheduleBatch } from './scheduler.js';
 
 // ── Constants ────────────────────────────────────────────
 const CHART_WIDTH = 24;
@@ -101,16 +102,22 @@ export function beginBatch() {
 export function endBatch() {
   if (!inBatch) return;
   inBatch = false;
-  if (batchNeedsRebuild) {
-    rebuildAxes();
-    for (const s of sequences) rebuildLineFor(s);
-  } else {
-    // Just create any lines that were deferred
-    for (const s of sequences) {
-      if (!s.mesh) rebuildLineFor(s);
-    }
-  }
+  const needsRebuild = batchNeedsRebuild;
   batchNeedsRebuild = false;
+
+  if (needsRebuild) rebuildAxes();
+
+  // Build the work list: rebuild everything if scale changed, else just
+  // build deferred (mesh-less) lines. Stage the mesh creates across frames
+  // via the frame-budgeted scheduler — a synchronous burst of 200+
+  // TubeGeometry creates blocks the main thread for >2s on mobile and
+  // gets the tab killed by the browser watchdog.
+  const todo = needsRebuild
+    ? sequences.slice()
+    : sequences.filter(s => !s.mesh);
+  if (todo.length === 0) return;
+
+  scheduleBatch(todo, (s) => rebuildLineFor(s), { priority: 5 });
 }
 
 /**
