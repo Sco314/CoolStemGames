@@ -10,6 +10,7 @@ import { initUI, updateTooltip } from './ui.js';
 import { initNumberLine, updateNumberLine, isNumberLineActive } from './numberline.js';
 import { initTimeSeries, updateTimeSeries, isTimeSeriesActive } from './timeseries.js';
 import { initSpiral, updateSpiral, isSpiralActive } from './spiral.js';
+import { initFlatChart, updateFlatChart, isFlatChartActive } from './flatchart.js';
 
 // ── Block iOS Safari's page-level pinch-zoom gestures ───
 // touch-action: none should handle this, but iOS fires legacy
@@ -56,6 +57,7 @@ initGraph(scene);
 initNumberLine(scene);
 initTimeSeries(scene);
 initSpiral(scene);
+initFlatChart(scene);
 
 // ── UI ───────────────────────────────────────────────────
 initUI((n) => {
@@ -87,6 +89,9 @@ function animate() {
     controls.update();
   } else if (isSpiralActive()) {
     updateSpiral(dt);
+    controls.update();
+  } else if (isFlatChartActive()) {
+    updateFlatChart(dt);
     controls.update();
   } else {
     // Graph modes
