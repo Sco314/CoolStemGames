@@ -654,8 +654,8 @@ export function initUI(onSubmit) {
   }
   requestAnimationFrame(updateMathBar);
 
-  // ── Default mode: Time Series ─────────────────────────
-  enterTimeSeries();
+  // ── Default mode: Number Line ─────────────────────────
+  enterNumberLine();
 }
 
 let tooltipScreenPos = { x: 0, y: 0 };
