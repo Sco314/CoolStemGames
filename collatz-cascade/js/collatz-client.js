@@ -24,6 +24,10 @@ let onSnapshot = null;
 let onProgress = null;
 let onComplete = null;
 
+// Persistent snapshot handler — always called when any snapshot arrives
+// (not just during fills). Set via registerSnapshotHandler.
+let persistentSnapshotHandler = null;
+
 function ensureWorker() {
   if (worker) return;
   worker = new Worker('./js/collatz-worker.js', { type: 'module' });
@@ -47,6 +51,7 @@ function handleMessage(e) {
 
   else if (type === 'snapshot') {
     if (onSnapshot) onSnapshot(e.data.bitmap, e.data.drawn, e.data.total);
+    else if (persistentSnapshotHandler) persistentSnapshotHandler(e.data.bitmap, e.data.drawn, e.data.total);
   }
 
   else if (type === 'progress') {
@@ -124,4 +129,8 @@ export function refitChart({ renderMode, flipped } = {}) {
 
 export function isWorkerBusy() {
   return busy;
+}
+
+export function registerSnapshotHandler(handler) {
+  persistentSnapshotHandler = handler;
 }

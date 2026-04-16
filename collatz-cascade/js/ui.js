@@ -34,8 +34,9 @@ import {
 import {
   showFlatChart, hideFlatChart, isFlatChartActive,
   addFlatChartNumber, clearFlatChart, getFlatChartCameraTarget,
-  setFlatChartVisibleMax, toggleFlatChartFlip,
-  MAX_FLAT_CHART_LINES,
+  startStreamingFill, abortFill, toggleFlatChartFlip,
+  setFlatChartRenderMode, getFlatChartRenderMode,
+  refitFlatChart,
 } from './flatchart.js';
 
 // ── DOM refs ─────────────────────────────────────────────
@@ -229,12 +230,21 @@ export function initUI(onSubmit) {
       return;
     }
 
-    // Flat chart fast path: single canvas redraw pass via batch mode
+    // Flat chart: stream fill via Web Worker (no cap)
     if (flatChartMode) {
-      setFlatChartVisibleMax(n);
-      frameFlatChartCamera();
-      btnFill.disabled = false;
-      btnFill.textContent = 'Fill';
+      btnFill.disabled = true;
+      btnFill.textContent = '0%';
+      startStreamingFill(2, n, {
+        onProgressCb: (drawn, total) => {
+          const pct = Math.round((drawn / total) * 100);
+          btnFill.textContent = `${Math.min(pct, 100)}%`;
+        },
+        onCompleteCb: () => {
+          btnFill.disabled = false;
+          btnFill.textContent = 'Fill';
+          frameFlatChartCamera();
+        },
+      });
       return;
     }
 
@@ -291,6 +301,8 @@ export function initUI(onSubmit) {
   const flatSlider = document.getElementById('flat-slider');
   const flatSliderVal = document.getElementById('flat-slider-val');
   const chartFlipBtn = document.getElementById('chart-flip');
+  const heatmapToggleBtn = document.getElementById('flat-heatmap-toggle');
+  const refitBtn = document.getElementById('flat-refit');
   const mathBar = document.getElementById('math-bar');
   const graphGroup = getGroup();
 
@@ -322,9 +334,11 @@ export function initUI(onSubmit) {
     if (flatChartMode) {
       flatChartMode = false;
       hideFlatChart();
+      abortFill();
       chartControls.classList.add('hidden');
-      flatSliderWrap.classList.add('hidden');
       chartFlipBtn.classList.add('hidden');
+      heatmapToggleBtn.classList.add('hidden');
+      refitBtn.classList.add('hidden');
     }
     graphSliderWrap.classList.add('hidden');
     if (graphGroup) graphGroup.visible = true;
@@ -370,8 +384,9 @@ export function initUI(onSubmit) {
     showFlatChart();
     if (graphGroup) graphGroup.visible = false;
     chartControls.classList.remove('hidden');
-    flatSliderWrap.classList.remove('hidden');
     chartFlipBtn.classList.remove('hidden');
+    heatmapToggleBtn.classList.remove('hidden');
+    refitBtn.classList.remove('hidden');
     input.placeholder = 'Try 27 or 27^27';
     frameFlatChartCamera();
   }
@@ -515,8 +530,6 @@ export function initUI(onSubmit) {
     if (spiralMode) clearSpiral();
     if (flatChartMode) {
       clearFlatChart();
-      flatSlider.value = 0;
-      flatSliderVal.textContent = '0';
     }
   });
 
@@ -529,6 +542,19 @@ export function initUI(onSubmit) {
       toggleFlatChartFlip();
       frameFlatChartCamera();
     }
+  });
+
+  // Heat-map toggle (Flat Chart mode only)
+  heatmapToggleBtn.addEventListener('click', () => {
+    const current = getFlatChartRenderMode();
+    const next = current === 'strokes' ? 'heatmap' : 'strokes';
+    setFlatChartRenderMode(next);
+    heatmapToggleBtn.textContent = next === 'strokes' ? 'Heat Map' : 'Strokes';
+  });
+
+  // Refit (Flat Chart mode only): re-draw at corrected axis scale
+  refitBtn.addEventListener('click', () => {
+    refitFlatChart();
   });
 
   // Rubberband sliders — drag right to push the per-mode ceiling up.
@@ -558,18 +584,12 @@ export function initUI(onSubmit) {
     initialMax: 500, initialValue: 250, safetyMax: MAX_ORBS,
     onChange: (n) => setOrbVisibleMax(n),
   });
-  makeRubberbandSlider({
-    sliderEl: flatSlider, valEl: flatSliderVal,
-    initialMax: 500, initialValue: 0, safetyMax: MAX_FLAT_CHART_LINES,
-    onChange: (n) => {
-      setFlatChartVisibleMax(n);
-      frameFlatChartCamera();
-    },
-  });
+  // Flat Chart has no slider — it's uncapped. Fill goes via worker streaming.
 
   // ── Abort button + Escape key ─────────────────────────
   function abortWork() {
     cancelAll();
+    abortFill();    // cancel any in-flight worker range fill
     btnFill.disabled = false;
     btnFill.textContent = 'Fill';
     btnAbort.classList.add('hidden');
