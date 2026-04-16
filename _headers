@@ -25,3 +25,5 @@
 # App folders: no-cache so edits deploy immediately
 /collatz-cascade/*
   Cache-Control: public, max-age=0, must-revalidate
+/fibonacci-zoom/*
+  Cache-Control: public, max-age=0, must-revalidate
