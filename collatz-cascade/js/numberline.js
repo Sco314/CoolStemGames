@@ -27,24 +27,23 @@ const OPERATOR_RADIUS = 0.18;
 const LINE_Y = 0;
 const LABEL_SCALE = 0.45;
 
-// Arc: minimum height so close numbers still arc visibly
-const ARC_MIN_HEIGHT = 0.8;
-const ARC_HEIGHT_FACTOR = 0.3;
+// Arc: gentle arcs so the ball glides smoothly
+const ARC_MIN_HEIGHT = 0.3;
+const ARC_HEIGHT_FACTOR = 0.12;
 
 // Colors
 const ORB_COLOR_DEFAULT = new THREE.Color(0.85, 0.35, 0.15);  // reddish orange
 const ORB_COLOR_VISITED = new THREE.Color(0.2, 0.45, 0.9);    // complement blue
 const OPERATOR_COLOR = new THREE.Color(1, 1, 1);
 
-// Timing (seconds)
-const TRAVEL_MIN = 1.2;          // minimum travel time (short hops)
-const TRAVEL_MAX = 4.0;          // maximum travel time (long travels)
-const PAUSE_DURATION = 0.5;      // pause on collision (half second)
-const ZOOM_IN_START = 0.7;       // progress fraction when zoom-in begins
+// Timing (seconds) — narrow range keeps pacing consistent
+const TRAVEL_MIN = 0.5;          // minimum travel time (short hops)
+const TRAVEL_MAX = 1.5;          // maximum travel time (long travels)
+const PAUSE_DURATION = 0.2;      // brief pause on collision
 const EXTRA_CYCLES = 2;          // repeat 4→2→1 this many times
 
 // Bounce animation during pause: single dramatic upward hop
-const BOUNCE_HEIGHT = 1.5;       // max height of the bounce arc
+const BOUNCE_HEIGHT = 0.35;      // subtle hop on landing
 
 // ── State ────────────────────────────────────────────────
 let nlGroup = null;
@@ -429,8 +428,9 @@ export function updateNumberLine(dt) {
       pauseElapsed = 0;
       pauseOrbY = arcEnd.y;
     } else {
-      // Quadratic bezier interpolation
-      const t = travelProgress;
+      // Quadratic bezier with smoothstep easing for natural acceleration
+      const raw = travelProgress;
+      const t = raw * raw * (3 - 2 * raw);  // smoothstep
       const invT = 1 - t;
       operatorBall.position.set(
         invT * invT * arcStart.x + 2 * invT * t * arcControl.x + t * t * arcEnd.x,
@@ -474,36 +474,13 @@ export function updateNumberLine(dt) {
 }
 
 /**
- * Camera target for the current state.
+ * Camera target: one consistent framing regardless of play state.
+ * Eliminates jarring jumps between travel/pause camera positions.
  */
 function getCameraTarget() {
   const ballPos = operatorBall.position.clone();
-
-  if (playState === 'traveling') {
-    const dist = arcStart.distanceTo(arcEnd);
-    const zoomOut = Math.max(3, dist * 0.8);
-
-    let camDist = zoomOut;
-    if (travelProgress > ZOOM_IN_START) {
-      const zoomInT = (travelProgress - ZOOM_IN_START) / (1 - ZOOM_IN_START);
-      camDist = zoomOut * (1 - zoomInT * 0.7);
-    }
-
-    return {
-      position: new THREE.Vector3(ballPos.x, ballPos.y + camDist * 0.3, camDist),
-      lookAt: ballPos,
-    };
-  }
-
-  if (playState === 'paused') {
-    return {
-      position: new THREE.Vector3(ballPos.x + 0.5, ballPos.y + 1.5, 3),
-      lookAt: ballPos,
-    };
-  }
-
   return {
-    position: new THREE.Vector3(ballPos.x, ballPos.y + 3, 8),
+    position: new THREE.Vector3(ballPos.x, ballPos.y + 1.2, 3.5),
     lookAt: ballPos,
   };
 }
@@ -755,8 +732,9 @@ function makeScaleLabel(value, tickSize) {
   const tex = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
   const sprite = new THREE.Sprite(mat);
-  // Scale proportional to tick interval so label stays proportional to the line section
-  const labelScale = Math.max(1.0, tickSize * 6);
+  // Scale grows with log of tick size so labels stay readable without
+  // filling the screen at large numbers.
+  const labelScale = Math.max(1.0, Math.min(6.0, 1.0 + Math.log2(Math.max(1, tickSize)) * 0.8));
   sprite.scale.set(labelScale * 2, labelScale * 0.5, 1);
   sprite.renderOrder = 2;
   return sprite;

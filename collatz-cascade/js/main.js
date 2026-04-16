@@ -79,8 +79,8 @@ function animate() {
     // Number line mode: update playback and follow camera
     const camTarget = updateNumberLine(dt);
     if (camTarget) {
-      camera.position.lerp(camTarget.position, 0.06);
-      controls.target.lerp(camTarget.lookAt, 0.06);
+      camera.position.lerp(camTarget.position, 0.12);
+      controls.target.lerp(camTarget.lookAt, 0.12);
     }
     controls.update();
   } else if (isTimeSeriesActive()) {
