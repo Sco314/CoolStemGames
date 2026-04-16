@@ -1,0 +1,2495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Fibonacci Zoom</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0b0f1a;
+  --bg2:       #111827;
+  --card:      rgba(17, 24, 39, 0.85);
+  --border:    rgba(51, 65, 85, 0.7);
+  --amber:     #f5a623;
+  --amber-l:   #fbbf24;
+  --orange:    #f97316;
+  --red:       #e05c5c;
+  --teal:      #a8e6cf;
+  --txt:       #f1f5f9;
+  --txt2:      #94a3b8;
+  --txt3:      #475569;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg);
+  color: var(--txt);
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+/* ── Layout ─────────────────────────────── */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 16px;
+  gap: 12px;
+}
+
+/* centered title */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+.top-bar h1 {
+  font-size: 26px; font-weight: 700;
+  background: linear-gradient(135deg, #fde68a 0%, #fb923c 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+}
+.top-bar-right {
+  position: absolute; right: 0;
+  display: flex; gap: 8px; align-items: center;
+}
+
+/* settings / admin icon buttons */
+.icon-btn {
+  width: 34px; height: 34px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--card); color: var(--txt2);
+  cursor: pointer; transition: all .2s;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.icon-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+/* overlay panel */
+.overlay-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+.overlay-backdrop.open { display: flex; align-items: center; justify-content: center; }
+
+.overlay-panel {
+  background: #111827;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  width: 320px;
+  max-width: 90vw;
+  position: relative;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}
+.overlay-title {
+  font-size: 16px; font-weight: 700;
+  color: var(--txt); margin-bottom: 18px;
+  display: flex; align-items: center; gap: 8px;
+}
+.overlay-close {
+  position: absolute; top: 14px; right: 14px;
+  background: none; border: none;
+  color: var(--txt3); font-size: 18px; cursor: pointer;
+  line-height: 1;
+}
+.overlay-close:hover { color: var(--txt); }
+
+.overlay-section {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: var(--txt3);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin: 14px 0 8px;
+}
+.overlay-section:first-of-type { margin-top: 0; }
+
+/* admin unlock row */
+.admin-unlock-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 10px;
+}
+.admin-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; padding: 2px 6px;
+  border-radius: 4px; background: rgba(239,68,68,0.15);
+  color: #f87171; border: 1px solid rgba(239,68,68,0.3);
+  flex-shrink: 0;
+}
+
+
+
+.main-row {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Sidebar ─────────────────────────────── */
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  backdrop-filter: blur(8px);
+}
+
+.card-title {
+  font-size: 15px; font-weight: 600;
+  color: var(--txt); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 7px;
+  letter-spacing: .04em;
+}
+
+/* mode buttons */
+.mode-btns {
+  display: flex; gap: 6px; margin-bottom: 8px;
+}
+.mode-btn {
+  flex: 1; padding: 8px 6px;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: transparent; color: var(--txt2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all .2s;
+}
+.mode-btn:hover { color: var(--txt); border-color: var(--amber); }
+.mode-btn.active {
+  background: var(--amber); color: #0b0f1a;
+  border-color: var(--amber);
+}
+.mode-info {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: var(--txt3);
+  text-align: center; padding-top: 4px;
+  min-height: 14px;
+}
+
+/* mobile */
+@media (max-width: 640px) {
+  /* 100svh = stable viewport height — doesn't change when address bar shows/hides */
+  .shell { padding: 6px; gap: 6px; height: 100svh; overflow: hidden; }
+  .main-row { flex-direction: column; gap: 6px; }
+  .sidebar { display: none !important; }
+  .sidebar-right { display: none !important; }
+  .top-bar h1 { font-size: 18px; }
+  .nl-wrapper { height: 64px; }
+  .right-col { order: 0; gap: 4px; }
+
+  /* Mobile: hide old account button, show info row instead */
+  .mobile-account-btn { display: none !important; }
+  .top-bar-right { gap: 6px; }
+
+  /* Mobile info row: account card + leaderboard top 3 side by side */
+  .mobile-info-row {
+    display: flex; gap: 6px; flex-shrink: 0;
+  }
+  .mobile-info-row .card {
+    flex: 1; min-width: 0;
+    padding: 8px 10px;
+  }
+  .mobile-info-row .card-title {
+    font-size: 12px; margin-bottom: 6px;
+  }
+  .mobile-info-row .user-name { font-size: 13px; }
+  .mobile-info-row .user-score { font-size: 11px; }
+  .mobile-info-row .auth-btn { font-size: 10px; padding: 6px 8px; margin-top: 4px; }
+  .mobile-info-row .lb-row { padding: 3px 0; }
+  .mobile-info-row .lb-name { font-size: 11px; }
+  .mobile-info-row .lb-score { font-size: 10px; }
+  .mobile-info-row .lb-rank { font-size: 11px; }
+  #mobileInfoRow { display: flex !important; }
+
+  /* Mobile bottom sheet for account/leaderboard */
+  .mobile-sheet-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 90;
+    backdrop-filter: blur(2px);
+  }
+  .mobile-sheet-backdrop.open { display: flex; align-items: flex-end; justify-content: center; }
+  .mobile-sheet {
+    background: #111827;
+    border: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+    padding: 20px 16px 24px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 70vh;
+    overflow-y: auto;
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.5);
+  }
+  .mobile-sheet .card { margin-bottom: 12px; }
+  .mobile-sheet .card:last-child { margin-bottom: 0; }
+  .mobile-sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--txt3); border-radius: 2px;
+    margin: 0 auto 14px;
+  }
+}
+/* Hide mobile-only elements on desktop */
+@media (min-width: 641px) {
+  .mobile-account-btn { display: none !important; }
+  .mobile-info-row { display: none !important; }
+  .mobile-sheet-backdrop { display: none !important; }
+}
+/* tablet: hide left sidebar, keep right sidebar */
+@media (min-width: 641px) and (max-width: 900px) {
+  .sidebar { display: none; }
+}
+
+/* scroll hint */
+.scroll-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: var(--txt3);
+  text-align: center; padding: 6px 0;
+  letter-spacing: .05em;
+}
+
+/* toggles */
+.toggle-group { display: flex; flex-direction: column; gap: 9px; }
+.toggle-item  { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+
+.toggle-sw {
+  width: 36px; height: 20px;
+  background: #374151; border-radius: 10px;
+  position: relative; transition: background .2s; flex-shrink: 0;
+}
+.toggle-sw.on { background: var(--amber); }
+.toggle-sw::after {
+  content: ''; position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  background: #fff; border-radius: 50%;
+  transition: transform .2s;
+}
+.toggle-sw.on::after { transform: translateX(16px); }
+.toggle-lbl { font-size: 12px; color: var(--txt2); }
+
+.btn-row { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.btn {
+  flex: 1; padding: 9px 12px;
+  border: none; border-radius: 7px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all .2s;
+}
+.btn-primary { background: var(--amber); color: #0b0f1a; }
+.btn-primary:hover { background: var(--amber-l); }
+.btn-secondary { background: #374151; color: var(--txt); }
+.btn-secondary:hover { background: #4b5563; }
+
+/* ── Right sidebar (leaderboard) ─────────── */
+.sidebar-right {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.sidebar-right::-webkit-scrollbar { width: 4px; }
+.sidebar-right::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+
+/* auth card */
+.auth-btn {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: transparent; color: var(--txt);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all .2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.auth-btn:hover { border-color: var(--amber); color: var(--amber); }
+.auth-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+.user-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.user-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  object-fit: cover; border: 2px solid var(--amber);
+  flex-shrink: 0;
+}
+.user-name {
+  font-size: 15px; color: var(--txt);
+  font-weight: 600; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.user-score {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; color: var(--amber);
+  font-weight: 600;
+  margin-top: 2px;
+}
+/* guest name input */
+.guest-name-input {
+  width: 100%; padding: 6px 8px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--txt);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; margin-bottom: 4px;
+}
+.guest-name-input:focus { border-color: var(--amber); outline: none; }
+/* admin visibility: hide admin sections when user is not admin */
+.admin-hidden [data-admin="true"] { display: none !important; }
+.signout-btn {
+  background: none; border: none; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--txt2);
+  padding: 4px 0 0;
+}
+.signout-btn:hover { color: var(--amber); }
+
+/* leaderboard */
+.lb-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(51,65,85,0.4);
+}
+.lb-row:last-child { border-bottom: none; }
+.lb-rank {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; color: var(--txt3);
+  width: 22px; flex-shrink: 0; text-align: right;
+}
+.lb-rank.top1 { color: #fbbf24; }
+.lb-rank.top2 { color: #94a3b8; }
+.lb-rank.top3 { color: #cd7f32; }
+.lb-avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  object-fit: cover; flex-shrink: 0;
+  background: var(--border);
+}
+.lb-name {
+  flex: 1; font-size: 13px; color: var(--txt2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lb-name.is-me { color: var(--amber); font-weight: 600; }
+.lb-score {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--txt);
+  font-weight: 600;
+  flex-shrink: 0;
+  max-width: 70px;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lb-empty {
+  font-size: 11px; color: var(--txt3);
+  text-align: center; padding: 12px 0;
+  font-style: italic;
+}
+.lb-status {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; color: var(--txt3);
+  text-align: center; margin-top: 6px;
+}
+
+@media (min-width: 641px) and (max-width: 900px) {
+  .sidebar-right { display: none; }
+}
+
+.right-col {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  gap: 10px;
+}
+
+/* Number line */
+.nl-wrapper {
+  flex-shrink: 0;
+  height: 88px;
+  background: rgba(11,15,26,.9);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* crosshair */
+.nl-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%; width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(245,166,35,.6), transparent);
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 4;
+}
+
+#nlCanvas {
+  width: 100%; height: 100%;
+  display: block;
+}
+
+/* Canvas */
+.canvas-box {
+  flex: 1; min-height: 0;
+  background: #0a0e1a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+#spiralCanvas {
+  width: 100%; height: 100%;
+  display: block;
+  cursor: pointer;
+  touch-action: none;
+}
+#spiralCanvas.panning { cursor: grabbing; }
+
+.canvas-footer {
+  position: absolute;
+  bottom: 10px; left: 14px; right: 14px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: var(--txt3);
+  pointer-events: none;
+}
+
+.legend { display: flex; gap: 14px; }
+.leg-item { display: flex; align-items: center; gap: 5px; }
+.leg-line { width: 14px; height: 2px; border-radius: 1px; }
+
+/* power flowers */
+.power-flower {
+  position: absolute;
+  width: 44px; height: 44px;
+  cursor: pointer;
+  pointer-events: auto; /* clickable even though parent is pointer-events:none */
+  animation: flowerLife 5s ease-in-out forwards;
+  transform-origin: center;
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.3));
+}
+.power-flower svg { width: 100%; height: 100%; }
+@keyframes flowerLife {
+  0%   { transform: scale(0); opacity: 0; }
+  15%  { transform: scale(1.15); opacity: 1; }
+  20%  { transform: scale(1); }
+  75%  { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+/* +## floating points animation */
+.points-popup {
+  position: absolute;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 26px; font-weight: 700;
+  color: #fbbf24;
+  pointer-events: none;
+  animation: pointsFloat 1s ease-out forwards;
+  z-index: 8;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+@keyframes pointsFloat {
+  0%   { opacity: 1; transform: translateY(0) scale(1.2); }
+  30%  { opacity: 1; transform: translateY(-15px) scale(1); }
+  100% { opacity: 0; transform: translateY(-45px) scale(0.8); }
+}
+
+/* smiley power-ups */
+.power-smiley {
+  position: absolute;
+  width: 44px; height: 44px;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: smileyPulse 5s ease-in-out forwards;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.4));
+}
+.power-smiley svg { width: 100%; height: 100%; }
+@keyframes smileyPulse {
+  0%   { transform: scale(0); opacity: 0; }
+  10%  { transform: scale(1.2); opacity: 1; }
+  15%  { transform: scale(1); }
+  85%  { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+/* smiley confetti scatter */
+.smiley-confetti {
+  position: absolute;
+  width: 30px; height: 30px;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: all 0.7s cubic-bezier(.25,.46,.45,.94);
+  z-index: 9;
+}
+.smiley-confetti svg { width: 100%; height: 100%; }
+
+</style>
+</head>
+<body>
+<!-- Hidden Mona Lisa face crop for n=12 easter egg -->
+<!-- Mona Lisa for n=12 easter egg — drawn on canvas if loaded -->
+<img id="monaLisa" style="display:none"
+     src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/200px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg"
+     onerror="this.src=''" alt="">
+
+<div class="shell">
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <h1>Fibonacci Zoom</h1>
+    <div class="top-bar-right">
+      <button class="mobile-account-btn" id="mobileAccountBtn" title="Account & Leaderboard">
+        <span id="mobileAccountLabel">Sign in</span>
+      </button>
+      <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
+    </div>
+  </div>
+
+  <!-- Unified Settings overlay -->
+  <div class="overlay-backdrop" id="settingsOverlay">
+    <div class="overlay-panel admin-hidden" id="settingsPanel">
+      <button class="overlay-close" id="settingsClose">✕</button>
+      <div class="overlay-title">⚙️ Settings</div>
+
+      <div class="overlay-section">Display</div>
+      <div class="toggle-group">
+        <div class="toggle-item" data-key="showNegative">
+          <div class="toggle-sw on"></div>
+          <span class="toggle-lbl">Negative n coloring</span>
+        </div>
+      </div>
+
+      <div data-admin="true">
+        <div class="overlay-section" style="margin-top:16px;">Visualization <span class="admin-badge" style="margin-left:6px;">ADMIN</span></div>
+        <div class="toggle-group">
+          <div class="toggle-item" data-key="showSquares">
+            <div class="toggle-sw on"></div>
+            <span class="toggle-lbl">Show Squares</span>
+          </div>
+          <div class="toggle-item" data-key="showNumbers">
+            <div class="toggle-sw on"></div>
+            <span class="toggle-lbl">Show Numbers</span>
+          </div>
+          <div class="toggle-item" data-key="showFibSpiral">
+            <div class="toggle-sw on"></div>
+            <span class="toggle-lbl">Fibonacci Spiral</span>
+          </div>
+        </div>
+      </div>
+
+      <div data-admin="true">
+        <div class="overlay-section" style="margin-top:16px;">Mode <span class="admin-badge" style="margin-left:6px;">ADMIN</span></div>
+        <div class="mode-btns">
+          <button class="mode-btn" data-mode="standard">Standard</button>
+          <button class="mode-btn active" data-mode="fib-steps">Fib Steps</button>
+        </div>
+        <div class="mode-info" id="modeInfo">—</div>
+      </div>
+
+      <div data-admin="true">
+        <div class="overlay-section" style="margin-top:16px;">Number Line</div>
+        <div class="admin-unlock-row">
+          <div class="toggle-item" data-key="nlFreeScroll" style="flex:1">
+            <div class="toggle-sw"></div>
+            <span class="toggle-lbl">Free drag to any n</span>
+          </div>
+          <span class="admin-badge">ADMIN</span>
+        </div>
+      </div>
+
+      <div data-admin="true">
+        <div class="overlay-section" style="margin-top:16px;">Input</div>
+        <div class="admin-unlock-row">
+          <div class="toggle-item" data-key="scrollWheel" style="flex:1">
+            <div class="toggle-sw"></div>
+            <span class="toggle-lbl">Scroll wheel input</span>
+          </div>
+          <span class="admin-badge">ADMIN</span>
+        </div>
+      </div>
+
+      <div class="btn-row" style="padding-top:14px; margin-top:4px;">
+        <button class="btn btn-secondary" id="resetBtn">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile info row: account + top 3 leaderboard (visible on mobile only) -->
+  <div class="mobile-info-row" id="mobileInfoRow" style="display:none;">
+    <!-- Leaderboard (LEFT) — collapsed to #1, tap opens full top 10 -->
+    <div class="card" id="mobileInfoLbCard" style="cursor:pointer;">
+      <div class="card-title" style="font-size:12px;margin-bottom:4px;">🏆 Leaderboard</div>
+      <div id="mobileInfoLb"><div class="lb-empty" style="font-size:10px;">Loading...</div></div>
+    </div>
+    <!-- Account (RIGHT) -->
+    <div class="card">
+      <div id="mobileInfoAccount">
+        <div class="user-name" id="mobileInfoName" style="font-size:13px;">—</div>
+        <div class="user-score" id="mobileInfoScore">Level: —</div>
+        <button class="auth-btn" id="mobileInfoSignIn" style="font-size:9px;padding:5px 6px;margin-top:4px;">
+          <svg viewBox="0 0 24 24" style="width:14px;height:14px;flex-shrink:0;margin-right:4px;">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Sign in to save
+        </button>
+        <button class="signout-btn" id="mobileInfoSignOut" style="display:none;">sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main-row">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <div class="card">
+        <div class="scroll-hint">Click to find the next<br>Fibonacci number</div>
+      </div>
+
+    </div><!-- /sidebar -->
+
+    <!-- Right column -->
+    <div class="right-col">
+
+      <!-- Number line -->
+      <div class="nl-wrapper">
+        <canvas id="nlCanvas"></canvas>
+      </div>
+
+      <!-- Spiral canvas -->
+      <div class="canvas-box">
+        <canvas id="spiralCanvas"></canvas>
+        <canvas id="confettiCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;"></canvas>
+        <div id="flowerLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;z-index:6;pointer-events:none;"></div>
+        <div class="canvas-footer">
+          <span id="zoomLbl"></span>
+        </div>
+      </div>
+
+    </div><!-- /right-col -->
+
+    <!-- Right sidebar: auth + leaderboard -->
+    <div class="sidebar-right">
+
+      <!-- Auth card -->
+      <div class="card" id="authCard">
+        <div class="card-title">Account</div>
+        <!-- Signed-out state (unauthenticated until n=8) -->
+        <div id="signedOut">
+          <div class="lb-status">Reach Fibonacci 21 to join<br>the leaderboard</div>
+        </div>
+        <!-- Signed-in state (both anonymous and Google users) -->
+        <div id="signedIn" style="display:none">
+          <div class="user-row">
+            <img class="user-avatar" id="userAvatar" src="" alt="">
+            <div style="flex:1;min-width:0;">
+              <input type="text" class="guest-name-input" id="guestNameInput" placeholder="Enter your name" maxlength="20" style="display:none">
+              <div class="user-name" id="userName"></div>
+              <div class="user-score" id="userBestScore">Best: —</div>
+            </div>
+          </div>
+          <button class="auth-btn" id="signInBtn" style="margin-top:8px;display:none">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;flex-shrink:0">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Sign in with Google
+          </button>
+          <button class="signout-btn" id="signOutBtn" style="display:none">sign out</button>
+        </div>
+      </div>
+
+      <!-- Leaderboard card -->
+      <div class="card">
+        <div class="card-title">🏆 Leaderboard</div>
+        <div id="lbList"><div class="lb-empty">Loading…</div></div>
+        <div class="lb-status" id="lbStatus"></div>
+      </div>
+
+    </div><!-- /sidebar-right -->
+
+  </div><!-- /main-row -->
+</div><!-- /shell -->
+
+<!-- Mobile bottom sheet (account + leaderboard) -->
+<div class="mobile-sheet-backdrop" id="mobileSheet">
+  <div class="mobile-sheet">
+    <div class="mobile-sheet-handle"></div>
+    <div class="card" id="mobileAuthCard">
+      <div class="card-title">Account</div>
+      <div id="mobileSignedOut">
+        <div class="lb-status">Reach Fibonacci 21 to join<br>the leaderboard</div>
+      </div>
+      <div id="mobileSignedIn" style="display:none">
+        <div class="user-row">
+          <img class="user-avatar" id="mobileUserAvatar" src="" alt="">
+          <div style="flex:1;min-width:0;">
+            <input type="text" class="guest-name-input" id="mobileGuestNameInput" placeholder="Enter your name" maxlength="20" style="display:none">
+            <div class="user-name" id="mobileUserName"></div>
+            <div class="user-score" id="mobileUserBestScore">Best: —</div>
+          </div>
+        </div>
+        <button class="auth-btn" id="mobileSignInBtn" style="margin-top:8px;display:none">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;flex-shrink:0">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Sign in with Google
+        </button>
+        <button class="signout-btn" id="mobileSignOutBtn" style="display:none">sign out</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🏆 Leaderboard</div>
+      <div id="mobileLbList"><div class="lb-empty">Loading…</div></div>
+      <div class="lb-status" id="mobileLbStatus"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ─── BigInt Fibonacci (extended to negatives) ──────────────────────
+const _memo = new Map([[0, 0n],[1, 1n]]);
+function fibPos(n) {
+  if (_memo.has(n)) return _memo.get(n);
+  let a = 0n, b = 1n;
+  for (let i = 2; i <= n; i++) { [a, b] = [b, a + b]; }
+  _memo.set(n, b);
+  return b;
+}
+function fib(n) {
+  if (n === 0) return 0n;
+  if (n > 0)  return fibPos(n);
+  const a = -n;
+  return (a % 2 === 0) ? -fibPos(a) : fibPos(a);
+}
+function fmt(v) {
+  const s = v < 0n ? '-' + String(-v) : String(v);
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// ─── Constants ────────────────────────────────────────────────────
+const PHI = (1 + Math.sqrt(5)) / 2;
+const NL_CELL    = 120;  // px per number-line cell
+const SCROLL_THR = 40;   // px scroll per tick
+
+// ─── Pseudonym generator ─────────────────────────────────────────
+const _ADJ = [
+  'Swift','Bold','Clever','Lucky','Bright','Cosmic','Golden','Silver',
+  'Mighty','Noble','Brave','Calm','Daring','Eager','Fierce','Grand',
+  'Happy','Keen','Lively','Merry','Quick','Rapid','Sharp','Wise'
+];
+const _ANI = [
+  'Falcon','Otter','Tiger','Eagle','Wolf','Fox','Bear','Hawk',
+  'Lion','Panda','Raven','Cobra','Lynx','Heron','Bison','Crane',
+  'Shark','Viper','Whale','Koala','Moose','Robin','Trout','Wren'
+];
+function generateAnimalName() {
+  const adj = _ADJ[Math.floor(Math.random() * _ADJ.length)];
+  const ani = _ANI[Math.floor(Math.random() * _ANI.length)];
+  const num = Math.floor(Math.random() * 100);
+  return adj + ani + num;
+}
+
+// ─── State ────────────────────────────────────────────────────────
+const state = {
+  n: 1,
+
+  // Mode: 'standard' | 'fib-steps'
+  // fib-steps: advancing to targetN requires Math.max(1,|targetN|) ticks
+  mode:    'fib-steps',
+  subStep: 0,       // ticks accumulated toward next n
+  stepDir: 1,       // +1 or -1 — direction currently committed to
+
+  showSquares:      true,
+  showNumbers:      true,
+  showFibSpiral:    true,
+  showNegative:     true,
+  nlFreeScroll:     false,   // admin toggle — allow dragging to uneached n
+  scrollWheel:      false,   // admin toggle — enable scroll wheel input
+  highestAbsN:      1,       // highest |n| reached via legitimate input
+
+  // Spiral pan
+  panX: 0, panY: 0,
+  scDown: false,      // mousedown is on spiral canvas
+  dragMoved: false,
+  lastMx: 0, lastMy: 0,
+
+  // Touch on spiral
+  touchStartX: 0, touchStartY: 0, touchStartTime: 0, touchMoved: false,
+
+  // Number-line
+  nlWorldX:  0,
+  nlDragging: false,
+  nlLastX:   0,
+  nlVel:     0,
+  nlAF:      null,
+
+  // +/- indicator (drawn inside drawNumberLine)
+  nlIndSign:  1,
+  nlIndAlpha: 0,
+
+  // Rotation: accumulates π/2 per committed square (both modes)
+  rotation: 0,  _sw: 0, _sh: 0, _nlw: 0, _nlh: 0,
+};
+
+// ─── Colors ──────────────────────────────────────────────────────
+const COLORS = [
+  [59,130,246],[16,185,129],[245,158,11],[239,68,68],
+  [139,92,246],[236,72,153],[6,182,212],[132,204,22],
+  [249,115,22],[99,102,241],
+];
+function col(i, alpha = 1) {
+  const [r,g,b] = COLORS[((i % COLORS.length) + COLORS.length) % COLORS.length];
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ─── Fibonacci square layout ──────────────────────────────────────
+function buildSquares(n, scale) {
+  if (n === 0) return [];
+  const absN = Math.abs(n);
+  const squares = [];
+  let minX = 0, maxX = 0, minY = 0, maxY = 0;
+  for (let k = 1; k <= absN; k++) {
+    const sz = Number(fibPos(k)) * scale;
+    let x = 0, y = 0;
+    if      (k === 1) { x = 0;    y = 0; maxX = sz; maxY = sz; }
+    else if (k === 2) { x = maxX; y = 0; maxX = x + sz; }
+    else {
+      const dir = (k - 3) % 4;
+      if      (dir === 0) { x = minX;      y = minY - sz; minY = y; }
+      else if (dir === 1) { x = minX - sz; y = minY;      minX = x; }
+      else if (dir === 2) { x = minX;      y = maxY;      maxY = y + sz; }
+      else                { x = maxX;      y = minY;      maxX = x + sz; }
+    }
+    squares.push({ x, y, size: sz, k, fibVal: fib(n < 0 ? -k : k) });
+  }
+  return squares;
+}
+
+function arcParams(sq, i) {
+  const { x, y, size } = sq;
+  if (i === 0) return { ax: x + size, ay: y,        sa: Math.PI / 2 };
+  if (i === 1) return { ax: x,        ay: y,        sa: 0 };
+  const d = (i - 1) % 4;
+  if (d === 1) return { ax: x,        ay: y + size, sa: -Math.PI / 2 };
+  if (d === 2) return { ax: x + size, ay: y + size, sa: Math.PI };
+  if (d === 3) return { ax: x + size, ay: y,        sa: Math.PI / 2 };
+  return             { ax: x,        ay: y,         sa: 0 };
+}
+
+// ─── Canvases ────────────────────────────────────────────────────
+const sc    = document.getElementById('spiralCanvas');
+const sctx  = sc.getContext('2d');
+const nl    = document.getElementById('nlCanvas');
+const nlctx = nl.getContext('2d');
+const cc    = document.getElementById('confettiCanvas');
+const cctx  = cc.getContext('2d');
+
+// ─── Input position tracking (for confetti placement) ────────────
+let lastInputX = 0, lastInputY = 0;
+let lastInputSource = 'key'; // 'mouse' | 'touch' | 'key'
+
+// ─── Confetti particle system ────────────────────────────────────
+let confettiParticles = [];
+let confettiAnimating = false;
+
+function launchConfetti(x, y, count) {
+  const actual = Math.min(count, 150);
+  for (let i = 0; i < actual; i++) {
+    const [r,g,b] = COLORS[Math.floor(Math.random() * COLORS.length)];
+    confettiParticles.push({
+      x: x + (Math.random() - 0.5) * 40,
+      y: y,
+      vx: (Math.random() - 0.5) * 14,
+      vy: -Math.random() * 16 - 4,
+      w: Math.random() * 8 + 4,
+      h: Math.random() * 6 + 2,
+      color: `rgb(${r},${g},${b})`,
+      rotation: Math.random() * Math.PI * 2,
+      rv: (Math.random() - 0.5) * 0.3,
+      alpha: 1,
+    });
+  }
+  if (!confettiAnimating) {
+    confettiAnimating = true;
+    requestAnimationFrame(animateConfetti);
+  }
+}
+
+function animateConfetti() {
+  const W = state._sw, H = state._sh;
+  cctx.clearRect(0, 0, W, H);
+  let alive = false;
+  for (const p of confettiParticles) {
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.25;
+    p.rotation += p.rv;
+    p.alpha -= 0.005;
+    if (p.alpha <= 0) continue;
+    alive = true;
+    cctx.save();
+    cctx.globalAlpha = p.alpha;
+    cctx.translate(p.x, p.y);
+    cctx.rotate(p.rotation);
+    cctx.fillStyle = p.color;
+    cctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+    cctx.restore();
+  }
+  if (alive) {
+    requestAnimationFrame(animateConfetti);
+  } else {
+    confettiParticles = [];
+    confettiAnimating = false;
+    cctx.clearRect(0, 0, W, H);
+  }
+}
+
+// ─── Flower power-ups ────────────────────────────────────────────
+let flowerInterval = null;
+
+function createFlowerSVG(color) {
+  const [r,g,b] = color;
+  let petals = '';
+  for (let i = 0; i < 5; i++) {
+    const angle = i * 72;
+    petals += `<ellipse cx="22" cy="8" rx="7" ry="13" fill="rgba(${r},${g},${b},0.85)" transform="rotate(${angle} 22 22)"/>`;
+  }
+  return `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">${petals}<circle cx="22" cy="22" r="6" fill="#fbbf24"/></svg>`;
+}
+
+function startFlowerSpawning() {
+  if (flowerInterval) return;
+  flowerInterval = setInterval(() => {
+    if (Math.abs(state.n) !== 10 || celebrationAF) return;
+    spawnFlower();
+  }, 2000 + Math.random() * 1500);
+}
+
+function stopFlowerSpawning() {
+  if (flowerInterval) { clearInterval(flowerInterval); flowerInterval = null; }
+  const layer = document.getElementById('flowerLayer');
+  while (layer.firstChild) layer.firstChild.remove();
+}
+
+function spawnFlower() {
+  const layer = document.getElementById('flowerLayer');
+  const box = layer.getBoundingClientRect();
+  if (box.width < 50 || box.height < 50) return;
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+  const el = document.createElement('div');
+  el.className = 'power-flower';
+  el.innerHTML = createFlowerSVG(color);
+  el.style.left = (20 + Math.random() * (box.width - 64)) + 'px';
+  el.style.top  = (20 + Math.random() * (box.height - 64)) + 'px';
+
+  function collectFlower(e) {
+    e.stopPropagation();
+    if (e.type === 'touchend') e.preventDefault();
+    for (let i = 0; i < 5; i++) tickInput(+1);
+    const rect = el.getBoundingClientRect();
+    const boxRect = cc.getBoundingClientRect();
+    launchConfetti(rect.left - boxRect.left + 22, rect.top - boxRect.top + 22, 20);
+    showPointsAnimation(parseFloat(el.style.left), parseFloat(el.style.top) - 10, 5);
+    el.remove();
+  }
+  el.addEventListener('click', collectFlower);
+  el.addEventListener('touchend', collectFlower);
+
+  layer.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.remove(); }, 5000);
+}
+
+// ─── +## floating points animation ───────────────────────────────
+function showPointsAnimation(x, y, points) {
+  const layer = document.getElementById('flowerLayer');
+  const el = document.createElement('div');
+  el.className = 'points-popup';
+  el.textContent = '+' + points;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+// ─── Smiley face power-ups (n >= 12) ─────────────────────────────
+let smileyClickCounter = 0;
+const SMILEY_TRIGGERS = [3, 5, 8, 13, 21, 34];
+const SMILEY_DECAY = [34, 21, 13, 8, 5, 3, 2, 1, 1, 0];
+
+function createSmileySVG(color) {
+  const [r,g,b] = color;
+  const dk = `rgb(${Math.max(0,r-60)},${Math.max(0,g-60)},${Math.max(0,b-60)})`;
+  return `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="22" cy="22" r="20" fill="rgb(${r},${g},${b})" stroke="${dk}" stroke-width="1.5"/>
+    <circle cx="15" cy="17" r="3" fill="#1a1a2e"/>
+    <circle cx="29" cy="17" r="3" fill="#1a1a2e"/>
+    <path d="M 12,27 Q 22,37 32,27" fill="none" stroke="#1a1a2e" stroke-width="2.5" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function launchSmileySpread(pageX, pageY) {
+  const layer = document.getElementById('flowerLayer');
+  const boxRect = layer.parentElement.getBoundingClientRect();
+  const cx = (pageX || boxRect.left + boxRect.width / 2) - boxRect.left;
+  const cy = (pageY || boxRect.top + boxRect.height / 2) - boxRect.top;
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  const count = 6 + Math.floor(Math.random() * 4); // 6-9 smiley confetti
+  const smileys = [];
+
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'smiley-confetti';
+    el.innerHTML = createSmileySVG(color);
+    el.style.left = cx + 'px';
+    el.style.top = cy + 'px';
+    el.style.opacity = '1';
+
+    // Only the first smiley is the clickable power-up (airborne)
+    if (i === 0) {
+      function airCollect(e) {
+        e.stopPropagation();
+        if (e.type === 'touchend') e.preventDefault();
+        for (let j = 0; j < 55; j++) tickInput(+1);
+        launchConfetti(parseFloat(el.style.left), parseFloat(el.style.top), 30);
+        showPointsAnimation(parseFloat(el.style.left), parseFloat(el.style.top) - 10, 55);
+        smileys.forEach(s => { if (s.parentNode) s.remove(); });
+      }
+      el.addEventListener('click', airCollect);
+      el.addEventListener('touchend', airCollect);
+    } else {
+      el.style.pointerEvents = 'none'; // decorative only
+    }
+
+    layer.appendChild(el);
+    smileys.push(el);
+
+    // Scatter outward — wider spread
+    const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
+    const dist = 100 + Math.random() * 200;
+    requestAnimationFrame(() => {
+      el.style.left = (cx + Math.cos(angle) * dist) + 'px';
+      el.style.top  = (cy + Math.sin(angle) * dist) + 'px';
+    });
+  }
+
+  // After 800ms: remove all except one, land the survivor
+  setTimeout(() => {
+    const alive = smileys.filter(s => s.parentNode);
+    if (!alive.length) return;
+    // Pick one survivor
+    const survivor = alive[Math.floor(Math.random() * alive.length)];
+    alive.forEach(s => { if (s !== survivor && s.parentNode) s.remove(); });
+
+    // Convert survivor to a landed smiley
+    survivor.className = 'power-smiley';
+    survivor.style.transition = 'none';
+    const landX = 20 + Math.random() * (boxRect.width - 64);
+    const landY = 20 + Math.random() * (boxRect.height - 64);
+    survivor.style.left = landX + 'px';
+    survivor.style.top  = landY + 'px';
+
+    const landTime = performance.now();
+
+    // Replace click handlers with decay-based handler
+    const newEl = survivor.cloneNode(true);
+    survivor.replaceWith(newEl);
+
+    function collectLanded(e) {
+      e.stopPropagation();
+      if (e.type === 'touchend') e.preventDefault();
+      const elapsed = performance.now() - landTime;
+      const idx = Math.min(Math.floor(elapsed / 500), SMILEY_DECAY.length - 1);
+      const value = SMILEY_DECAY[idx];
+      if (value > 0) {
+        for (let j = 0; j < value; j++) tickInput(+1);
+        const rect = newEl.getBoundingClientRect();
+        launchConfetti(rect.left - boxRect.left + 22, rect.top - boxRect.top + 22, value);
+        showPointsAnimation(parseFloat(newEl.style.left), parseFloat(newEl.style.top) - 10, value);
+      }
+      newEl.remove();
+    }
+    newEl.addEventListener('click', collectLanded);
+    newEl.addEventListener('touchend', collectLanded);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => { if (newEl.parentNode) newEl.remove(); }, 5000);
+  }, 800);
+}
+
+function resizeCanvases() {
+  const sr = sc.parentElement.getBoundingClientRect();
+  const sw = Math.round(sr.width), sh = Math.round(sr.height);
+  const nr = nl.parentElement.getBoundingClientRect();
+  const nw = Math.round(nr.width), nh = Math.round(nr.height);
+
+  // Skip if dimensions haven't changed
+  if (sw === state._sw && sh === state._sh && nw === state._nlw && nh === state._nlh) return;
+
+  // Set canvas BUFFER dimensions only. CSS width:100%/height:100% handles display size.
+  // Do NOT set canvas.style.width/height — on Safari iOS, explicit pixel styles on a
+  // canvas inside a flex container cause the parent to grow by ~2px/frame (feedback loop).
+  sc.width  = sw * devicePixelRatio;
+  sc.height = sh * devicePixelRatio;
+  sctx.scale(devicePixelRatio, devicePixelRatio);
+  cc.width  = sw * devicePixelRatio;
+  cc.height = sh * devicePixelRatio;
+  cctx.scale(devicePixelRatio, devicePixelRatio);
+  state._sw = sw; state._sh = sh;
+
+  nl.width  = nw * devicePixelRatio;
+  nl.height = nh * devicePixelRatio;
+  nlctx.scale(devicePixelRatio, devicePixelRatio);
+  state._nlw = nw; state._nlh = nh;
+
+  centerNlOn(state.n);
+}
+
+// ─── Number-line helpers ─────────────────────────────────────────
+function cellLeft(n)   { return state.nlWorldX + n * NL_CELL; }
+function cellCentre(n) { return cellLeft(n) + NL_CELL / 2; }
+function centerNlOn(n) {
+  state.nlWorldX = state._nlw / 2 - n * NL_CELL - NL_CELL / 2;
+}
+
+// ─── Number-line draw ────────────────────────────────────────────
+function drawNumberLine() {
+  const ctx = nlctx;
+  const W = state._nlw, H = state._nlh;
+  ctx.clearRect(0, 0, W, H);
+  const mid = H / 2;
+
+  // Axis
+  const axGrad = ctx.createLinearGradient(0, 0, W, 0);
+  axGrad.addColorStop(0,   'transparent');
+  axGrad.addColorStop(0.1, 'rgba(245,166,35,0.15)');
+  axGrad.addColorStop(0.5, 'rgba(245,166,35,0.30)');
+  axGrad.addColorStop(0.9, 'rgba(245,166,35,0.15)');
+  axGrad.addColorStop(1,   'transparent');
+  ctx.fillStyle = axGrad;
+  ctx.fillRect(0, mid - 0.5, W, 1);
+
+  const startN = Math.floor(-state.nlWorldX / NL_CELL) - 2;
+  const endN   = startN + Math.ceil(W / NL_CELL) + 4;
+
+  // In fib-steps mode: ghost dot toward target
+  const targetN    = state.n + state.stepDir;
+  const stepsNeeded = stepsForN(targetN);
+  const progress   = state.mode === 'fib-steps' && stepsNeeded > 0
+    ? Math.min(state.subStep / stepsNeeded, 1) : 0;
+
+  for (let n = startN; n <= endN; n++) {
+    const cx = cellCentre(n);
+    if (cx < -NL_CELL || cx > W + NL_CELL) continue;
+
+    const isCenter = (n === state.n);
+    const isTarget = (state.mode === 'fib-steps' && n === targetN && state.subStep > 0);
+    const dist = Math.abs(n - state.n);
+
+    let baseR, baseG, baseB;
+    if (n === 0)    { baseR=168; baseG=230; baseB=207; }
+    else if (n > 0) { baseR=245; baseG=166; baseB=35;  }
+    else            { baseR=224; baseG=92;  baseB=92;  }
+
+    const alpha = Math.max(0.05, 1 - dist * 0.14);
+
+    // Tick
+    ctx.fillStyle = `rgba(${baseR},${baseG},${baseB},${alpha * 0.7})`;
+    ctx.fillRect(cx - 0.5, mid - (isCenter ? 11 : 5), 1, isCenter ? 22 : 10);
+
+    // Fib value
+    const fibV   = fmt(fib(n));
+    const display = fibV.length > 10 ? fibV.slice(0,9)+'…' : fibV;
+    const fontSize = isCenter ? 20 : Math.max(11, 16 - dist * 1.5);
+    ctx.font = `${isCenter ? 'italic 600' : '400'} ${fontSize}px 'Cormorant Garamond', serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = `rgba(${baseR},${baseG},${baseB},${alpha})`;
+    ctx.fillText(display, cx, mid - 16);
+
+    // Dot
+    if (isCenter) {
+      ctx.beginPath();
+      ctx.arc(cx, mid, 5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${baseR},${baseG},${baseB},0.9)`;
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx, mid, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${baseR},${baseG},${baseB},${alpha * 0.5})`;
+      ctx.fill();
+    }
+
+    // Progress ring on target dot in fib-steps mode
+    if (isTarget && progress > 0) {
+      ctx.beginPath();
+      ctx.arc(cx, mid, 4 * progress, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${baseR},${baseG},${baseB},${0.45 * progress})`;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, mid, 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+      ctx.strokeStyle = `rgba(${baseR},${baseG},${baseB},${0.8 * progress})`;
+      ctx.lineWidth = 2; ctx.stroke();
+    }
+  }
+
+  // ── Click count — stationary at screen center below the line ───
+  if (state.mode === 'fib-steps') {
+    const tN = state.n + state.stepDir;
+    const needed = stepsForN(tN);
+    ctx.font = '600 13px JetBrains Mono, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(245,166,35,0.8)';
+    ctx.fillText(`${state.subStep} / ${needed}`, W / 2, mid + 14);
+  }
+
+  // ── +/- indicator bubble ──────────────────────────────────────
+  if (state.nlIndAlpha > 0.01) {
+    const isPos = state.nlIndSign > 0;
+    const [ir, ig, ib] = isPos ? [245,166,35] : [224,92,92];
+    const a = state.nlIndAlpha;
+    const indX = isPos ? W - 26 : 26;
+
+    ctx.beginPath();
+    ctx.arc(indX, mid, 18, 0, Math.PI * 2);
+    ctx.fillStyle   = `rgba(${ir},${ig},${ib},${a * 0.18})`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(indX, mid, 18, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${ir},${ig},${ib},${a * 0.65})`;
+    ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.font = `bold 20px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = `rgba(${ir},${ig},${ib},${a})`;
+    ctx.fillText(isPos ? '+' : '−', indX, mid);
+
+    // Decay — schedule next frame while still visible
+    state.nlIndAlpha = Math.max(0, state.nlIndAlpha - 0.022);
+    if (state.nlIndAlpha > 0) requestAnimationFrame(drawNumberLine);
+  }
+}
+
+// ─── Spiral draw ─────────────────────────────────────────────────
+const LOOKAHEAD = 13; // extra squares always visible as ghost context
+
+function drawSpiral() {
+  const ctx = sctx;
+  const W = state._sw, H = state._sh;
+  const n = state.n;
+
+  ctx.fillStyle = '#0a0e1a';
+  ctx.fillRect(0, 0, W, H);
+
+  if (n === 0 && state.subStep === 0) {
+    ctx.fillStyle = 'rgba(168,230,207,0.55)';
+    ctx.font = 'italic 22px Cormorant Garamond, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('F(0) = 0  ·  click or scroll to explore', W/2, H/2);
+    updateFooter();
+    return;
+  }
+
+  const absN    = Math.abs(n);
+  const isNeg   = n < 0;
+  const maxFib  = Math.max(1, Number(fibPos(Math.max(1, absN))));
+  const SCALE_FACTOR = W < 500 ? 0.40 : 0.55;
+  const snapScale = Math.min(W, H) * SCALE_FACTOR / maxFib;
+
+  // Progress toward next n (for ghost square materialising + smooth zoom)
+  const targetN     = n + state.stepDir;
+  const stepsNeeded = stepsForN(targetN);
+  const progress    = stepsNeeded > 0 ? Math.min(state.subStep / stepsNeeded, 1) : 0;
+
+  // Smooth zoom: interpolate scale toward next n's scale during sub-steps
+  let baseScale;
+  if (state.mode === 'fib-steps' && progress > 0) {
+    const nextAbsN   = Math.abs(targetN);
+    const nextMaxFib = Math.max(1, Number(fibPos(Math.max(1, nextAbsN))));
+    const nextScale  = Math.min(W, H) * SCALE_FACTOR / nextMaxFib;
+    // Ease-in-out for organic feel
+    const eased = progress < 0.5
+      ? 2 * progress * progress
+      : -1 + (4 - 2 * progress) * progress;
+    baseScale = snapScale + (nextScale - snapScale) * eased;
+  } else {
+    baseScale = snapScale;
+  }
+
+  // Current committed squares
+  const squares = buildSquares(n, baseScale);
+  if (!squares.length) return;
+
+  // Lookahead squares (geometry always positive direction — spiral just keeps growing)
+  const lookaheadN   = absN + LOOKAHEAD;
+  const allSquares   = buildSquares(lookaheadN, baseScale); // positive, for geometry
+  const lookaheadSqs = allSquares.slice(absN); // only the extra ones
+
+  const sq0  = squares[0];
+  let eyeX, eyeY;
+  if (W < 500 && squares.length > 0) {
+    // Mobile: center on bounding box midpoint for better visual balance at low n
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    squares.forEach(sq => {
+      minX = Math.min(minX, sq.x);
+      minY = Math.min(minY, sq.y);
+      maxX = Math.max(maxX, sq.x + sq.size);
+      maxY = Math.max(maxY, sq.y + sq.size);
+    });
+    eyeX = (minX + maxX) / 2;
+    eyeY = (minY + maxY) / 2;
+  } else {
+    // Desktop: classic eye point (spiral convergence point)
+    eyeX = sq0.x + sq0.size;
+    eyeY = sq0.y + sq0.size;
+  }
+
+  // Rotation: state.rotation is the committed total (grows by π/2 each step).
+  // In fib-steps mode, progress smoothly rotates toward the next π/2 increment.
+  const inProgressRot = state.mode === 'fib-steps' && stepsNeeded > 0
+    ? (Math.PI / 2) * Math.min(state.subStep / stepsNeeded, 1) * state.stepDir
+    : 0;
+  const rotAngle = state.rotation + inProgressRot;
+
+  // ── Transform: eye always locked to canvas centre ─────────────────
+  // Correct order: (1) shift eye to canvas origin, (2) rotate, (3) place at canvas centre
+  // Pan is applied inside the rotate so it moves the scene in world space (intuitive drag)
+  ctx.save();
+  ctx.translate(W / 2, H / 2);          // canvas centre
+  ctx.rotate(rotAngle);                  // rotate around canvas centre
+  ctx.translate(-eyeX + state.panX, -eyeY + state.panY); // eye→origin + pan
+
+  // ── Lookahead ghost squares (drawn first, behind everything) ──────
+  if (state.showSquares) {
+    lookaheadSqs.forEach((sq, j) => {
+      const dist  = j + 1; // 1 = immediate next, 13 = farthest
+      const alpha = Math.max(0.02, 0.22 - dist * 0.015);
+      ctx.fillStyle   = col(absN + j, alpha * 0.6);
+      ctx.fillRect(sq.x, sq.y, sq.size, sq.size);
+      ctx.strokeStyle = col(absN + j, alpha);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 6]);
+      ctx.strokeRect(sq.x, sq.y, sq.size, sq.size);
+    });
+    ctx.setLineDash([]);
+  }
+  // Lookahead spiral arcs (ghost)
+  if (state.showFibSpiral) {
+    lookaheadSqs.forEach((sq, j) => {
+      const dist  = j + 1;
+      const alpha = Math.max(0.02, 0.18 - dist * 0.012);
+      const { ax, ay, sa } = arcParams(sq, absN + j);
+      ctx.beginPath();
+      ctx.arc(ax, ay, sq.size, sa, sa + Math.PI / 2);
+      ctx.strokeStyle = `rgba(241,245,249,${alpha})`;
+      ctx.lineWidth = 1; ctx.lineCap = 'round'; ctx.stroke();
+    });
+  }
+
+  // ── Existing committed squares ────────────────────────────────────
+  if (state.showSquares) {
+    squares.forEach((sq, i) => {
+      ctx.fillStyle   = col(i, isNeg ? 0.12 : 0.15);
+      ctx.fillRect(sq.x, sq.y, sq.size, sq.size);
+      ctx.strokeStyle = col(i, isNeg ? 0.55 : 0.75);
+      ctx.lineWidth = 1.5;
+      if (isNeg) ctx.setLineDash([6,4]); else ctx.setLineDash([]);
+      ctx.strokeRect(sq.x, sq.y, sq.size, sq.size);
+    });
+    ctx.setLineDash([]);
+  }
+
+  // ── Immediate next square ghost (progress materialising) ──────────
+  if (progress > 0 && lookaheadSqs.length > 0) {
+    const gSq = lookaheadSqs[0];
+    const gi  = absN; // index into allSquares
+
+    if (state.showSquares) {
+      ctx.fillStyle   = col(gi, progress * 0.18);
+      ctx.fillRect(gSq.x, gSq.y, gSq.size, gSq.size);
+      ctx.strokeStyle = col(gi, progress * 0.85);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeRect(gSq.x, gSq.y, gSq.size, gSq.size);
+      ctx.setLineDash([]);
+    }
+    if (state.showFibSpiral) {
+      const { ax, ay, sa } = arcParams(gSq, gi);
+      ctx.beginPath();
+      // Grow from existing spiral tip (sa + π/2) outward toward new tip (sa)
+      ctx.arc(ax, ay, gSq.size, sa + (Math.PI / 2) * (1 - progress), sa + Math.PI / 2);
+      ctx.strokeStyle = `rgba(241,245,249,${progress * 0.7})`;
+      ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.stroke();
+    }
+  }
+
+  // ── Fibonacci spiral arcs (committed) ────────────────────────────
+  if (state.showFibSpiral) {
+    ctx.strokeStyle = isNeg ? '#e05c5c' : '#f1f5f9';
+    ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.setLineDash([]);
+    squares.forEach((sq, i) => {
+      const { ax, ay, sa } = arcParams(sq, i);
+      ctx.beginPath();
+      ctx.arc(ax, ay, sq.size, sa, sa + Math.PI / 2);
+      ctx.stroke();
+    });
+  }
+
+  // ── Numbers ───────────────────────────────────────────────────────
+  if (state.showNumbers) {
+    squares.forEach((sq) => {
+      if (sq.size < 12) return;
+      const fs = Math.max(9, Math.min(sq.size * 0.28, 22));
+      ctx.font = `600 ${fs}px 'JetBrains Mono', monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = isNeg ? 'rgba(224,92,92,0.85)' : 'rgba(241,245,249,0.85)';
+      const maxW = sq.size * 0.85;
+      let txt = fmt(sq.fibVal);
+      while (ctx.measureText(txt).width > maxW && txt.length > 4) txt = txt.slice(0,-2)+'…';
+
+      // Counter-rotate around the square's own centre so text stays upright
+      const cx = sq.x + sq.size / 2;
+      const cy = sq.y + sq.size / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-rotAngle);
+      ctx.fillText(txt, 0, 0);
+      ctx.restore();
+    });
+  }
+
+  // ── Mona Lisa easter egg on k=12 square ──────────────────────────
+  if (absN >= 12) {
+    const mlImg = document.getElementById('monaLisa');
+    if (mlImg && mlImg.complete && mlImg.naturalWidth > 0) {
+      const sq12 = squares.find(sq => sq.k === 12);
+      if (sq12 && sq12.size > 8) {
+        const cx = sq12.x + sq12.size / 2;
+        const cy = sq12.y + sq12.size / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-rotAngle);
+        const drawSz = sq12.size * 0.9;
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(mlImg, -drawSz/2, -drawSz/2, drawSz, drawSz);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+    }
+  }
+
+  ctx.restore();
+  updateFooter();
+}
+
+function updateFooter() {
+  const n = state.n;
+  const el = document.getElementById('zoomLbl');
+  const deg = Math.round((state.rotation * 180 / Math.PI) % 360);
+  if (state.mode === 'fib-steps' && state.subStep > 0) {
+    const targetN     = n + state.stepDir;
+    const stepsNeeded = stepsForN(targetN);
+    el.textContent = `n=${n} → n=${targetN}  [${state.subStep} / ${stepsNeeded}]  rot:${deg}°`;
+  } else {
+    el.textContent = `n = ${n}  ·  F(n) = ${fmt(fib(n))}  ·  rot: ${deg}°`;
+  }
+}
+
+// ─── Step logic ──────────────────────────────────────────────────
+// Number of ticks to advance to targetN from current n.
+// In fib-steps mode: takes F(|targetN|) inputs — the actual Fibonacci value.
+// Min 1 so n=0→1 and n=1→2 (both F=1) each take exactly 1 click.
+function stepsForN(targetN) {
+  return Math.max(1, Number(fibPos(Math.abs(targetN))));
+}
+
+// Single entry point for ALL directional inputs
+// Keeps scrollAccum consistent across input method switches
+function tickInput(dir) {
+  // Block input during celebration animation
+  if (celebrationAF) return;
+  // Flash indicator on number line
+  state.nlIndSign  = dir;
+  state.nlIndAlpha = 1.0;
+
+  if (state.mode === 'standard') {
+    commitN(state.n + dir);
+    return;
+  }
+
+  // Fib-steps mode ────────────────────────────────────────────────
+  if (dir !== state.stepDir) {
+    // Direction reversal: reset sub-step count, adopt new direction
+    state.stepDir = dir;
+    state.subStep = 0;
+  }
+
+  const targetN     = state.n + state.stepDir;
+  const needed      = stepsForN(targetN);
+  state.subStep++;
+
+  if (state.subStep >= needed) {
+    // Threshold reached — advance n
+    state.subStep = 0;
+    commitN(targetN);
+  } else {
+    // Still building up — scroll number line proportionally toward target
+    const progress = state.subStep / needed;
+    const fromX = state._nlw / 2 - state.n * NL_CELL - NL_CELL / 2;
+    const toX   = state._nlw / 2 - targetN * NL_CELL - NL_CELL / 2;
+    state.nlWorldX = fromX + (toX - fromX) * progress;
+    drawSpiral();
+    drawNumberLine();
+    debouncedSaveProgress();
+  }
+
+  // Update mode-info card to show progress toward next n
+  updateModeInfo();
+
+  // Confetti on every tick at n = 9 only
+  if (Math.abs(state.n) === 9) {
+    const count = Math.min(Number(fibPos(Math.abs(state.n))), 150);
+    if (lastInputSource === 'key') {
+      launchConfetti(state._sw / 2, state._sh / 2, count);
+    } else {
+      const boxRect = cc.getBoundingClientRect();
+      launchConfetti(lastInputX - boxRect.left, lastInputY - boxRect.top, count);
+    }
+  }
+
+  // Smiley face power-ups at n = 11 only — fire at Fibonacci click counts
+  if (Math.abs(state.n) === 11) {
+    smileyClickCounter++;
+    if (SMILEY_TRIGGERS.includes(smileyClickCounter)) {
+      launchSmileySpread(lastInputX, lastInputY);
+    }
+  }
+}
+
+function commitN(newN) {
+  const oldHighest = state.highestAbsN;
+  state.rotation += (Math.PI / 2) * (newN > state.n ? 1 : -1);
+  state.n       = newN;
+  state.subStep = 0;
+  // Track legitimate high-water mark for NL drag boundary
+  const isNewHigh = Math.abs(newN) > oldHighest;
+  if (isNewHigh) state.highestAbsN = Math.abs(newN);
+  animateNlToN(newN);
+  drawSpiral();
+  drawNumberLine();
+  updateModeInfo();
+  // At n=8: create guest account if not yet authenticated
+  if (isNewHigh && Math.abs(newN) >= 8 && !currentUser && fbAuth) {
+    fbAuth.signInAnonymously().catch(err => {
+      console.error('❌ Anonymous sign-in error:', err.message);
+    });
+    // onAuthStateChanged → onSignIn() will capture guestN = current state.n
+  }
+
+  maybeSaveScore(newN);
+  debouncedSaveProgress();
+
+  // Celebration: zoom-through animation on new high score (n >= 8)
+  if (isNewHigh && Math.abs(newN) >= 8) {
+    playCelebration(Math.abs(newN));
+  }
+
+  // Level-specific power-ups (exact n, not ranges)
+  const absNewN = Math.abs(newN);
+  if (absNewN === 10) startFlowerSpawning();
+  else stopFlowerSpawning();
+
+  // Reset smiley click counter on each level advance
+  smileyClickCounter = 0;
+}
+
+// ─── Celebration: smooth zoom in/out on new high ─────────────────
+// Phase 1: zoom into spiral center (unwind rotation, n decreases to 1)
+// Phase 2: zoom back out to current n (rewind rotation)
+// Duration: 8s at n=8, +1s per level, caps at 21s
+let celebrationAF = null;
+function playCelebration(targetN) {
+  if (celebrationAF) cancelAnimationFrame(celebrationAF);
+  const DURATION = Math.min(5000, 3000 + (targetN - 8) * 200);
+  const startTime = performance.now();
+
+  const savedN = state.n;
+  const savedRotation = state.rotation;
+  const savedPanX = state.panX;
+  const savedPanY = state.panY;
+
+  function celebFrame(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / DURATION, 1);
+
+    // phase: 0 at start → 1 at midpoint → 0 at end
+    let phase;
+    if (t < 0.5) {
+      const p = t * 2;
+      phase = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    } else {
+      const p = (t - 0.5) * 2;
+      const e = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p+2, 3)/2;
+      phase = 1 - e; // ease-in-out, inverted
+    }
+
+    // Interpolate n: targetN at edges, 1 at midpoint
+    const displayN = Math.max(1, Math.round(targetN - (targetN - 1) * phase));
+    // Interpolate rotation: savedRotation at edges, 0 at midpoint
+    const currentRotation = savedRotation * (1 - phase);
+
+    state.n = displayN;
+    state.rotation = currentRotation;
+    state.panX = 0; state.panY = 0;
+    drawSpiral();
+    animateNlToN(displayN);
+
+    if (t < 1) {
+      celebrationAF = requestAnimationFrame(celebFrame);
+    } else {
+      celebrationAF = null;
+      state.n = savedN;
+      state.rotation = savedRotation;
+      state.panX = savedPanX;
+      state.panY = savedPanY;
+      drawSpiral();
+      drawNumberLine();
+      animateNlToN(savedN);
+    }
+  }
+  celebrationAF = requestAnimationFrame(celebFrame);
+}
+
+function updateModeInfo() {
+  const el = document.getElementById('modeInfo');
+  if (state.mode === 'standard') {
+    el.textContent = '1 input = 1 step';
+  } else {
+    const targetN = state.n + state.stepDir;
+    const needed  = stepsForN(targetN);
+    if (state.subStep > 0) {
+      el.textContent = `${state.subStep} / ${needed} → n=${targetN}`;
+    } else {
+      el.textContent = `${needed} inputs → n=${targetN}`;
+    }
+  }
+}
+
+// ─── Scroll: 1 physical wheel notch = 1 tick ────────────────────
+// deltaY sign: positive = scrolling down = negative direction
+let scrollAccum = 0; // kept for reset on mode-switch, not used for gating
+function handleScroll(deltaY) {
+  if (deltaY > 0) tickInput(-1);
+  else if (deltaY < 0) tickInput(+1);
+}
+sc.addEventListener('wheel', e => { e.preventDefault(); if (state.scrollWheel) handleScroll(e.deltaY); }, { passive: false });
+nl.addEventListener('wheel', e => { e.preventDefault(); if (state.scrollWheel) handleScroll(e.deltaY); }, { passive: false });
+
+// ─── Mouse on spiral canvas ──────────────────────────────────────
+// left-click = +1, right-click = -1, drag = pan
+sc.addEventListener('mousedown', e => {
+  state.scDown    = true;
+  state.dragMoved = false;
+  state.lastMx    = e.clientX;
+  state.lastMy    = e.clientY;
+});
+
+window.addEventListener('mousemove', e => {
+  // Spiral pan
+  if (state.scDown) {
+    const dx = e.clientX - state.lastMx;
+    const dy = e.clientY - state.lastMy;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      state.dragMoved = true;
+      sc.classList.add('panning');
+    }
+    if (state.dragMoved) {
+      state.panX += dx; state.panY += dy;
+      state.lastMx = e.clientX; state.lastMy = e.clientY;
+      drawSpiral();
+    }
+  }
+  // Number-line pan
+  if (state.nlDragging) {
+    const dx = e.clientX - state.nlLastX;
+    state.nlWorldX += dx;
+    state.nlVel     = dx;
+    state.nlLastX   = e.clientX;
+    let centN = Math.round((state._nlw / 2 - state.nlWorldX - NL_CELL / 2) / NL_CELL);
+    // Clamp to reached range unless admin free-scroll enabled
+    if (!state.nlFreeScroll) {
+      centN = Math.max(-state.highestAbsN, Math.min(state.highestAbsN, centN));
+      // Re-snap worldX if clamped
+      const clampedWorld = state._nlw / 2 - centN * NL_CELL - NL_CELL / 2;
+      if (centN === -state.highestAbsN || centN === state.highestAbsN) {
+        state.nlWorldX = clampedWorld;
+      }
+    }
+    if (centN !== state.n) { state.n = centN; state.subStep = 0; drawSpiral(); updateModeInfo(); }
+    drawNumberLine();
+  }
+});
+
+window.addEventListener('mouseup', e => {
+  if (state.scDown && !state.dragMoved) {
+    // Click (not drag)
+    if (e.button === 0) { lastInputX = e.clientX; lastInputY = e.clientY; lastInputSource = 'mouse'; tickInput(+1); }
+    if (e.button === 2) { lastInputX = e.clientX; lastInputY = e.clientY; lastInputSource = 'mouse'; tickInput(-1); }
+  }
+  if (state.scDown) { state.scDown = false; state.dragMoved = false; sc.classList.remove('panning'); }
+  if (state.nlDragging) { state.nlDragging = false; nlMomentum(); }
+});
+
+sc.addEventListener('contextmenu', e => e.preventDefault());
+
+// ─── Touch on spiral canvas (mobile) ────────────────────────────
+sc.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    state.touchStartX    = e.touches[0].clientX;
+    state.touchStartY    = e.touches[0].clientY;
+    state.touchStartTime = Date.now();
+    state.touchMoved     = false;
+    state.lastMx = e.touches[0].clientX;
+    state.lastMy = e.touches[0].clientY;
+  }
+}, { passive: false });
+
+sc.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    const dx = e.touches[0].clientX - state.lastMx;
+    const dy = e.touches[0].clientY - state.lastMy;
+    const totalDX = e.touches[0].clientX - state.touchStartX;
+    const totalDY = e.touches[0].clientY - state.touchStartY;
+    if (Math.abs(totalDX) > 10 || Math.abs(totalDY) > 10) state.touchMoved = true;
+    if (state.touchMoved) {
+      state.panX += dx; state.panY += dy;
+      state.lastMx = e.touches[0].clientX;
+      state.lastMy = e.touches[0].clientY;
+      drawSpiral();
+    }
+  }
+}, { passive: false });
+
+sc.addEventListener('touchend', e => {
+  e.preventDefault();
+  const elapsed = Date.now() - state.touchStartTime;
+  const dx = e.changedTouches[0].clientX - state.touchStartX;
+  const dy = e.changedTouches[0].clientY - state.touchStartY;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+
+  if (!state.touchMoved && elapsed < 300) {
+    lastInputX = e.changedTouches[0].clientX; lastInputY = e.changedTouches[0].clientY; lastInputSource = 'touch';
+    tickInput(+1);
+  } else if (elapsed < 500 && dist > 25) {
+    lastInputX = e.changedTouches[0].clientX; lastInputY = e.changedTouches[0].clientY; lastInputSource = 'touch';
+    const swipeUp = Math.abs(dy) > Math.abs(dx) ? dy < 0 : dx > 0;
+    tickInput(swipeUp ? +1 : -1);
+  }
+  state.touchMoved = false;
+}, { passive: false });
+
+// ─── Number-line drag ────────────────────────────────────────────
+nl.addEventListener('mousedown', e => {
+  state.nlDragging = true;
+  state.nlLastX    = e.clientX;
+  state.nlVel      = 0;
+  if (state.nlAF) { cancelAnimationFrame(state.nlAF); state.nlAF = null; }
+});
+
+function nlMomentum() {
+  function tick() {
+    if (Math.abs(state.nlVel) > 0.3) {
+      state.nlWorldX += state.nlVel;
+      state.nlVel    *= 0.88;
+      let centN = Math.round((state._nlw/2 - state.nlWorldX - NL_CELL/2) / NL_CELL);
+      if (!state.nlFreeScroll) {
+        centN = Math.max(-state.highestAbsN, Math.min(state.highestAbsN, centN));
+        if (centN === -state.highestAbsN || centN === state.highestAbsN) {
+          state.nlWorldX = state._nlw/2 - centN*NL_CELL - NL_CELL/2;
+          state.nlVel = 0;
+        }
+      }
+      if (centN !== state.n) { state.n = centN; state.subStep = 0; drawSpiral(); updateModeInfo(); }
+      drawNumberLine();
+      state.nlAF = requestAnimationFrame(tick);
+    } else {
+      state.nlVel = 0; snapNl();
+    }
+  }
+  state.nlAF = requestAnimationFrame(tick);
+}
+function snapNl() {
+  const target = state._nlw/2 - state.n*NL_CELL - NL_CELL/2;
+  function tick() {
+    const delta = target - state.nlWorldX;
+    if (Math.abs(delta) < 0.5) { state.nlWorldX = target; drawNumberLine(); return; }
+    state.nlWorldX += delta * 0.18;
+    drawNumberLine();
+    state.nlAF = requestAnimationFrame(tick);
+  }
+  state.nlAF = requestAnimationFrame(tick);
+}
+function animateNlToN(n) {
+  if (state.nlAF) cancelAnimationFrame(state.nlAF);
+  const target = state._nlw/2 - n*NL_CELL - NL_CELL/2;
+  function tick() {
+    const delta = target - state.nlWorldX;
+    if (Math.abs(delta) < 0.5) { state.nlWorldX = target; drawNumberLine(); return; }
+    state.nlWorldX += delta * 0.22;
+    drawNumberLine();
+    state.nlAF = requestAnimationFrame(tick);
+  }
+  state.nlAF = requestAnimationFrame(tick);
+}
+
+// Touch on number line
+nl.addEventListener('touchstart', e => {
+  e.preventDefault();
+  state.nlDragging = true;
+  state.nlLastX    = e.touches[0].clientX;
+  state.nlVel      = 0;
+  if (state.nlAF) { cancelAnimationFrame(state.nlAF); state.nlAF = null; }
+}, { passive: false });
+nl.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!state.nlDragging) return;
+  const dx = e.touches[0].clientX - state.nlLastX;
+  state.nlWorldX += dx; state.nlVel = dx; state.nlLastX = e.touches[0].clientX;
+  let centN = Math.round((state._nlw/2 - state.nlWorldX - NL_CELL/2) / NL_CELL);
+  if (!state.nlFreeScroll) {
+    centN = Math.max(-state.highestAbsN, Math.min(state.highestAbsN, centN));
+    if (centN === -state.highestAbsN || centN === state.highestAbsN)
+      state.nlWorldX = state._nlw/2 - centN*NL_CELL - NL_CELL/2;
+  }
+  if (centN !== state.n) { state.n = centN; state.subStep = 0; drawSpiral(); updateModeInfo(); }
+  drawNumberLine();
+}, { passive: false });
+nl.addEventListener('touchend', e => {
+  e.preventDefault(); state.nlDragging = false; nlMomentum();
+}, { passive: false });
+
+// ─── Overlay panel wiring ────────────────────────────────────────
+function openOverlay(id)  { document.getElementById(id).classList.add('open'); }
+function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+
+document.getElementById('settingsBtn').addEventListener('click', () => openOverlay('settingsOverlay'));
+document.getElementById('settingsClose').addEventListener('click', () => closeOverlay('settingsOverlay'));
+
+document.getElementById('settingsOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('settingsOverlay')) closeOverlay('settingsOverlay');
+});
+
+// ─── Mobile bottom sheet ──────────────────────────────────────────
+document.getElementById('mobileAccountBtn').addEventListener('click', () => {
+  document.getElementById('mobileSheet').classList.add('open');
+});
+document.getElementById('mobileSheet').addEventListener('click', e => {
+  if (e.target === document.getElementById('mobileSheet')) {
+    document.getElementById('mobileSheet').classList.remove('open');
+  }
+});
+
+// Mobile info row: leaderboard card tap → open bottom sheet for full top 10
+const mobileInfoLbCard = document.getElementById('mobileInfoLbCard');
+if (mobileInfoLbCard) {
+  mobileInfoLbCard.addEventListener('click', () => {
+    document.getElementById('mobileSheet').classList.add('open');
+  });
+}
+
+// Sync mobile account button label with auth state
+function updateMobileAccountBtn() {
+  const btn = document.getElementById('mobileAccountBtn');
+  if (currentUser) {
+    btn.innerHTML = currentUser.photoURL
+      ? `<img src="${currentUser.photoURL}" referrerpolicy="no-referrer" alt=""><span>${(currentUser.displayName || 'Account').split(' ')[0]}</span>`
+      : `<span>${(currentUser.displayName || 'Account').split(' ')[0]}</span>`;
+  } else {
+    btn.innerHTML = '<span>Sign in</span>';
+  }
+}
+// Sync mobile signed-in/out panels
+function syncMobileAuth() {
+  if (currentUser) {
+    const isAnon = currentUser.isAnonymous;
+    const name = currentUser.displayName || (isAnon ? 'Guest' : currentUser.email);
+    document.getElementById('mobileSignedOut').style.display  = 'none';
+    document.getElementById('mobileSignedIn').style.display   = 'block';
+    document.getElementById('mobileUserAvatar').src = currentUser.photoURL || '';
+    document.getElementById('mobileUserName').textContent = name;
+    // Show/hide elements for anon vs Google
+    document.getElementById('mobileSignInBtn').style.display     = isAnon ? '' : 'none';
+    document.getElementById('mobileSignOutBtn').style.display     = isAnon ? 'none' : '';
+    document.getElementById('mobileGuestNameInput').style.display = isAnon ? '' : 'none';
+    if (isAnon) document.getElementById('mobileGuestNameInput').value = name;
+  } else {
+    document.getElementById('mobileSignedOut').style.display  = 'block';
+    document.getElementById('mobileSignedIn').style.display   = 'none';
+  }
+  updateMobileAccountBtn();
+  // Sync mobile info row
+  const infoName = document.getElementById('mobileInfoName');
+  const infoScore = document.getElementById('mobileInfoScore');
+  const infoSignIn = document.getElementById('mobileInfoSignIn');
+  const infoSignOut = document.getElementById('mobileInfoSignOut');
+  if (infoName) {
+    if (currentUser) {
+      const isAnon = currentUser.isAnonymous;
+      const name = currentUser.displayName || 'Guest';
+      infoName.textContent = name;
+      // Anonymous: show sign-in, hide sign-out. Google: show sign-out, hide sign-in.
+      infoSignIn.style.display = isAnon ? '' : 'none';
+      if (infoSignOut) infoSignOut.style.display = isAnon ? 'none' : '';
+    } else {
+      infoName.textContent = '—';
+      infoScore.textContent = 'Level: —';
+      // Not authenticated: show sign-in
+      infoSignIn.style.display = '';
+      if (infoSignOut) infoSignOut.style.display = 'none';
+    }
+  }
+}
+// Sync mobile leaderboard (called from renderLeaderboard)
+function syncMobileLeaderboard(html, statusText) {
+  document.getElementById('mobileLbList').innerHTML  = html;
+  document.getElementById('mobileLbStatus').textContent = statusText;
+  // Sync mobile info row top 3
+  const infoLb = document.getElementById('mobileInfoLb');
+  if (infoLb) {
+    // Extract just the first 3 rows from the full leaderboard HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const rows = tempDiv.querySelectorAll('.lb-row');
+    // Show only #1 in collapsed mobile info row
+    infoLb.innerHTML = rows.length > 0 ? rows[0].outerHTML : '<div class="lb-empty" style="font-size:10px;">No scores yet</div>';
+  }
+}
+
+// ─── Toggles (all panels) ────────────────────────────────────────
+document.querySelectorAll('.toggle-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const key = item.dataset.key;
+    state[key] = !state[key];
+    // Sync ALL switches with this key (in case duplicated across panels)
+    document.querySelectorAll(`.toggle-item[data-key="${key}"] .toggle-sw`)
+      .forEach(sw => sw.classList.toggle('on', state[key]));
+    if (key === 'showGoldenSpiral') {
+      const lg = document.getElementById('goldenLegItem');
+      if (lg) lg.style.display = state[key] ? 'flex' : 'none';
+    }
+    drawSpiral();
+    drawNumberLine();
+  });
+});
+
+// ─── Mode buttons (inside admin overlay) ────────────────────────
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.mode    = btn.dataset.mode;
+    state.subStep = 0;
+    scrollAccum   = 0;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+    updateModeInfo();
+    drawSpiral();
+    drawNumberLine();
+  });
+});
+
+// ─── Reset ───────────────────────────────────────────────────────
+document.getElementById('resetBtn').addEventListener('click', () => {
+  state.n = 1; state.subStep = 0; state.stepDir = 1;
+  state.rotation = 0; state.highestAbsN = 1;
+  state.panX = 0; state.panY = 0;
+  scrollAccum = 0;
+  closeOverlay('settingsOverlay');
+  centerNlOn(1);
+  drawSpiral(); drawNumberLine(); updateModeInfo();
+});
+
+// ─── Keyboard ────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (e.repeat) return; // 1 keypress = 1 tick, ignore held keys
+  if (e.key === 'ArrowUp'   || e.key === 'ArrowRight' ||
+      e.key === ' '         || e.key === 'Enter'       ||
+      e.key === '+'         || e.key === '=') { e.preventDefault(); lastInputSource = 'key'; tickInput(+1); }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowLeft'  ||
+      e.key === '-'         || e.key === '_') { e.preventDefault(); lastInputSource = 'key'; tickInput(-1); }
+});
+
+// ─── Resize ──────────────────────────────────────────────────────
+let resizeTimer = 0;
+const ro = new ResizeObserver(() => {
+  if (window.innerWidth <= 640) {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { resizeCanvases(); drawSpiral(); drawNumberLine(); }, 80);
+  } else {
+    resizeCanvases(); drawSpiral(); drawNumberLine();
+  }
+});
+ro.observe(document.querySelector('.canvas-box'));
+ro.observe(document.querySelector('.nl-wrapper'));
+
+// ─── Boot ────────────────────────────────────────────────────────
+resizeCanvases();
+drawSpiral();
+drawNumberLine();
+updateModeInfo();
+</script>
+
+<!-- Firebase SDKs (compat v9 — works as plain script tags, no bundler needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  ⚠️  PASTE YOUR FIREBASE CONFIG HERE
+//  1. Go to https://console.firebase.google.com
+//  2. Create project → Add web app → copy the config object below
+//  3. Enable Authentication → Google sign-in provider
+//  4. Enable Firestore Database (start in production mode)
+//  5. Add this Firestore security rule:
+//     rules_version = '2';
+//     service cloud.firestore {
+//       match /databases/{db}/documents {
+//         match /scores/{uid} {
+//           allow read: if true;
+//           allow write: if request.auth != null && request.auth.uid == uid;
+//         }
+//       }
+//     }
+// ════════════════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyC_xHppB5s0Zo0Zx-BOh6o3gAqXRwHgfN0",
+  authDomain:        "fibonacci-zoom.firebaseapp.com",
+  projectId:         "fibonacci-zoom",
+  storageBucket:     "fibonacci-zoom.firebasestorage.app",
+  messagingSenderId: "278440000838",
+  appId:             "1:278440000838:web:5a5ef198f1808432557947"
+};
+
+// ─── Admin whitelist ─────────────────────────────────────────────
+const ADMIN_EMAILS = ['scottsandvik@gmail.com', 'ssandvik@hisd.com'];
+let isAdmin = false;
+
+function applyAdminVisibility() {
+  const panel = document.getElementById('settingsPanel');
+  if (isAdmin) {
+    panel.classList.remove('admin-hidden');
+  } else {
+    panel.classList.add('admin-hidden');
+  }
+}
+
+// ─── Init ────────────────────────────────────────────────────────
+let fbApp, fbAuth, fbDb;
+let currentUser  = null;
+let userBestAbsN = 0;
+let lbUnsub      = null;   // Firestore listener unsubscribe handle
+
+function initFirebase() {
+  try {
+    // Guard: skip if placeholder config
+    if (FIREBASE_CONFIG.apiKey.startsWith('PASTE')) {
+      console.warn('⚠️  Firebase config not set — auth/leaderboard disabled.');
+      document.getElementById('signedOut').querySelector('.lb-status').textContent =
+        'Paste Firebase config to enable';
+      document.getElementById('lbList').innerHTML =
+        '<div class="lb-empty">Firebase not configured</div>';
+      return;
+    }
+
+    fbApp  = firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth();
+    fbDb   = firebase.firestore();
+
+    // Handle redirect result when returning from Google auth on mobile
+    fbAuth.getRedirectResult().then(result => {
+      if (result && result.user) {
+        console.log('✅ Redirect sign-in complete:', result.user.displayName);
+      }
+    }).catch(err => {
+      if (err.code !== 'auth/no-auth-event') {
+        console.error('❌ Redirect result error:', err.message);
+      }
+    });
+
+    // Auth state listener
+    fbAuth.onAuthStateChanged(async user => {
+      currentUser = user;
+      if (user) {
+        await onSignIn(user);
+      } else {
+        // No session — reset state, show unauthenticated UI
+        // User plays freely without auth until reaching n=8
+        state.n = 1; state.subStep = 0; state.stepDir = 1;
+        state.rotation = 0; state.highestAbsN = 1;
+        state.panX = 0; state.panY = 0;
+        userBestAbsN = 0;
+        isAdmin = false; applyAdminVisibility();
+        document.getElementById('signedOut').style.display = 'block';
+        document.getElementById('signedIn').style.display  = 'none';
+        centerNlOn(1);
+        drawSpiral(); drawNumberLine(); updateModeInfo();
+        syncMobileAuth();
+      }
+    });
+
+    // Sign-in helper: links anonymous → Google, or direct Google sign-in
+    function doSignIn() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if (currentUser && currentUser.isAnonymous) {
+        // Link anonymous account to Google (preserves UID + all data)
+        if (isMobile) {
+          currentUser.linkWithRedirect(provider).catch(handleLinkError);
+        } else {
+          currentUser.linkWithPopup(provider).then(result => {
+            console.log('✅ Account linked:', result.user.displayName);
+          }).catch(handleLinkError);
+        }
+      } else {
+        if (isMobile) {
+          fbAuth.signInWithRedirect(provider).catch(err => {
+            console.error('❌ Sign-in redirect error:', err.message);
+          });
+        } else {
+          fbAuth.signInWithPopup(provider).catch(err => {
+            console.error('❌ Sign-in popup error:', err.message);
+          });
+        }
+      }
+    }
+
+    function handleLinkError(err) {
+      if (err.code === 'auth/credential-already-in-use') {
+        // Google account already exists with different UID — sign in with it
+        console.log('⚠️ Google account exists, signing in directly');
+        const cred = err.credential;
+        if (cred) fbAuth.signInWithCredential(cred);
+        return;
+      }
+      console.error('❌ Link error:', err.message);
+    }
+
+    // Sign-in buttons (desktop + mobile)
+    document.getElementById('signInBtn').addEventListener('click', doSignIn);
+    document.getElementById('mobileSignInBtn').addEventListener('click', doSignIn);
+
+    // Sign-out: delete anonymous accounts entirely, sign out Google accounts
+    async function doSignOut() {
+      if (currentUser && currentUser.isAnonymous) {
+        // Delete the anonymous Firestore doc and auth account entirely
+        try {
+          await fbDb.collection('scores').doc(currentUser.uid).delete();
+          await currentUser.delete();
+          console.log('✅ Anonymous account deleted');
+        } catch (err) {
+          console.error('⚠️ Error deleting anonymous account:', err.message);
+          fbAuth.signOut(); // fallback
+        }
+      } else {
+        fbAuth.signOut();
+      }
+    }
+    document.getElementById('signOutBtn').addEventListener('click', doSignOut);
+    document.getElementById('mobileSignOutBtn').addEventListener('click', doSignOut);
+    const mobileInfoSignOut = document.getElementById('mobileInfoSignOut');
+    if (mobileInfoSignOut) mobileInfoSignOut.addEventListener('click', doSignOut);
+
+    // Guest name input handlers
+    function setupGuestNameInput(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      input.addEventListener('change', async () => {
+        if (!currentUser || !currentUser.isAnonymous) return;
+        const name = input.value.trim() || 'Guest' + generateAnimalName();
+        await currentUser.updateProfile({ displayName: name });
+        // Sync display
+        document.getElementById('userName').textContent = name;
+        document.getElementById('mobileUserName').textContent = name;
+        updateMobileAccountBtn();
+        debouncedSaveProgress();
+        console.log('✅ Guest name set:', name);
+      });
+    }
+    setupGuestNameInput('guestNameInput');
+    setupGuestNameInput('mobileGuestNameInput');
+
+    // Mobile info row sign-in button
+    const mobileInfoSignIn = document.getElementById('mobileInfoSignIn');
+    if (mobileInfoSignIn) mobileInfoSignIn.addEventListener('click', doSignIn);
+
+    // Start leaderboard listener immediately (public read)
+    startLeaderboardListener();
+
+  } catch (err) {
+    console.error('❌ Firebase init error:', err.message);
+  }
+}
+
+// ─── Sign-in handler ─────────────────────────────────────────────
+async function onSignIn(user) {
+  const isAnon = user.isAnonymous;
+
+  document.getElementById('signedOut').style.display = 'none';
+  document.getElementById('signedIn').style.display  = 'block';
+
+  // Generate AnimalNoun# name for new anonymous users
+  if (isAnon && !user.displayName) {
+    const animalName = generateAnimalName();
+    const guestName = 'Guest' + animalName;
+    await user.updateProfile({ displayName: guestName });
+    // Store generatedName permanently in Firestore
+    await fbDb.collection('scores').doc(user.uid).set({
+      generatedName: animalName, displayName: guestName, uid: user.uid,
+    }, { merge: true });
+    console.log('✅ Generated guest name:', guestName);
+  }
+
+  // For non-anonymous users upgrading from Guest: strip "Guest" prefix
+  if (!isAnon && user.displayName && user.displayName.startsWith('Guest') && user.displayName.length > 5) {
+    const stripped = user.displayName.slice(5);
+    await user.updateProfile({ displayName: stripped });
+    console.log('✅ Upgraded name: Guest' + stripped + ' → ' + stripped);
+  }
+
+  const displayName = user.displayName || (isAnon ? 'Guest' : user.email);
+  document.getElementById('userAvatar').src = user.photoURL || '';
+  document.getElementById('userName').textContent = displayName;
+
+  // Show/hide elements based on anonymous vs Google
+  document.getElementById('signInBtn').style.display     = isAnon ? '' : 'none';
+  document.getElementById('signOutBtn').style.display     = isAnon ? 'none' : '';
+  document.getElementById('guestNameInput').style.display = isAnon ? '' : 'none';
+  if (isAnon) document.getElementById('guestNameInput').value = displayName;
+
+  // Admin check (anonymous users never admin)
+  isAdmin = !isAnon && ADMIN_EMAILS.includes((user.email || '').toLowerCase());
+  applyAdminVisibility();
+  if (isAdmin) console.log('✅ Admin access granted for', user.email);
+
+  // Capture guest progress before loading saved data
+  const guestN    = state.n;
+  const guestAbsN = Math.abs(guestN);
+
+  // Load saved progress
+  try {
+    const doc = await fbDb.collection('scores').doc(user.uid).get();
+    if (doc.exists) {
+      const data = doc.data();
+      userBestAbsN = data.absN || 0;
+
+      // Keep whichever is further: guest progress or saved progress
+      if (guestAbsN > userBestAbsN) {
+        // Guest got further than saved — keep current position and save it
+        state.highestAbsN = Math.max(state.highestAbsN, guestAbsN);
+        updateUserBestDisplay(guestN);
+        console.log(`✅ Keeping guest progress n=${guestN} (beats saved n=${data.n}) for ${user.displayName}`);
+        maybeSaveScore(guestN);
+      } else {
+        // Saved is further — restore it (including sub-step progress)
+        const restoreN = data.currentN ?? data.n;
+        if (restoreN !== undefined && restoreN !== null) {
+          state.n          = restoreN;
+          state.subStep    = data.currentSubStep ?? 0;
+          state.stepDir    = data.currentStepDir ?? 1;
+          state.highestAbsN = Math.max(state.highestAbsN, Math.abs(restoreN));
+          state.rotation   = 0;
+          centerNlOn(state.n);
+          updateUserBestDisplay(data.n ?? restoreN);
+          console.log(`✅ Restored n=${restoreN} subStep=${state.subStep} for ${user.displayName}`);
+        }
+      }
+    } else {
+      // Anonymous user with no saved data — sign them out to start fresh
+      // (this handles stale anonymous sessions persisted by Firebase IndexedDB)
+      if (isAnon) {
+        console.log('⚠️ Stale anonymous session with no data — signing out');
+        fbAuth.signOut();
+        return;
+      }
+      userBestAbsN = 0;
+      if (guestAbsN > 0) {
+        updateUserBestDisplay(guestN);
+        maybeSaveScore(guestN);
+      } else {
+        updateUserBestDisplay(null);
+      }
+    }
+    drawSpiral();
+    drawNumberLine();
+    updateModeInfo();
+    syncMobileAuth();
+  } catch (err) {
+    console.error('❌ Error loading score:', err.message);
+  }
+}
+
+// onSignOut removed — auth state listener handles state reset when user = null
+
+// ─── Display helpers ─────────────────────────────────────────────
+function updateUserBestDisplay(n) {
+  const fibText = (n === null || n === undefined)
+    ? '—'
+    : (fmt(fib(n)).length > 20 ? fmt(fib(n)).slice(0,18) + '…' : fmt(fib(n)));
+  // Desktop sidebar: keep "Best: X"
+  document.getElementById('userBestScore').textContent = 'Best: ' + fibText;
+  const mobileEl = document.getElementById('mobileUserBestScore');
+  if (mobileEl) mobileEl.textContent = 'Best: ' + fibText;
+  // Mobile info row: "Level: X"
+  const infoScore = document.getElementById('mobileInfoScore');
+  if (infoScore) infoScore.textContent = 'Level: ' + fibText;
+}
+
+function fibDisplayStr(n) {
+  const v = fmt(fib(n));
+  return v.length > 12 ? v.slice(0,10) + '…' : v;
+}
+
+// ─── Save score ──────────────────────────────────────────────────
+// Called from commitN — only writes if new |n| beats stored best
+async function maybeSaveScore(n) {
+  if (!currentUser || !fbDb) return;
+  const absN = Math.abs(n);
+  if (absN <= userBestAbsN) return;   // not a new best, skip write
+  userBestAbsN = absN;
+  updateUserBestDisplay(n);
+  try {
+    await fbDb.collection('scores').doc(currentUser.uid).set({
+      n,
+      absN,
+      fibDisplay: fibDisplayStr(n),
+      currentN:       state.n,
+      currentSubStep: state.subStep,
+      currentStepDir: state.stepDir,
+      displayName: currentUser.displayName || currentUser.email || 'Guest',
+      photoURL:    currentUser.photoURL    || '',
+      uid:         currentUser.uid,
+      updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`✅ Score saved: n=${n}, F(n)=${fmt(fib(n))}`);
+  } catch (err) {
+    console.error('❌ Error saving score:', err.message);
+  }
+}
+
+// ─── Save progress (debounced) ───────────────────────────────────
+// Persists current position + sub-step so user doesn't lose click progress
+let saveProgressTimer = 0;
+function debouncedSaveProgress() {
+  if (!currentUser || !fbDb) return;
+  clearTimeout(saveProgressTimer);
+  saveProgressTimer = setTimeout(saveProgress, 2000);
+}
+async function saveProgress() {
+  if (!currentUser || !fbDb) return;
+  try {
+    await fbDb.collection('scores').doc(currentUser.uid).set({
+      currentN:       state.n,
+      currentSubStep: state.subStep,
+      currentStepDir: state.stepDir,
+      displayName: currentUser.displayName || currentUser.email || 'Guest',
+      photoURL:    currentUser.photoURL    || '',
+      uid:         currentUser.uid,
+      updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.error('❌ Error saving progress:', err.message);
+  }
+}
+
+// ─── Leaderboard ─────────────────────────────────────────────────
+function startLeaderboardListener() {
+  if (!fbDb) return;
+  if (lbUnsub) lbUnsub();   // cancel any previous listener
+
+  lbUnsub = fbDb.collection('scores')
+    .orderBy('absN', 'desc')
+    .limit(10)
+    .onSnapshot(snap => {
+      renderLeaderboard(snap.docs.map(d => d.data()));
+    }, err => {
+      console.error('❌ Leaderboard error:', err.message);
+      document.getElementById('lbList').innerHTML =
+        '<div class="lb-empty">Could not load leaderboard</div>';
+    });
+}
+
+function renderLeaderboard(rows) {
+  rows = rows.filter(row => (row.absN || 0) >= 8);
+  const list = document.getElementById('lbList');
+  if (!rows.length) {
+    const emptyHtml = '<div class="lb-empty">No scores yet — be first!</div>';
+    list.innerHTML = emptyHtml;
+    syncMobileLeaderboard(emptyHtml, '');
+    return;
+  }
+
+  const rankClass = i => i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
+  const medal     = i => ['🥇','🥈','🥉'][i] ?? `${i+1}.`;
+  const isMe = row => currentUser && row.uid === currentUser.uid;
+
+  list.innerHTML = rows.map((row, i) => {
+    // Compute F(n) client-side for display (fibDisplay may not be stored yet)
+    let fibStr;
+    try { fibStr = fibDisplayStr(row.n); } catch(e) { fibStr = 'F(' + row.n + ')'; }
+    return `
+    <div class="lb-row">
+      <div class="lb-rank ${rankClass(i)}">${medal(i)}</div>
+      ${row.photoURL
+        ? `<img class="lb-avatar" src="${row.photoURL}" alt="" referrerpolicy="no-referrer">`
+        : `<div class="lb-avatar"></div>`}
+      <div class="lb-name ${isMe(row) ? 'is-me' : ''}">${escHtml(row.displayName || 'Anonymous')}</div>
+      <div class="lb-score" title="n=${row.n}">${fibStr}</div>
+    </div>`;
+  }).join('');
+
+  const statusText = `${rows.length} player${rows.length !== 1 ? 's' : ''}`;
+  document.getElementById('lbStatus').textContent = statusText;
+  syncMobileLeaderboard(list.innerHTML, statusText);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Boot Firebase ───────────────────────────────────────────────
+
+initFirebase();
+</script>
+</body>
+</html>
+<!--© 2026 Scott Sandvik · GPL-3.0 · All commercial rights reserved by author -->

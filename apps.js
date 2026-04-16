@@ -19,4 +19,10 @@ window.COOL_STEM_APPS = [
     href: "/collatz-cascade/",
     bg: "radial-gradient(circle at 50% 40%, #1a3a5c 0%, #0a0f1e 80%)",
   },
+  {
+    title: "Fibonacci Zoom",
+    sub: "Spiral through 1, 1, 2, 3, 5, 8…",
+    href: "/fibonacci-zoom/",
+    bg: "radial-gradient(circle at 50% 50%, #3b1e0d 0%, #0a0f1e 80%)",
+  },
 ];

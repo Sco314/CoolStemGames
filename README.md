@@ -99,3 +99,22 @@ collatz-cascade/
     ui.js             input, mode selector, recent panel, tooltips
     constants.js      all tunable parameters
 ```
+
+---
+
+## Fibonacci Zoom
+
+**[coolstemgames.com/fibonacci-zoom/](https://coolstemgames.com/fibonacci-zoom/)**
+
+An interactive, infinite Fibonacci sequence visualizer with a live leaderboard. Explore the Fibonacci sequence, negative indices, and the geometric spiral relationship through visual tiling of colored squares.
+
+Mirrored from the standalone [Sco314/Fibonacci-Zoom](https://github.com/Sco314/Fibonacci-Zoom) repo (GPL-3.0). Single self-contained HTML file — all CSS and JS inline. Runtime dependencies: Google Fonts (Cormorant Garamond, JetBrains Mono) and Firebase v10.12.0 (auth + Firestore for the leaderboard) loaded via CDN.
+
+```
+fibonacci-zoom/
+  index.html          the entire app (inline CSS + JS, BigInt math, canvas spiral)
+  nautilus.html       sprite preview page for the power-up shells
+  LICENSE             GPL-3.0 (preserved from original repo)
+  README.md           original project documentation
+  CLAUDE.md           original Claude Code agent context
+```
