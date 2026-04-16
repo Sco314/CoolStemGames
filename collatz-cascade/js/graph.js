@@ -32,7 +32,7 @@ let settled = true;
 // ── Memory ceilings ──────────────────────────────────────
 // Hardware safety cap: the rubberband slider cannot exceed this.
 // Picked conservatively for mid-tier mobile GPUs.
-export const MAX_VISIBLE_NODES = 2000;
+export const MAX_VISIBLE_NODES = 5000;
 let visibleMax = 100;   // current soft ceiling (user-controlled via slider)
 
 // Recent-nodes ring buffer for raycast candidates (keeps tooltip O(small-N)).
@@ -580,16 +580,20 @@ function layoutStepForceDirected(dt) {
     const force = new THREE.Vector3();
     const p = node.mesh.position;
 
-    // Repulsion from all other nodes
+    // Repulsion from nearby nodes. Spatial cutoff at 5× SPRING_LENGTH
+    // turns O(N²) into O(N·k) where k = average nodes within the cutoff.
+    const REPULSION_CUTOFF = SPRING_LENGTH * 5;
+    const CUTOFF_SQ = REPULSION_CUTOFF * REPULSION_CUTOFF;
     for (const other of nodeArr) {
       if (other === node) continue;
-      const diff = new THREE.Vector3().subVectors(p, other.mesh.position);
-      const dist = diff.length() || 0.01;
-      const minDist = node.radius + other.radius + 0.5;
-      if (dist < minDist * 5) {
-        const strength = REPULSION_STRENGTH / (dist * dist);
-        force.add(diff.normalize().multiplyScalar(strength));
-      }
+      const dx = p.x - other.mesh.position.x;
+      const dy = p.y - other.mesh.position.y;
+      const dz = p.z - other.mesh.position.z;
+      const distSq = dx * dx + dy * dy + dz * dz;
+      if (distSq > CUTOFF_SQ) continue;
+      const dist = Math.sqrt(distSq) || 0.01;
+      const strength = REPULSION_STRENGTH / (distSq || 0.01);
+      force.addScaledVector(new THREE.Vector3(dx, dy, dz).normalize(), strength);
     }
 
     // Spring attraction to connected nodes

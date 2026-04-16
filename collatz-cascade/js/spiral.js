@@ -26,7 +26,7 @@ const COLORS = [
 ];
 
 // ── Memory ceilings ──────────────────────────────────────
-export const MAX_SPIRAL_LINES = 500;
+export const MAX_SPIRAL_LINES = 2000;
 let visibleMax = 50;
 
 // ── State ────────────────────────────────────────────────
