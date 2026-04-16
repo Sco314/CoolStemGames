@@ -10,6 +10,12 @@
   Content-Type: image/svg+xml
   Cache-Control: public, max-age=300, must-revalidate
 
+# Fibonacci Zoom card art (PNG, not SVG) — explicit Content-Type so
+# nosniff doesn't block rendering.
+/fibonacci-zoom/assets/images/*.png
+  Content-Type: image/png
+  Cache-Control: public, max-age=300, must-revalidate
+
 # Everything the site owner edits frequently must be always-fresh.
 /
   Cache-Control: public, max-age=0, must-revalidate
