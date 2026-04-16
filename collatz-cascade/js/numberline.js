@@ -6,14 +6,19 @@
 import * as THREE from 'three';
 import { collatzValues } from './collatz.js';
 import {
-  isBig, isEven, isOne, log10 as bigLog10,
+  isBig, isEven, isOne, log10 as bigLog10, log2 as bigLog2,
   valueKey, formatValue as fmtValue,
 } from './valueUtils.js';
 import { scheduleBatch } from './scheduler.js';
+import { computeSequenceAsync } from './collatz-client.js';
 
 // ── Memory ceilings ──────────────────────────────────────
 export const MAX_ORBS = 5000;
 let visibleMax = 250;
+
+// Sequences longer than this auto-switch to density band rendering
+const DENSITY_THRESHOLD = 2000;
+const DENSITY_BINS = 512;
 
 // ── Constants ────────────────────────────────────────────
 const SPACING = 0.3;          // world units per integer
@@ -81,8 +86,15 @@ let mathDisplay = null;
 const allVisited = new Set();
 let maxOnLine = 0;
 
+// Density band state (for sequences above DENSITY_THRESHOLD steps)
+let densityMode = false;
+let densityTexture = null;
+let densityMesh = null;
+
 // Active state
 let active = false;
+
+export function isDensityMode() { return densityMode; }
 
 // ── Public API ───────────────────────────────────────────
 
@@ -136,9 +148,24 @@ export function formatValue(n) {
 
 /**
  * Start a Collatz sequence from number n on the number line.
+ * For BigInt or huge sequences, uses the Web Worker for off-thread compute.
+ * Sequences above DENSITY_THRESHOLD steps auto-switch to density band rendering.
  */
 export function startSequence(n) {
+  // For BigInt inputs, use async worker so the main thread doesn't freeze
+  if (isBig(n)) {
+    computeSequenceAsync(n).then(({ values }) => launchSequence(n, values));
+    return;
+  }
+
   const values = collatzValues(n);
+  launchSequence(n, values);
+}
+
+function launchSequence(n, values) {
+  // Clean up previous density band if any
+  cleanupDensityBand();
+  densityMode = false;
 
   // Build full sequence with extra 4→2→1 cycles
   sequence = [...values];
@@ -149,7 +176,7 @@ export function startSequence(n) {
   // Reset user speed
   userSpeed = 1;
 
-  // Find max value to size the line. Use BigInt-safe max comparison via log.
+  // Find max value to size the line
   let newMax = maxOnLine;
   let curMaxLog = bigLog10(typeof maxOnLine === 'number' && maxOnLine > 0 ? maxOnLine : 1);
   for (const v of sequence) {
@@ -159,18 +186,24 @@ export function startSequence(n) {
       newMax = v;
     }
   }
-  // Compare using log to avoid Number/BigInt direct comparison issues
   if (bigLog10(typeof newMax === 'number' ? Math.max(newMax, 1) : newMax) >
       bigLog10(typeof maxOnLine === 'number' ? Math.max(maxOnLine, 1) : maxOnLine)) {
     maxOnLine = newMax;
     rebuildLine();
   }
 
-  // First orb must exist synchronously so the launch arc has a target.
-  // Remaining orbs are staged across frames via the scheduler so huge
-  // sequences (e.g. 27^27 ≈ 10k steps) don't freeze the main thread.
+  // Long sequences → density band mode
+  if (values.length > DENSITY_THRESHOLD) {
+    densityMode = true;
+    renderDensityBand(values);
+    // Auto-scale speed so the whole journey takes ~10 seconds
+    const totalSteps = sequence.length - 1;
+    userSpeed = Math.max(1, totalSteps / (10 / TRAVEL_MIN));
+  }
+
+  // First orb must exist synchronously so the launch arc has a target
   ensureOrb(sequence[0]);
-  if (sequence.length > 1) {
+  if (!densityMode && sequence.length > 1) {
     scheduleBatch(sequence.slice(1), (v) => ensureOrb(v), { priority: 6 });
   }
 
@@ -186,6 +219,105 @@ export function startSequence(n) {
   setupArc(operatorBall.position.clone(), firstPos);
   travelProgress = 0;
   playState = 'traveling';
+}
+
+/**
+ * Skip the ball animation to the end (for long density-mode sequences).
+ */
+export function skipToEnd() {
+  if (!densityMode || playState === 'complete' || playState === 'idle') return;
+  stepIndex = sequence.length - 1;
+  const lastVal = sequence[stepIndex];
+  const lastPos = orbPosition(lastVal);
+  operatorBall.position.copy(lastPos);
+  markVisited(lastVal);
+  playState = 'complete';
+  mathDisplay = {
+    value: lastVal, isEven: false,
+    label: 'DONE', rule: '', operation: '', result: '',
+  };
+}
+
+// ── Density band rendering ──────────────────────────────
+function renderDensityBand(values) {
+  // Bin all visited values along the number line's X axis.
+  // Each bin covers a range of X positions.
+  const endX = orbPosition(maxOnLine).x;
+  if (endX <= 0) return;
+
+  const densityArray = new Float32Array(DENSITY_BINS);
+  let maxDensity = 0;
+
+  for (const v of values) {
+    const x = orbPosition(v).x;
+    const bin = Math.min(DENSITY_BINS - 1, Math.max(0, Math.floor((x / endX) * DENSITY_BINS)));
+    densityArray[bin]++;
+    if (densityArray[bin] > maxDensity) maxDensity = densityArray[bin];
+  }
+
+  if (maxDensity === 0) return;
+
+  // Generate a 1D RGBA texture from density data
+  // Color ramp: cold blue → cyan → yellow → white
+  const texData = new Uint8Array(DENSITY_BINS * 4);
+  for (let i = 0; i < DENSITY_BINS; i++) {
+    const t = densityArray[i] / maxDensity;  // 0..1
+    const [r, g, b] = densityColorRamp(t);
+    texData[i * 4] = r;
+    texData[i * 4 + 1] = g;
+    texData[i * 4 + 2] = b;
+    texData[i * 4 + 3] = t > 0 ? 255 : 0;
+  }
+
+  if (densityTexture) densityTexture.dispose();
+  densityTexture = new THREE.DataTexture(texData, DENSITY_BINS, 1, THREE.RGBAFormat);
+  densityTexture.magFilter = THREE.LinearFilter;
+  densityTexture.minFilter = THREE.LinearFilter;
+  densityTexture.needsUpdate = true;
+
+  // Create a thin strip mesh along the number line
+  if (densityMesh) {
+    nlGroup.remove(densityMesh);
+    densityMesh.geometry.dispose();
+    densityMesh.material.dispose();
+  }
+  const stripGeo = new THREE.PlaneGeometry(endX, 0.6);
+  const stripMat = new THREE.MeshBasicMaterial({
+    map: densityTexture,
+    transparent: true,
+    depthTest: false,
+  });
+  densityMesh = new THREE.Mesh(stripGeo, stripMat);
+  densityMesh.position.set(endX / 2, LINE_Y + 0.5, -0.1);
+  nlGroup.add(densityMesh);
+}
+
+function densityColorRamp(t) {
+  // 0 → dark blue, 0.33 → cyan, 0.66 → yellow, 1.0 → white
+  if (t <= 0) return [10, 20, 60];
+  if (t < 0.33) {
+    const f = t / 0.33;
+    return [Math.round(10 + 0 * f), Math.round(20 + 200 * f), Math.round(60 + 195 * f)];
+  }
+  if (t < 0.66) {
+    const f = (t - 0.33) / 0.33;
+    return [Math.round(10 + 245 * f), Math.round(220 + 35 * f), Math.round(255 - 200 * f)];
+  }
+  const f = (t - 0.66) / 0.34;
+  return [255, 255, Math.round(55 + 200 * f)];
+}
+
+function cleanupDensityBand() {
+  if (densityMesh) {
+    nlGroup.remove(densityMesh);
+    densityMesh.geometry.dispose();
+    densityMesh.material.dispose();
+    densityMesh = null;
+  }
+  if (densityTexture) {
+    densityTexture.dispose();
+    densityTexture = null;
+  }
 }
 
 /**

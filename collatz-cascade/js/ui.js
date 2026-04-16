@@ -20,6 +20,7 @@ import {
   findLowestUnvisited, findHighestUnvisited, formatValue,
   setSpeed, getSpeed, setScaleMode, getScaleMode,
   clearNumberLine, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
+  isDensityMode, skipToEnd,
 } from './numberline.js';
 import {
   showTimeSeries, hideTimeSeries, addTimeSeriesNumber,
@@ -517,7 +518,11 @@ export function initUI(onSubmit) {
     setTimeout(() => zoomToExtents(getCamera(), getControls()), 50);
   });
 
-  // Clear for chart modes (time series + spiral)
+  // Skip to End (Number Line density mode only)
+  const skipBtn = document.getElementById('nl-skip');
+  skipBtn.addEventListener('click', () => skipToEnd());
+
+  // Clear for chart modes (time series + spiral + flat chart)
   document.getElementById('chart-clear').addEventListener('click', () => {
     cancelAll();  // cancel any in-flight fill scheduler work
     btnFill.disabled = false;
@@ -625,6 +630,8 @@ export function initUI(onSubmit) {
   // ── Math bar update (self-scheduling RAF loop) ─────────
   function updateMathBar() {
     requestAnimationFrame(updateMathBar);
+    // Show/hide Skip button based on density mode
+    skipBtn.classList.toggle('hidden', !(numberLineMode && isDensityMode() && getPlayState() !== 'complete'));
     if (!numberLineMode) {
       mathBar.classList.add('hidden');
       return;
