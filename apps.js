@@ -23,6 +23,7 @@ window.COOL_STEM_APPS = [
     title: "Fibonacci Zoom",
     sub: "Spiral through 1, 1, 2, 3, 5, 8…",
     href: "/fibonacci-zoom/",
+    image: "/fibonacci-zoom/assets/images/FibonacciZoomLogo.png",
     bg: "radial-gradient(circle at 50% 50%, #3b1e0d 0%, #0a0f1e 80%)",
   },
 ];
