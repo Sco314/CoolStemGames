@@ -541,7 +541,6 @@ export function updateNumberLine(dt) {
     }
 
     // Milestone callouts
-    const val = sequence[currentStep];
     if (importance[currentStep] >= TERMINAL_WEIGHT && (val === 4 || val === 4n)) {
       milestoneCallout = { text: '4 → 2 → 1', type: 'terminal' };
       milestoneTimer = CALLOUT_DURATION * 1.5;
