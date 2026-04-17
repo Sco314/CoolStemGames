@@ -12,6 +12,7 @@ import {
 import { getBounds } from './graph.js';
 
 let camera, controls, renderer;
+let postFxEnabled = true;
 let flyAnim = null; // active fly-to animation
 
 export function getCamera() { return camera; }
@@ -71,6 +72,14 @@ export function initCamera(canvas) {
 
   return renderer;
 }
+
+export function setPostFxEnabled(enabled) {
+  postFxEnabled = !!enabled;
+  if (!renderer) return;
+  renderer.toneMappingExposure = postFxEnabled ? 1.08 : 1.0;
+}
+
+export function isPostFxEnabled() { return postFxEnabled; }
 
 let resizeTimer = null;
 function debouncedResize() {
