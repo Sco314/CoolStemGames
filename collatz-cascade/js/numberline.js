@@ -483,29 +483,23 @@ export function updateNumberLine(dt) {
 
   if (playState === 'paused') {
     pauseTimer -= effectiveDt;
-    pauseElapsed += effectiveDt;
 
-    // Single dramatic upward bounce: goes up and comes back in one arc
-    // t goes from 0 → 1 over the pause duration
-    const t = Math.min(1, pauseElapsed / PAUSE_DURATION);
-    // sin(t * π) = parabolic arc: 0 → 1 → 0
-    const bounceY = Math.sin(t * Math.PI) * BOUNCE_HEIGHT;
-    operatorBall.position.y = pauseOrbY + OPERATOR_RADIUS + bounceY;
+    // No upward bounce — ball sits at the collision point briefly,
+    // then immediately launches toward the next number.
+    // The short PAUSE_DURATION (0.12s) creates a natural "impact dwell"
+    // before the rebound.
 
     if (pauseTimer <= 0) {
       stepIndex++;
-
-      // NOTE: mathDisplay stays visible — it persists until next collision
 
       if (stepIndex >= sequence.length - 1) {
         playState = 'complete';
         return getCameraTarget();
       }
 
-      // Set up next arc
-      const from = orbPosition(sequence[stepIndex]);
+      // Rebound: launch directly from current position toward next number
       const to = orbPosition(sequence[stepIndex + 1]);
-      setupArc(from, to);
+      setupArc(operatorBall.position.clone(), to);
       travelProgress = 0;
       playState = 'traveling';
     }
@@ -515,14 +509,14 @@ export function updateNumberLine(dt) {
 }
 
 /**
- * Camera: angled view along the number line (pinball perspective).
- * Slightly behind and above the ball, looking ahead along the line.
+ * Camera: follows the ball from slightly above and behind, shifted
+ * right so the shooter + number line stay visible on mobile.
  */
 function getCameraTarget() {
   const ballPos = operatorBall.position.clone();
   return {
-    position: new THREE.Vector3(ballPos.x - 1.5, ballPos.y + 2.0, 4.0),
-    lookAt: new THREE.Vector3(ballPos.x + 2.0, ballPos.y, 0),
+    position: new THREE.Vector3(ballPos.x + 0.5, ballPos.y + 1.5, 3.0),
+    lookAt: new THREE.Vector3(ballPos.x + 1.5, ballPos.y, 0),
   };
 }
 
