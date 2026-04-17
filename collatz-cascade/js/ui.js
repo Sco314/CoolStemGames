@@ -14,9 +14,10 @@ import {
 import { pulseAnchor } from './animate.js';
 import { autoFrame, flyToNode, recenter, getCamera, getControls } from './camera.js';
 import {
-  getGameState, getTotalScore, getStreak, getBuckets, getSelectedBucket,
+  getGameState, getGameMode, getTotalScore, getStreak, getBuckets,
+  getSelectedBucket, getChallenge, getHighScore, getBestStreak,
   submitNumber, selectBucket, confirmLaunch, onRunStart, onRunComplete,
-  nextRound, getCurrentNumber,
+  nextRound, getCurrentNumber, setGameMode, generateChallenge, MODES,
 } from './game.js';
 import { INPUT_MAX, RECENT_MAX } from './constants.js';
 import {
@@ -141,9 +142,16 @@ export function initUI(onSubmit) {
       if (isOne) { input.value = ''; return; }
       input.value = '';
       clearError();
-      // Route through game loop: show prediction UI instead of launching directly
-      if (submitNumber(n)) {
-        showPredictionPanel(n);
+      const mode = getGameMode();
+      if (mode === 'freeExplore' || mode === 'hitRange' || mode === 'findLongest') {
+        // These modes skip bucket prediction
+        if (submitNumber(n)) {
+          const num = confirmLaunch();
+          if (num != null) { onRunStart(); startSequence(num); }
+        }
+      } else {
+        // guessSteps: show prediction panel
+        if (submitNumber(n)) showPredictionPanel(n);
       }
       return;
     }
@@ -660,6 +668,67 @@ export function initUI(onSubmit) {
   const scoreValueEl = document.getElementById('score-value');
   const streakValueEl = document.getElementById('streak-value');
   const streakLabelEl = document.getElementById('streak-label');
+  const modeSelectPanel = document.getElementById('mode-select-panel');
+  const modeSelectBtns = document.getElementById('mode-select-buttons');
+  const challengePanel = document.getElementById('challenge-panel');
+  const challengeInstruction = document.getElementById('challenge-instruction');
+  const challengeInput = document.getElementById('challenge-input');
+  const btnChallengeGo = document.getElementById('btn-challenge-go');
+  const highScoreEl = document.getElementById('high-score');
+  const highScoreValue = document.getElementById('high-score-value');
+
+  // Build mode selector buttons
+  modeSelectBtns.innerHTML = MODES.map(m =>
+    `<button class="mode-select-btn${m.id === getGameMode() ? ' active' : ''}" data-mode="${m.id}">` +
+    `<span class="mode-select-icon">${m.icon}</span>` +
+    `<span><span>${m.label}</span><br><span class="mode-select-desc">${m.desc}</span></span>` +
+    `</button>`
+  ).join('');
+
+  for (const btn of modeSelectBtns.querySelectorAll('.mode-select-btn')) {
+    btn.addEventListener('click', () => {
+      setGameMode(btn.dataset.mode);
+      for (const b of modeSelectBtns.querySelectorAll('.mode-select-btn')) b.classList.remove('active');
+      btn.classList.add('active');
+      modeSelectPanel.classList.add('hidden');
+      // Show challenge panel for hitRange/findLongest
+      if (btn.dataset.mode === 'hitRange' || btn.dataset.mode === 'findLongest') {
+        const ch = generateChallenge();
+        if (ch) {
+          challengeInstruction.textContent = ch.instruction;
+          challengePanel.classList.remove('hidden');
+          challengeInput.value = '';
+          challengeInput.focus();
+        }
+      }
+    });
+  }
+
+  // Challenge panel submit (hitRange / findLongest)
+  function submitChallengeInput() {
+    const raw = challengeInput.value.trim();
+    const n = parseInt(raw, 10);
+    if (!raw || isNaN(n) || n < 1) return;
+    if (submitNumber(n)) {
+      challengePanel.classList.add('hidden');
+      // For these modes, skip prediction → go straight to launch
+      const num = confirmLaunch();
+      if (num != null) {
+        onRunStart();
+        startSequence(num);
+      }
+    }
+  }
+  btnChallengeGo.addEventListener('click', submitChallengeInput);
+  challengeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitChallengeInput();
+  });
+
+  // Show mode selector when idle and user clicks a "Mode" button
+  // For now, show it via a small link in the input area
+  function showModeSelector() {
+    modeSelectPanel.classList.toggle('hidden');
+  }
 
   function showPredictionPanel(n) {
     predictNumber.textContent = fmtValue(n);
@@ -693,33 +762,43 @@ export function initUI(onSubmit) {
     tagLabel.textContent = results.tag;
     tagLabel.style.color = results.tagColor || '#889abb';
 
-    // Number that was played
+    // Number
     const numEl = document.getElementById('results-number');
     if (numEl) numEl.textContent = results.numberDisplay;
 
-    // Actual vs guess
+    // Actual steps
     document.getElementById('results-actual').textContent = String(results.actualSteps);
-    document.getElementById('results-guess').textContent = results.guessedBucket.label;
+
+    // Guess display depends on mode
+    const guessEl = document.getElementById('results-guess');
+    if (results.mode === 'guessSteps' && results.guessedBucket) {
+      guessEl.textContent = results.guessedBucket.label;
+    } else if (results.mode === 'hitRange' && results.challenge) {
+      guessEl.textContent = results.challenge.label;
+      guessEl.parentElement.querySelector('.results-stat-label').textContent = 'target range';
+    } else if (results.mode === 'findLongest' && results.challenge) {
+      guessEl.textContent = `best: ${results.challenge.bestSteps}`;
+      guessEl.parentElement.querySelector('.results-stat-label').textContent = 'best in range';
+    } else {
+      guessEl.textContent = '—';
+    }
 
     // Verdict
     const verdict = document.getElementById('results-verdict');
-    if (results.isCorrect) {
-      verdict.textContent = '\u2705 Correct!';
-      verdict.className = 'results-verdict correct';
-    } else if (results.bucketDistance === 1) {
-      verdict.textContent = '\uD83D\uDD36 Close!';
-      verdict.className = 'results-verdict close';
-    } else {
-      verdict.textContent = '\u274C Missed';
-      verdict.className = 'results-verdict miss';
-    }
+    verdict.textContent = results.verdictText || '';
+    verdict.className = 'results-verdict ' + (results.verdictClass || '');
 
-    // Peak value
+    // Peak
     const peakEl = document.getElementById('results-peak');
     if (peakEl) peakEl.textContent = `Peak value: ${results.peakDisplay}`;
 
     // Score + streak
-    document.getElementById('results-score').textContent = `+${results.roundScore}`;
+    const scoreEl = document.getElementById('results-score');
+    if (results.mode === 'freeExplore') {
+      scoreEl.textContent = '';
+    } else {
+      scoreEl.textContent = `+${results.roundScore}`;
+    }
     const streakEl = document.getElementById('results-streak');
     if (streakEl) {
       streakEl.textContent = results.streak > 1 ? `${results.streak}\u00D7 streak!` : '';
@@ -747,6 +826,9 @@ export function initUI(onSubmit) {
     }
   }
 
+  // Mode select button (in input area)
+  document.getElementById('btn-mode-select').addEventListener('click', showModeSelector);
+
   // Launch button
   btnLaunch.addEventListener('click', () => {
     const n = confirmLaunch();
@@ -760,8 +842,30 @@ export function initUI(onSubmit) {
   btnNext.addEventListener('click', () => {
     hideResultsPanel();
     nextRound();
+    // For challenge modes, auto-generate next challenge
+    const mode = getGameMode();
+    if (mode === 'hitRange' || mode === 'findLongest') {
+      const ch = generateChallenge();
+      if (ch) {
+        challengeInstruction.textContent = ch.instruction;
+        challengePanel.classList.remove('hidden');
+        challengeInput.value = '';
+        challengeInput.focus();
+        return;
+      }
+    }
     input.focus();
   });
+
+  // Update high score display
+  function updateHighScore() {
+    const hs = getHighScore();
+    if (hs > 0) {
+      highScoreValue.textContent = String(hs);
+      highScoreEl.classList.remove('hidden');
+    }
+  }
+  updateHighScore();
 
   // Poll for run completion — when numberline playState becomes
   // 'complete' and game state is 'running', trigger results.

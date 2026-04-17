@@ -49,12 +49,31 @@
     <main id="scene-wrap">
       <canvas id="scene"></canvas>
 
-      <!-- Game score (persistent, top-left) -->
+      <!-- Game score + leaderboard (persistent, top-left) -->
       <div id="game-score">
         <span id="score-value">0</span>
         <span class="score-label">score</span>
         <span id="streak-value" class="hidden">0</span>
         <span id="streak-label" class="score-label hidden">streak</span>
+      </div>
+      <div id="high-score" class="hidden">
+        <span class="score-label">best</span>
+        <span id="high-score-value">0</span>
+      </div>
+
+      <!-- Game mode selector (shown in idle state) -->
+      <div id="mode-select-panel" class="hidden">
+        <div class="mode-select-title">Choose a Mode</div>
+        <div id="mode-select-buttons"></div>
+      </div>
+
+      <!-- Challenge panel (for hitRange / findLongest) -->
+      <div id="challenge-panel" class="hidden">
+        <div class="challenge-instruction" id="challenge-instruction"></div>
+        <div class="challenge-input-row">
+          <input id="challenge-input" type="text" inputmode="numeric" placeholder="Enter number" autocomplete="off" />
+          <button id="btn-challenge-go" class="btn-launch">Go!</button>
+        </div>
       </div>
 
       <!-- Math display + hit counter (during run) -->
@@ -169,6 +188,7 @@
       </div>
 
       <div id="input-area">
+        <button id="btn-mode-select" class="icon-btn" title="Game mode">\uD83C\uDFAE</button>
         <input id="num-input" type="text" inputmode="text" placeholder="Enter a number" autocomplete="off" />
         <button id="btn-go">Go</button>
         <span class="input-sep"></span>
