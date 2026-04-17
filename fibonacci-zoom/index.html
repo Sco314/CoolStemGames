@@ -874,6 +874,17 @@ function col(i, alpha = 1) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+// Cache Number(fibPos(k)) — BigInt→Number conversion is expensive at large k
+// and buildSquares re-runs every draw frame. Keyed by k only; result is independent of scale.
+const _fibNumMemo = new Map([[0, 0], [1, 1]]);
+function fibPosNum(k) {
+  const cached = _fibNumMemo.get(k);
+  if (cached !== undefined) return cached;
+  const v = Number(fibPos(k));
+  _fibNumMemo.set(k, v);
+  return v;
+}
+
 // ─── Fibonacci square layout ──────────────────────────────────────
 function buildSquares(n, scale) {
   if (n === 0) return [];
@@ -881,7 +892,7 @@ function buildSquares(n, scale) {
   const squares = [];
   let minX = 0, maxX = 0, minY = 0, maxY = 0;
   for (let k = 1; k <= absN; k++) {
-    const sz = Number(fibPos(k)) * scale;
+    const sz = fibPosNum(k) * scale;
     let x = 0, y = 0;
     if      (k === 1) { x = 0;    y = 0; maxX = sz; maxY = sz; }
     else if (k === 2) { x = maxX; y = 0; maxX = x + sz; }
@@ -915,6 +926,26 @@ const nl    = document.getElementById('nlCanvas');
 const nlctx = nl.getContext('2d');
 const cc    = document.getElementById('confettiCanvas');
 const cctx  = cc.getContext('2d');
+
+// Cap devicePixelRatio to limit canvas backing-store memory on high-DPI
+// Chromebooks (dpr 2.0 otherwise gives 4× backing store per canvas).
+const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+
+// rAF-coalesced draw scheduler. Bulk input handlers (flower/smiley combo ticks,
+// drag handlers, resize observer) can request many redraws per frame; this
+// collapses them to one paint per frame — critical on weak Chromebook GPUs.
+let _drawSpiralScheduled = false;
+let _drawNlScheduled     = false;
+function requestDrawSpiral() {
+  if (_drawSpiralScheduled) return;
+  _drawSpiralScheduled = true;
+  requestAnimationFrame(() => { _drawSpiralScheduled = false; drawSpiral(); });
+}
+function requestDrawNumberLine() {
+  if (_drawNlScheduled) return;
+  _drawNlScheduled = true;
+  requestAnimationFrame(() => { _drawNlScheduled = false; drawNumberLine(); });
+}
 
 // ─── Input position tracking (for confetti placement) ────────────
 let lastInputX = 0, lastInputY = 0;
@@ -1017,7 +1048,7 @@ function spawnFlower() {
   function collectFlower(e) {
     e.stopPropagation();
     if (e.type === 'touchend') e.preventDefault();
-    for (let i = 0; i < 5; i++) tickInput(+1);
+    bulkTick(+1, 5);
     const rect = el.getBoundingClientRect();
     const boxRect = cc.getBoundingClientRect();
     launchConfetti(rect.left - boxRect.left + 22, rect.top - boxRect.top + 22, 20);
@@ -1081,7 +1112,7 @@ function launchSmileySpread(pageX, pageY) {
       function airCollect(e) {
         e.stopPropagation();
         if (e.type === 'touchend') e.preventDefault();
-        for (let j = 0; j < 55; j++) tickInput(+1);
+        bulkTick(+1, 55);
         launchConfetti(parseFloat(el.style.left), parseFloat(el.style.top), 30);
         showPointsAnimation(parseFloat(el.style.left), parseFloat(el.style.top) - 10, 55);
         smileys.forEach(s => { if (s.parentNode) s.remove(); });
@@ -1133,7 +1164,7 @@ function launchSmileySpread(pageX, pageY) {
       const idx = Math.min(Math.floor(elapsed / 500), SMILEY_DECAY.length - 1);
       const value = SMILEY_DECAY[idx];
       if (value > 0) {
-        for (let j = 0; j < value; j++) tickInput(+1);
+        bulkTick(+1, value);
         const rect = newEl.getBoundingClientRect();
         launchConfetti(rect.left - boxRect.left + 22, rect.top - boxRect.top + 22, value);
         showPointsAnimation(parseFloat(newEl.style.left), parseFloat(newEl.style.top) - 10, value);
@@ -1160,17 +1191,17 @@ function resizeCanvases() {
   // Set canvas BUFFER dimensions only. CSS width:100%/height:100% handles display size.
   // Do NOT set canvas.style.width/height — on Safari iOS, explicit pixel styles on a
   // canvas inside a flex container cause the parent to grow by ~2px/frame (feedback loop).
-  sc.width  = sw * devicePixelRatio;
-  sc.height = sh * devicePixelRatio;
-  sctx.scale(devicePixelRatio, devicePixelRatio);
-  cc.width  = sw * devicePixelRatio;
-  cc.height = sh * devicePixelRatio;
-  cctx.scale(devicePixelRatio, devicePixelRatio);
+  sc.width  = sw * DPR;
+  sc.height = sh * DPR;
+  sctx.scale(DPR, DPR);
+  cc.width  = sw * DPR;
+  cc.height = sh * DPR;
+  cctx.scale(DPR, DPR);
   state._sw = sw; state._sh = sh;
 
-  nl.width  = nw * devicePixelRatio;
-  nl.height = nh * devicePixelRatio;
-  nlctx.scale(devicePixelRatio, devicePixelRatio);
+  nl.width  = nw * DPR;
+  nl.height = nh * DPR;
+  nlctx.scale(DPR, DPR);
   state._nlw = nw; state._nlh = nh;
 
   centerNlOn(state.n);
@@ -1354,6 +1385,13 @@ function drawSpiral() {
   const allSquares   = buildSquares(lookaheadN, baseScale); // positive, for geometry
   const lookaheadSqs = allSquares.slice(absN); // only the extra ones
 
+  // Cap lookahead render size — each successive square is φ× larger than the
+  // last, so lookaheadSqs[12] is ~520× screen size. Letting the canvas
+  // rasterize such massive fillRect/strokeRect regions hits GPU memory limits
+  // on weak integrated GPUs (school Chromebooks) and can crash the GPU
+  // process. Skip any lookahead square whose side exceeds a few viewports.
+  const LOOKAHEAD_MAX_SIZE = Math.max(W, H) * 4;
+
   const sq0  = squares[0];
   let eyeX, eyeY;
   if (W < 500 && squares.length > 0) {
@@ -1391,6 +1429,7 @@ function drawSpiral() {
   // ── Lookahead ghost squares (drawn first, behind everything) ──────
   if (state.showSquares) {
     lookaheadSqs.forEach((sq, j) => {
+      if (sq.size > LOOKAHEAD_MAX_SIZE) return;
       const dist  = j + 1; // 1 = immediate next, 13 = farthest
       const alpha = Math.max(0.02, 0.22 - dist * 0.015);
       ctx.fillStyle   = col(absN + j, alpha * 0.6);
@@ -1405,6 +1444,7 @@ function drawSpiral() {
   // Lookahead spiral arcs (ghost)
   if (state.showFibSpiral) {
     lookaheadSqs.forEach((sq, j) => {
+      if (sq.size > LOOKAHEAD_MAX_SIZE) return;
       const dist  = j + 1;
       const alpha = Math.max(0.02, 0.18 - dist * 0.012);
       const { ax, ay, sa } = arcParams(sq, absN + j);
@@ -1429,7 +1469,7 @@ function drawSpiral() {
   }
 
   // ── Immediate next square ghost (progress materialising) ──────────
-  if (progress > 0 && lookaheadSqs.length > 0) {
+  if (progress > 0 && lookaheadSqs.length > 0 && lookaheadSqs[0].size <= LOOKAHEAD_MAX_SIZE) {
     const gSq = lookaheadSqs[0];
     const gi  = absN; // index into allSquares
 
@@ -1532,6 +1572,15 @@ function stepsForN(targetN) {
   return Math.max(1, Number(fibPos(Math.abs(targetN))));
 }
 
+// Bulk-apply `count` ticks in one frame. Power-ups (flower=5, smiley air=55,
+// smiley landed=1..34) previously called `tickInput` in a synchronous loop,
+// which triggered up to 55 full spiral+number-line redraws per click. On weak
+// Chromebook GPUs this would spike memory and crash the renderer.
+function bulkTick(dir, count) {
+  if (celebrationAF) return;
+  for (let i = 0; i < count; i++) tickInput(dir);
+}
+
 // Single entry point for ALL directional inputs
 // Keeps scrollAccum consistent across input method switches
 function tickInput(dir) {
@@ -1567,8 +1616,8 @@ function tickInput(dir) {
     const fromX = state._nlw / 2 - state.n * NL_CELL - NL_CELL / 2;
     const toX   = state._nlw / 2 - targetN * NL_CELL - NL_CELL / 2;
     state.nlWorldX = fromX + (toX - fromX) * progress;
-    drawSpiral();
-    drawNumberLine();
+    requestDrawSpiral();
+    requestDrawNumberLine();
     debouncedSaveProgress();
   }
 
@@ -1604,8 +1653,8 @@ function commitN(newN) {
   const isNewHigh = Math.abs(newN) > oldHighest;
   if (isNewHigh) state.highestAbsN = Math.abs(newN);
   animateNlToN(newN);
-  drawSpiral();
-  drawNumberLine();
+  requestDrawSpiral();
+  requestDrawNumberLine();
   updateModeInfo();
   // At n=8: create guest account if not yet authenticated
   if (isNewHigh && Math.abs(newN) >= 8 && !currentUser && fbAuth) {
@@ -1735,7 +1784,7 @@ window.addEventListener('mousemove', e => {
     if (state.dragMoved) {
       state.panX += dx; state.panY += dy;
       state.lastMx = e.clientX; state.lastMy = e.clientY;
-      drawSpiral();
+      requestDrawSpiral();
     }
   }
   // Number-line pan
@@ -1754,8 +1803,8 @@ window.addEventListener('mousemove', e => {
         state.nlWorldX = clampedWorld;
       }
     }
-    if (centN !== state.n) { state.n = centN; state.subStep = 0; drawSpiral(); updateModeInfo(); }
-    drawNumberLine();
+    if (centN !== state.n) { state.n = centN; state.subStep = 0; requestDrawSpiral(); updateModeInfo(); }
+    requestDrawNumberLine();
   }
 });
 
@@ -1796,7 +1845,7 @@ sc.addEventListener('touchmove', e => {
       state.panX += dx; state.panY += dy;
       state.lastMx = e.touches[0].clientX;
       state.lastMy = e.touches[0].clientY;
-      drawSpiral();
+      requestDrawSpiral();
     }
   }
 }, { passive: false });
@@ -1892,8 +1941,8 @@ nl.addEventListener('touchmove', e => {
     if (centN === -state.highestAbsN || centN === state.highestAbsN)
       state.nlWorldX = state._nlw/2 - centN*NL_CELL - NL_CELL/2;
   }
-  if (centN !== state.n) { state.n = centN; state.subStep = 0; drawSpiral(); updateModeInfo(); }
-  drawNumberLine();
+  if (centN !== state.n) { state.n = centN; state.subStep = 0; requestDrawSpiral(); updateModeInfo(); }
+  requestDrawNumberLine();
 }, { passive: false });
 nl.addEventListener('touchend', e => {
   e.preventDefault(); state.nlDragging = false; nlMomentum();
@@ -2052,9 +2101,9 @@ let resizeTimer = 0;
 const ro = new ResizeObserver(() => {
   if (window.innerWidth <= 640) {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { resizeCanvases(); drawSpiral(); drawNumberLine(); }, 80);
+    resizeTimer = setTimeout(() => { resizeCanvases(); requestDrawSpiral(); requestDrawNumberLine(); }, 80);
   } else {
-    resizeCanvases(); drawSpiral(); drawNumberLine();
+    resizeCanvases(); requestDrawSpiral(); requestDrawNumberLine();
   }
 });
 ro.observe(document.querySelector('.canvas-box'));
