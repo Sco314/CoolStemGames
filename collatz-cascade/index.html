@@ -26,10 +26,10 @@
     </header>
 
     <nav id="mode-selector">
-      <button class="mode-btn active" data-mode="timeseries">Time Series</button>
+      <button class="mode-btn" data-mode="timeseries">Time Series</button>
       <button class="mode-btn" data-mode="flatchart">Flat Chart</button>
       <button class="mode-btn" data-mode="spiral">Spiral</button>
-      <button class="mode-btn" data-mode="numberline">Num Line</button>
+      <button class="mode-btn active" data-mode="numberline">Num Line</button>
       <button class="mode-btn" data-mode="particles">Particles</button>
       <button class="mode-btn" data-mode="value">Value</button>
       <button class="mode-btn" data-mode="parity">Parity</button>
@@ -82,6 +82,12 @@
           <span>shallow</span>
           <span>deep</span>
         </div>
+      </div>
+
+      <!-- Hit counter (number line mode) -->
+      <div id="hit-counter" class="hidden">
+        <span id="hit-count">0</span>
+        <span class="hit-label">hits</span>
       </div>
 
       <aside id="recent-panel">

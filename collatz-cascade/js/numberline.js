@@ -27,23 +27,27 @@ const OPERATOR_RADIUS = 0.18;
 const LINE_Y = 0;
 const LABEL_SCALE = 0.45;
 
-// Arc: gentle arcs so the ball glides smoothly
-const ARC_MIN_HEIGHT = 0.3;
-const ARC_HEIGHT_FACTOR = 0.12;
+// Rebound arc: low, direct trajectory (pinball feel)
+const ARC_MIN_HEIGHT = 0.15;
+const ARC_HEIGHT_FACTOR = 0.06;
 
 // Colors
 const ORB_COLOR_DEFAULT = new THREE.Color(0.85, 0.35, 0.15);  // reddish orange
 const ORB_COLOR_VISITED = new THREE.Color(0.2, 0.45, 0.9);    // complement blue
 const OPERATOR_COLOR = new THREE.Color(1, 1, 1);
 
-// Timing (seconds) — narrow range keeps pacing consistent
-const TRAVEL_MIN = 0.5;          // minimum travel time (short hops)
-const TRAVEL_MAX = 1.5;          // maximum travel time (long travels)
-const PAUSE_DURATION = 0.2;      // brief pause on collision
+// Timing (seconds) — fast pinball pacing
+const TRAVEL_MIN = 0.3;          // minimum travel time (short hops)
+const TRAVEL_MAX = 0.8;          // maximum travel time (long travels)
+const PAUSE_DURATION = 0.12;     // brief impact flash
 const EXTRA_CYCLES = 2;          // repeat 4→2→1 this many times
 
 // Bounce animation during pause: single dramatic upward hop
-const BOUNCE_HEIGHT = 0.35;      // subtle hop on landing
+const BOUNCE_HEIGHT = 0.15;      // tiny impact rebound
+
+// Pinball shooter position (just left of the number line origin)
+const SHOOTER_X = -1.5;
+const SHOOTER_Y = LINE_Y;
 
 // ── State ────────────────────────────────────────────────
 let nlGroup = null;
@@ -85,6 +89,12 @@ let mathDisplay = null;
 const allVisited = new Set();
 let maxOnLine = 0;
 
+// Hit counter
+let hitCount = 0;
+
+// Pinball shooter mesh
+let shooterMesh = null;
+
 // Density band state (for sequences above DENSITY_THRESHOLD steps)
 let densityMode = false;
 let densityTexture = null;
@@ -94,6 +104,7 @@ let densityMesh = null;
 let active = false;
 
 export function isDensityMode() { return densityMode; }
+export function getHitCount() { return hitCount; }
 
 // ── Public API ───────────────────────────────────────────
 
@@ -116,6 +127,34 @@ export function initNumberLine(scene) {
 
   operatorLight = new THREE.PointLight(0xffeedd, 1.0, 8, 2);
   operatorBall.add(operatorLight);
+
+  // Pinball shooter: a small housing that the ball launches from
+  const shooterGeo = new THREE.BoxGeometry(0.6, 0.35, 0.35);
+  const shooterMat = new THREE.MeshStandardMaterial({
+    color: 0x334466,
+    emissive: 0x1a2a44,
+    emissiveIntensity: 0.3,
+    metalness: 0.6,
+    roughness: 0.3,
+  });
+  shooterMesh = new THREE.Mesh(shooterGeo, shooterMat);
+  shooterMesh.position.set(SHOOTER_X, SHOOTER_Y, 0);
+  nlGroup.add(shooterMesh);
+
+  // Plunger rod inside the shooter
+  const rodGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8);
+  const rodMat = new THREE.MeshStandardMaterial({ color: 0x889abb, metalness: 0.8, roughness: 0.2 });
+  const rod = new THREE.Mesh(rodGeo, rodMat);
+  rod.rotation.z = Math.PI / 2;
+  rod.position.set(-0.35, 0, 0);
+  shooterMesh.add(rod);
+
+  // Plunger knob
+  const knobGeo = new THREE.SphereGeometry(0.09, 12, 8);
+  const knobMat = new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0xff2222, emissiveIntensity: 0.4 });
+  const knob = new THREE.Mesh(knobGeo, knobMat);
+  knob.position.set(-0.6, 0, 0);
+  shooterMesh.add(knob);
 }
 
 export function showNumberLine() {
@@ -206,16 +245,17 @@ function launchSequence(n, values) {
     scheduleBatch(sequence.slice(1), (v) => ensureOrb(v), { priority: 6 });
   }
 
-  // Reset playback
+  // Reset playback + hit counter
   stepIndex = 0;
+  hitCount = 0;
   mathDisplay = null;
 
-  // Launch from below the first target
+  // Ball starts inside the pinball shooter, then launches to the first number
   const firstPos = orbPosition(sequence[0]);
-  operatorBall.position.set(firstPos.x, firstPos.y - 4, 2);
+  operatorBall.position.set(SHOOTER_X, SHOOTER_Y, 0);
   operatorBall.visible = true;
 
-  setupArc(operatorBall.position.clone(), firstPos);
+  setupArc(new THREE.Vector3(SHOOTER_X, SHOOTER_Y, 0), firstPos);
   travelProgress = 0;
   playState = 'traveling';
 }
@@ -396,9 +436,10 @@ export function updateNumberLine(dt) {
       travelProgress = 1;
       operatorBall.position.copy(arcEnd);
 
-      // Mark visited
+      // Mark visited + count hit
       const targetVal = sequence[stepIndex];
       markVisited(targetVal);
+      hitCount++;
 
       // Build math display — stays visible until next collision
       if (stepIndex < sequence.length - 1) {
@@ -474,14 +515,14 @@ export function updateNumberLine(dt) {
 }
 
 /**
- * Camera target: one consistent framing regardless of play state.
- * Eliminates jarring jumps between travel/pause camera positions.
+ * Camera: angled view along the number line (pinball perspective).
+ * Slightly behind and above the ball, looking ahead along the line.
  */
 function getCameraTarget() {
   const ballPos = operatorBall.position.clone();
   return {
-    position: new THREE.Vector3(ballPos.x, ballPos.y + 1.2, 3.5),
-    lookAt: ballPos,
+    position: new THREE.Vector3(ballPos.x - 1.5, ballPos.y + 2.0, 4.0),
+    lookAt: new THREE.Vector3(ballPos.x + 2.0, ballPos.y, 0),
   };
 }
 

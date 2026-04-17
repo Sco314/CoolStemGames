@@ -20,7 +20,7 @@ import {
   findLowestUnvisited, findHighestUnvisited, formatValue,
   setSpeed, getSpeed, setScaleMode, getScaleMode,
   clearNumberLine, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
-  isDensityMode, skipToEnd,
+  isDensityMode, skipToEnd, getHitCount,
 } from './numberline.js';
 import {
   showTimeSeries, hideTimeSeries, addTimeSeriesNumber,
@@ -628,10 +628,20 @@ export function initUI(onSubmit) {
   });
 
   // ── Math bar update (self-scheduling RAF loop) ─────────
+  const hitCounter = document.getElementById('hit-counter');
+  const hitCountEl = document.getElementById('hit-count');
+
   function updateMathBar() {
     requestAnimationFrame(updateMathBar);
     // Show/hide Skip button based on density mode
     skipBtn.classList.toggle('hidden', !(numberLineMode && isDensityMode() && getPlayState() !== 'complete'));
+    // Hit counter: visible in number line mode when a sequence is playing
+    if (numberLineMode && getPlayState() !== 'idle') {
+      hitCounter.classList.remove('hidden');
+      hitCountEl.textContent = String(getHitCount());
+    } else {
+      hitCounter.classList.add('hidden');
+    }
     if (!numberLineMode) {
       mathBar.classList.add('hidden');
       return;

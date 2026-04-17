@@ -346,6 +346,34 @@ body {
 #step-detail { color: #8899bb; }
 
 /* ── Recent Panel (overlay, top-right of scene) ───────── */
+/* ── Hit counter (number line mode) ───────────────────── */
+#hit-counter {
+  position: absolute;
+  top: 8px;
+  right: 160px;
+  background: rgba(11,16,32,0.85);
+  backdrop-filter: blur(12px);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 8px 14px;
+  z-index: 10;
+  text-align: center;
+}
+#hit-counter.hidden { display: none; }
+#hit-count {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffd866;
+  display: block;
+  line-height: 1;
+}
+.hit-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #667799;
+}
+
 #recent-panel {
   position: absolute;
   top: 8px;
