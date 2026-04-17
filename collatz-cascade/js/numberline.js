@@ -25,6 +25,7 @@ const MAGNITUDE_SCALE = 0.15;    // world units per log2 unit (Y axis)
 const ORB_RADIUS = 0.10;
 const ORB_RADIUS_ACTIVE = 0.14;
 const OPERATOR_RADIUS = 0.18;
+const ORB_SPIN_SPEED = 0.3;      // radians per second (Y-axis rotation)
 const LABEL_SCALE = 0.40;
 const EXTRA_CYCLES = 2;
 
@@ -55,7 +56,6 @@ const ORB_COLOR_VISITED = new THREE.Color(0.2, 0.45, 0.9);
 const ORB_COLOR_ACTIVE = new THREE.Color(1.0, 0.85, 0.3);
 const TRAIL_COLOR_BRIGHT = 0x4a9aff;
 const TRAIL_COLOR_FAINT = 0x223355;
-const OPERATOR_COLOR = new THREE.Color(1, 1, 1);
 
 // Density band threshold
 const DENSITY_THRESHOLD = 2000;
@@ -136,11 +136,16 @@ export function initNumberLine(scene) {
   nlGroup.visible = false;
   scene.add(nlGroup);
 
-  // Operator ball
-  const geo = new THREE.SphereGeometry(OPERATOR_RADIUS, 20, 14);
+  // Start orb — textured sphere with slow spin
+  const geo = new THREE.SphereGeometry(OPERATOR_RADIUS, 32, 24);
+  const orbTexture = new THREE.TextureLoader().load('assets/images/startorbgraphic.png');
+  orbTexture.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.MeshStandardMaterial({
-    color: OPERATOR_COLOR, emissive: OPERATOR_COLOR,
-    emissiveIntensity: 0.5, metalness: 0.3, roughness: 0.4,
+    map: orbTexture,
+    emissive: new THREE.Color(0xd4a44a),
+    emissiveIntensity: 0.4,
+    metalness: 0.35,
+    roughness: 0.35,
   });
   operatorBall = new THREE.Mesh(geo, mat);
   operatorBall.visible = false;
@@ -420,6 +425,11 @@ export function skipToEnd() {
 
 // ── Update (called each frame) ──────────────────────────
 export function updateNumberLine(dt) {
+  // Spin the start orb whenever it's visible
+  if (operatorBall && operatorBall.visible) {
+    operatorBall.rotation.y += ORB_SPIN_SPEED * dt;
+  }
+
   if (!active || playState === 'idle' || playState === 'complete') return null;
 
   const effectiveDt = dt * userSpeed;
