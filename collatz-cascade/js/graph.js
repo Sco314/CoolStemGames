@@ -21,6 +21,7 @@ import {
   ANCHOR_PULSE_PERIOD, ANCHOR_PULSE_MIN, ANCHOR_PULSE_MAX,
   COLOR_RAMP,
 } from './constants.js';
+import { getEffectiveQuality } from './quality.js';
 
 // ── State ────────────────────────────────────────────────
 const nodes = new Map();   // value → node object (insertion order = age, oldest first)
@@ -134,6 +135,23 @@ function makeLabelSprite(text, radius) {
   return sprite;
 }
 
+function enforceLabelCap() {
+  const maxLabels = getEffectiveQuality().maxLabels;
+  let shown = 0;
+  // Prefer recent nodes by iterating newest first.
+  const vals = Array.from(nodes.keys()).reverse();
+  for (const val of vals) {
+    const node = nodes.get(val);
+    if (!node || !node.label) continue;
+    if (shown < maxLabels) {
+      node.label.visible = true;
+      shown++;
+    } else {
+      node.label.visible = false;
+    }
+  }
+}
+
 // ── Add node ─────────────────────────────────────────────
 export function addNode(value, stoppingTime, immediate = false) {
   if (nodes.has(value)) return nodes.get(value);
@@ -195,6 +213,7 @@ export function addNode(value, stoppingTime, immediate = false) {
   nodes.set(value, node);
   pushRecent(value);
   settled = false;
+  enforceLabelCap();
 
   // If we're in a deterministic mode, compute target for the new node
   if (currentMode !== 'particles') {
@@ -261,6 +280,7 @@ export function removeNode(value) {
   for (let i = recentNodes.length - 1; i >= 0; i--) {
     if (recentNodes[i] === value) recentNodes.splice(i, 1);
   }
+  enforceLabelCap();
 }
 
 /**
@@ -567,6 +587,7 @@ export function layoutStep(dt) {
   for (const edge of edges.values()) {
     updateEdgePositions(edge);
   }
+  enforceLabelCap();
 }
 
 // ── Force-directed (particles mode) ──────────────────────
