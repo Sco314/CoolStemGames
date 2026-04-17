@@ -17,7 +17,7 @@ import {
   getGameState, getGameMode, getTotalScore, getStreak, getBuckets,
   getSelectedBucket, getChallenge, getHighScore, getBestStreak,
   submitNumber, selectBucket, confirmLaunch, onRunStart, onRunComplete,
-  nextRound, getCurrentNumber, setGameMode, generateChallenge, MODES,
+  nextRound, cancelPrediction, getCurrentNumber, setGameMode, generateChallenge, MODES,
 } from './game.js';
 import { INPUT_MAX, RECENT_MAX } from './constants.js';
 import {
@@ -105,6 +105,19 @@ let numberLineMode = false;
 let timeSeriesMode = false;
 let spiralMode = false;
 let flatChartMode = false;
+
+// ── Backdrop helper (for modal dialogs) ─────────────────
+let activeBackdrop = null;
+function showBackdrop(closeFn) {
+  removeBackdrop();
+  activeBackdrop = document.createElement('div');
+  activeBackdrop.className = 'panel-backdrop';
+  activeBackdrop.addEventListener('pointerdown', closeFn);
+  document.getElementById('scene-wrap').appendChild(activeBackdrop);
+}
+function removeBackdrop() {
+  if (activeBackdrop) { activeBackdrop.remove(); activeBackdrop = null; }
+}
 
 // ── Tooltip state ────────────────────────────────────────
 let hoveredValue = null;
@@ -697,11 +710,18 @@ export function initUI(onSubmit) {
         if (ch) {
           challengeInstruction.textContent = ch.instruction;
           challengePanel.classList.remove('hidden');
+          showBackdrop(closeChallengePanel);
           challengeInput.value = '';
           challengeInput.focus();
         }
       }
     });
+  }
+
+  function closeChallengePanel() {
+    challengePanel.classList.add('hidden');
+    removeBackdrop();
+    input.focus();
   }
 
   // Challenge panel submit (hitRange / findLongest)
@@ -711,6 +731,7 @@ export function initUI(onSubmit) {
     if (!raw || isNaN(n) || n < 1) return;
     if (submitNumber(n)) {
       challengePanel.classList.add('hidden');
+      removeBackdrop();
       // For these modes, skip prediction → go straight to launch
       const num = confirmLaunch();
       if (num != null) {
@@ -748,10 +769,19 @@ export function initUI(onSubmit) {
     }
     btnLaunch.disabled = true;
     predictPanel.classList.remove('hidden');
+    showBackdrop(closePredictPanel);
+  }
+
+  function closePredictPanel() {
+    predictPanel.classList.add('hidden');
+    removeBackdrop();
+    cancelPrediction();
+    input.focus();
   }
 
   function hidePredictionPanel() {
     predictPanel.classList.add('hidden');
+    removeBackdrop();
   }
 
   function showResultsPanel(results) {
@@ -806,11 +836,32 @@ export function initUI(onSubmit) {
     }
 
     resultsPanel.classList.remove('hidden');
+    showBackdrop(closeResultsPanel);
     updateScoreDisplay();
+  }
+
+  function closeResultsPanel() {
+    resultsPanel.classList.add('hidden');
+    removeBackdrop();
+    nextRound();
+    const mode = getGameMode();
+    if (mode === 'hitRange' || mode === 'findLongest') {
+      const ch = generateChallenge();
+      if (ch) {
+        challengeInstruction.textContent = ch.instruction;
+        challengePanel.classList.remove('hidden');
+        showBackdrop(closeChallengePanel);
+        challengeInput.value = '';
+        challengeInput.focus();
+        return;
+      }
+    }
+    input.focus();
   }
 
   function hideResultsPanel() {
     resultsPanel.classList.add('hidden');
+    removeBackdrop();
   }
 
   function updateScoreDisplay() {
@@ -838,24 +889,8 @@ export function initUI(onSubmit) {
     startSequence(n);
   });
 
-  // Next button (after results)
-  btnNext.addEventListener('click', () => {
-    hideResultsPanel();
-    nextRound();
-    // For challenge modes, auto-generate next challenge
-    const mode = getGameMode();
-    if (mode === 'hitRange' || mode === 'findLongest') {
-      const ch = generateChallenge();
-      if (ch) {
-        challengeInstruction.textContent = ch.instruction;
-        challengePanel.classList.remove('hidden');
-        challengeInput.value = '';
-        challengeInput.focus();
-        return;
-      }
-    }
-    input.focus();
-  });
+  // Next button (after results) — same logic as closeResultsPanel
+  btnNext.addEventListener('click', closeResultsPanel);
 
   // Update high score display
   function updateHighScore() {
@@ -866,6 +901,40 @@ export function initUI(onSubmit) {
     }
   }
   updateHighScore();
+
+  // ── Panel × close buttons ────────────────────────────
+  modeSelector.querySelector('.panel-close').addEventListener('click', () => {
+    modeSelector.classList.add('hidden');
+  });
+  modeSelectPanel.querySelector('.panel-close').addEventListener('click', () => {
+    modeSelectPanel.classList.add('hidden');
+  });
+  challengePanel.querySelector('.panel-close').addEventListener('click', closeChallengePanel);
+  predictPanel.querySelector('.panel-close').addEventListener('click', closePredictPanel);
+  resultsPanel.querySelector('.panel-close').addEventListener('click', closeResultsPanel);
+
+  // ── Popovers: outside-click to dismiss ────────────────
+  const btnModeSelect = document.getElementById('btn-mode-select');
+  document.addEventListener('pointerdown', (e) => {
+    if (!modeSelector.classList.contains('hidden') &&
+        !modeSelector.contains(e.target) && e.target !== btnSettings) {
+      modeSelector.classList.add('hidden');
+    }
+    if (!modeSelectPanel.classList.contains('hidden') &&
+        !modeSelectPanel.contains(e.target) && e.target !== btnModeSelect) {
+      modeSelectPanel.classList.add('hidden');
+    }
+  });
+
+  // ── Escape key closes the topmost open panel ──────────
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!resultsPanel.classList.contains('hidden')) { closeResultsPanel(); return; }
+    if (!predictPanel.classList.contains('hidden')) { closePredictPanel(); return; }
+    if (!challengePanel.classList.contains('hidden')) { closeChallengePanel(); return; }
+    if (!modeSelectPanel.classList.contains('hidden')) { modeSelectPanel.classList.add('hidden'); return; }
+    if (!modeSelector.classList.contains('hidden')) { modeSelector.classList.add('hidden'); return; }
+  });
 
   // Poll for run completion — when numberline playState becomes
   // 'complete' and game state is 'running', trigger results.

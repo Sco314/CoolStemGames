@@ -28,6 +28,7 @@
 
     <!-- Mode selector: hidden by default, revealed by gear button -->
     <nav id="mode-selector" class="hidden">
+      <button class="panel-close" aria-label="Close">&times;</button>
       <button class="mode-btn" data-mode="timeseries">Time Series</button>
       <button class="mode-btn" data-mode="flatchart">Flat Chart</button>
       <button class="mode-btn" data-mode="spiral">Spiral</button>
@@ -63,12 +64,14 @@
 
       <!-- Game mode selector (shown in idle state) -->
       <div id="mode-select-panel" class="hidden">
+        <button class="panel-close" aria-label="Close">&times;</button>
         <div class="mode-select-title">Choose a Mode</div>
         <div id="mode-select-buttons"></div>
       </div>
 
       <!-- Challenge panel (for hitRange / findLongest) -->
       <div id="challenge-panel" class="hidden">
+        <button class="panel-close" aria-label="Close">&times;</button>
         <div class="challenge-instruction" id="challenge-instruction"></div>
         <div class="challenge-input-row">
           <input id="challenge-input" type="text" inputmode="numeric" placeholder="Enter number" autocomplete="off" />
@@ -93,6 +96,7 @@
 
       <!-- Prediction panel (shown after number entry) -->
       <div id="predict-panel" class="hidden">
+        <button class="panel-close" aria-label="Close">&times;</button>
         <div class="predict-title">How many steps to reach 1?</div>
         <div class="predict-number" id="predict-number"></div>
         <div class="predict-buckets" id="predict-buckets"></div>
@@ -101,6 +105,7 @@
 
       <!-- Results panel (shown after run completes) -->
       <div id="results-panel" class="hidden">
+        <button class="panel-close" aria-label="Close">&times;</button>
         <div class="results-tag-wrap">
           <span class="results-tag-icon" id="results-tag-icon"></span>
           <span class="results-tag" id="results-tag"></span>
