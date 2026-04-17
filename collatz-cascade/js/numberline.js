@@ -14,10 +14,15 @@
 import * as THREE from 'three';
 import { collatzValues } from './collatz.js';
 import {
-  isBig, isEven, isOne, log2 as bigLog2,
-  valueKey, formatValue as fmtValue,
+  isBig, isEven, log2 as bigLog2,
+  formatValue as fmtValue,
 } from './valueUtils.js';
 import { computeSequenceAsync } from './collatz-client.js';
+import {
+  buildOrbRunRegistry,
+  makeRunHue,
+  resolveOrbRunStyle,
+} from './orbrun-color.js';
 
 // ── Path layout constants ───────────────────────────────
 const STEP_SPACING = 0.5;        // world units per step (X axis)
@@ -52,8 +57,6 @@ const VISIBLE_RANGE = 25;  // visible but small, no label
 
 // Colors
 const ORB_COLOR_FUTURE = new THREE.Color(0.3, 0.35, 0.5);
-const ORB_COLOR_VISITED = new THREE.Color(0.2, 0.45, 0.9);
-const ORB_COLOR_ACTIVE = new THREE.Color(1.0, 0.85, 0.3);
 const TRAIL_COLOR_BRIGHT = 0x4a9aff;
 const TRAIL_COLOR_FAINT = 0x223355;
 
@@ -94,6 +97,11 @@ let trailLine = null;        // traversed portion, bright
 
 // Step orbs
 let stepOrbs = [];           // { mesh, label, stepIdx }
+let orbRunRegistry = null;
+let orbRunHue = null;
+let terminalLoopMarked = false;
+let terminalFlashTimer = 0;
+let terminalFlashDone = false;
 
 // Camera blending
 let cameraMode = 'overview'; // overview | chase | tactical
@@ -198,6 +206,11 @@ export function clearNumberLine() {
   pathSpline = null;
   importance = [];
   stepOrbs = [];
+  orbRunRegistry = null;
+  orbRunHue = null;
+  terminalLoopMarked = false;
+  terminalFlashTimer = 0;
+  terminalFlashDone = false;
   currentStepFloat = 0;
   playState = 'idle';
   hitCount = 0;
@@ -316,7 +329,7 @@ function createStepOrb(stepIdx, value, pos) {
   label.visible = false;
   mesh.add(label);
 
-  return { mesh, label, stepIdx, value, activated: false };
+  return { mesh, label, stepIdx, value, activated: false, activationMix: 0 };
 }
 
 function makeLabel(value) {
@@ -395,6 +408,11 @@ function launchSequence(n, values) {
   }
 
   buildPath(sequence);
+  orbRunRegistry = buildOrbRunRegistry(sequence);
+  orbRunHue = makeRunHue(n);
+  terminalLoopMarked = false;
+  terminalFlashTimer = 0;
+  terminalFlashDone = false;
 
   // Reset playback
   currentStepFloat = -1;  // start before step 0 (at shooter)
@@ -419,6 +437,7 @@ export function skipToEnd() {
   }
   hitCount = totalSteps;
   playState = 'complete';
+  markTerminalLoopOnce();
   mathDisplay = { value: 1, isEven: false, label: 'DONE', rule: '', operation: '', result: '' };
   if (trailLine) trailLine.geometry.setDrawRange(0, totalSteps);
   updateOrbTiers(totalSteps - 1);
@@ -431,7 +450,15 @@ export function updateNumberLine(dt) {
     operatorBall.rotation.y += ORB_SPIN_SPEED * dt;
   }
 
-  if (!active || playState === 'idle' || playState === 'complete') return null;
+  if (!active || playState === 'idle') return null;
+  if (playState === 'complete') {
+    if (terminalFlashTimer > 0) {
+      terminalFlashTimer = Math.max(0, terminalFlashTimer - dt);
+      updateOrbTiers(Math.max(0, totalSteps - 1), dt);
+      return getCameraTarget();
+    }
+    return null;
+  }
 
   const effectiveDt = dt * userSpeed;
 
@@ -439,6 +466,10 @@ export function updateNumberLine(dt) {
   if (milestoneCallout) {
     milestoneTimer -= dt;
     if (milestoneTimer <= 0) milestoneCallout = null;
+  }
+
+  if (terminalFlashTimer > 0) {
+    terminalFlashTimer = Math.max(0, terminalFlashTimer - dt);
   }
 
   // ── LAUNCHING: plunger compresses, then fires ──────────
@@ -506,6 +537,7 @@ export function updateNumberLine(dt) {
     if (currentStepFloat >= totalSteps - 1) {
       currentStepFloat = totalSteps - 1;
       playState = 'complete';
+      markTerminalLoopOnce();
     }
 
     // Position ball on the spline
@@ -580,7 +612,7 @@ export function updateNumberLine(dt) {
   }
 
   // Update orb tiers
-  updateOrbTiers(currentStep);
+  updateOrbTiers(currentStep, dt);
 
   return getCameraTarget();
 }
@@ -588,32 +620,63 @@ export function updateNumberLine(dt) {
 // ── Orb tier management ─────────────────────────────────
 function activateOrb(orb) {
   orb.activated = true;
-  orb.mesh.material.color.copy(ORB_COLOR_VISITED);
-  orb.mesh.material.emissive.copy(ORB_COLOR_VISITED);
-  orb.mesh.material.emissiveIntensity = 0.3;
+  orb.activationMix = 0;
+  orb.mesh.material.color.copy(ORB_COLOR_FUTURE);
+  orb.mesh.material.emissive.copy(ORB_COLOR_FUTURE);
+  orb.mesh.material.emissiveIntensity = 0.25;
   orb.mesh.material.opacity = 1.0;
 }
 
-function updateOrbTiers(currentStep) {
+function markTerminalLoopOnce() {
+  if (terminalLoopMarked) return;
+  terminalLoopMarked = true;
+  if (!terminalFlashDone) {
+    terminalFlashDone = true;
+    terminalFlashTimer = 0.55;
+  }
+}
+
+function updateOrbTiers(currentStep, dt = 0) {
   for (const orb of stepOrbs) {
     const dist = Math.abs(orb.stepIdx - currentStep);
+    if (orb.activated) {
+      orb.activationMix = Math.min(1, orb.activationMix + dt * 2.4);
+    }
+
+    const style = resolveOrbRunStyle({
+      stepIdx: orb.stepIdx,
+      activated: orb.activated,
+      isCurrentStep: orb.stepIdx === currentStep,
+      runColor: orbRunHue || ORB_COLOR_FUTURE,
+      registry: orbRunRegistry || { repeatSteps: new Set(), terminalLoopSteps: new Set() },
+      terminalLoopMarked,
+      activationMix: orb.activationMix,
+    });
+
+    let emissiveBoost = 0;
+    if (terminalFlashTimer > 0 && (orb.value === 4 || orb.value === 4n || orb.value === 2 || orb.value === 2n || orb.value === 1 || orb.value === 1n)) {
+      emissiveBoost = Math.sin(((0.55 - terminalFlashTimer) / 0.55) * Math.PI) * 0.7;
+    }
+    orb.mesh.material.color.copy(style.color);
+    orb.mesh.material.emissive.copy(style.emissive);
+    orb.mesh.material.emissiveIntensity = style.emissiveIntensity + emissiveBoost;
 
     if (dist <= ACTIVE_RANGE) {
       // Active tier: full size, label visible
       const scale = orb.stepIdx === currentStep ? ORB_RADIUS_ACTIVE / ORB_RADIUS : 1.0;
       orb.mesh.scale.setScalar(scale);
       orb.label.visible = true;
-      orb.mesh.material.opacity = 1.0;
+      orb.mesh.material.opacity = style.opacity;
     } else if (dist <= VISIBLE_RANGE) {
       // Context tier: smaller, no label
       orb.mesh.scale.setScalar(0.6);
       orb.label.visible = false;
-      orb.mesh.material.opacity = orb.activated ? 0.5 : 0.2;
+      orb.mesh.material.opacity = orb.activated ? 0.55 : 0.2;
     } else {
       // Distant: tiny or hidden
       orb.mesh.scale.setScalar(0.3);
       orb.label.visible = false;
-      orb.mesh.material.opacity = orb.activated ? 0.15 : 0.05;
+      orb.mesh.material.opacity = orb.activated ? 0.2 : 0.05;
     }
   }
 }
