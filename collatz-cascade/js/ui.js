@@ -354,6 +354,11 @@ export function initUI(onSubmit) {
     nlControls.classList.remove('hidden');
     nlSliderWrap.classList.remove('hidden');
     input.placeholder = 'Enter number';
+    // Frame the camera on the shooter + first few positions
+    const cam = getCamera();
+    const ctrl = getControls();
+    cam.position.set(0.5, 1.5, 3.0);
+    ctrl.target.set(1.5, 0, 0);
   }
 
   function enterTimeSeries() {
