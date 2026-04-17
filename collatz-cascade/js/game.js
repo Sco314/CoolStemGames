@@ -12,8 +12,8 @@
  *   results  → run complete, showing score + stats
  */
 
-import { stoppingTime } from './collatz.js';
-import { formatValue } from './valueUtils.js';
+import { stoppingTime, peakValue } from './collatz.js';
+import { formatValue, log2 } from './valueUtils.js';
 
 // ── Step-count prediction buckets ────────────────────────
 const BUCKETS = [
@@ -45,15 +45,15 @@ let roundsPlayed = 0;
 let lastRoundScore = 0;
 let lastRoundCorrect = false;
 
-// Result tags for flavor text
+// Result tags for flavor text — icon + label + color
 const RESULT_TAGS = [
-  { maxSteps: 5,   tag: 'Quick drop' },
-  { maxSteps: 15,  tag: 'Short and direct' },
-  { maxSteps: 30,  tag: 'Moderate journey' },
-  { maxSteps: 60,  tag: 'Slow burner' },
-  { maxSteps: 100, tag: 'Big climber' },
-  { maxSteps: 200, tag: 'Wild ride' },
-  { maxSteps: Infinity, tag: 'Epic odyssey' },
+  { maxSteps: 5,   tag: 'Quick Drop',       icon: '\u26A1', color: '#4fb06f' },
+  { maxSteps: 15,  tag: 'Short & Sweet',    icon: '\u2728', color: '#6ad4e0' },
+  { maxSteps: 30,  tag: 'Steady Traveler',  icon: '\uD83D\uDEB6', color: '#4a9aff' },
+  { maxSteps: 60,  tag: 'Slow Burner',      icon: '\uD83D\uDD25', color: '#ff9a4a' },
+  { maxSteps: 100, tag: 'Big Climber',       icon: '\u26F0\uFE0F', color: '#ff6b4a' },
+  { maxSteps: 200, tag: 'Wild Ride',         icon: '\uD83C\uDF0B', color: '#aa66cc' },
+  { maxSteps: Infinity, tag: 'Epic Odyssey', icon: '\uD83C\uDF0C', color: '#ffd866' },
 ];
 
 // ── Public API ───────────────────────────────────────────
@@ -151,8 +151,9 @@ export function onRunComplete() {
   totalScore += roundScore;
   roundsPlayed++;
 
-  // Result tag
-  const tag = RESULT_TAGS.find(t => currentSteps <= t.maxSteps)?.tag || 'Unknown';
+  // Result tag with icon + color
+  const tagEntry = RESULT_TAGS.find(t => currentSteps <= t.maxSteps) || RESULT_TAGS[RESULT_TAGS.length - 1];
+  const peak = peakValue(currentNumber);
 
   gameState = 'results';
 
@@ -160,6 +161,8 @@ export function onRunComplete() {
     number: currentNumber,
     numberDisplay: formatValue(currentNumber),
     actualSteps: currentSteps,
+    peakValue: peak,
+    peakDisplay: formatValue(peak),
     guessedBucket: BUCKETS[selectedBucket],
     correctBucket: BUCKETS[correctBucket],
     isCorrect: selectedBucket === correctBucket,
@@ -168,7 +171,9 @@ export function onRunComplete() {
     totalScore,
     streak,
     roundsPlayed,
-    tag,
+    tag: tagEntry.tag,
+    tagIcon: tagEntry.icon,
+    tagColor: tagEntry.color,
   };
 }
 

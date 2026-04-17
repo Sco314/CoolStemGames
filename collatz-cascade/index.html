@@ -69,6 +69,9 @@
         </span>
       </div>
 
+      <!-- Milestone callout (floats during run) -->
+      <div id="milestone-callout" class="hidden"></div>
+
       <!-- Prediction panel (shown after number entry) -->
       <div id="predict-panel" class="hidden">
         <div class="predict-title">How many steps to reach 1?</div>
@@ -79,20 +82,29 @@
 
       <!-- Results panel (shown after run completes) -->
       <div id="results-panel" class="hidden">
-        <div class="results-tag" id="results-tag"></div>
+        <div class="results-tag-wrap">
+          <span class="results-tag-icon" id="results-tag-icon"></span>
+          <span class="results-tag" id="results-tag"></span>
+        </div>
+        <div class="results-number" id="results-number"></div>
         <div class="results-row">
           <div class="results-stat">
             <span class="results-stat-value" id="results-actual"></span>
             <span class="results-stat-label">actual steps</span>
           </div>
+          <div class="results-stat results-stat-vs">vs</div>
           <div class="results-stat">
             <span class="results-stat-value" id="results-guess"></span>
             <span class="results-stat-label">your guess</span>
           </div>
         </div>
         <div class="results-verdict" id="results-verdict"></div>
-        <div class="results-score" id="results-score"></div>
-        <button id="btn-next" class="btn-next">Next Number</button>
+        <div class="results-peak" id="results-peak"></div>
+        <div class="results-score-wrap">
+          <span class="results-score" id="results-score"></span>
+          <span class="results-streak" id="results-streak"></span>
+        </div>
+        <button id="btn-next" class="btn-next">Next Number →</button>
       </div>
 
       <!-- Number line controls (game mode) -->

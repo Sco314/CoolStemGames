@@ -24,7 +24,7 @@ import {
   getMathDisplay, getPlayState, formatValue,
   setSpeed, getSpeed,
   clearNumberLine, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
-  isDensityMode, skipToEnd, getHitCount,
+  isDensityMode, skipToEnd, getHitCount, getMilestoneCallout,
 } from './numberline.js';
 import {
   showTimeSeries, hideTimeSeries, addTimeSeriesNumber,
@@ -605,10 +605,22 @@ export function initUI(onSubmit) {
   const hitCounter = document.getElementById('hit-counter');
   const hitCountEl = document.getElementById('hit-count');
 
+  const milestoneEl = document.getElementById('milestone-callout');
+
   function updateMathBar() {
     requestAnimationFrame(updateMathBar);
     // Show/hide Skip button based on density mode
     skipBtn.classList.toggle('hidden', !(numberLineMode && isDensityMode() && getPlayState() !== 'complete'));
+
+    // Milestone callout
+    const callout = getMilestoneCallout();
+    if (callout && numberLineMode) {
+      milestoneEl.textContent = callout.text;
+      milestoneEl.className = 'milestone-callout-visible milestone-' + callout.type;
+    } else {
+      milestoneEl.className = 'hidden';
+    }
+
     // Hit counter: visible in number line mode when a sequence is playing
     if (numberLineMode && getPlayState() !== 'idle') {
       hitCounter.classList.remove('hidden');
@@ -674,23 +686,46 @@ export function initUI(onSubmit) {
   }
 
   function showResultsPanel(results) {
-    document.getElementById('results-tag').textContent = results.tag;
+    // Tag with icon + color
+    const tagIcon = document.getElementById('results-tag-icon');
+    const tagLabel = document.getElementById('results-tag');
+    tagIcon.textContent = results.tagIcon || '';
+    tagLabel.textContent = results.tag;
+    tagLabel.style.color = results.tagColor || '#889abb';
+
+    // Number that was played
+    const numEl = document.getElementById('results-number');
+    if (numEl) numEl.textContent = results.numberDisplay;
+
+    // Actual vs guess
     document.getElementById('results-actual').textContent = String(results.actualSteps);
     document.getElementById('results-guess').textContent = results.guessedBucket.label;
 
+    // Verdict
     const verdict = document.getElementById('results-verdict');
     if (results.isCorrect) {
-      verdict.textContent = 'Correct!';
+      verdict.textContent = '\u2705 Correct!';
       verdict.className = 'results-verdict correct';
     } else if (results.bucketDistance === 1) {
-      verdict.textContent = 'Close!';
+      verdict.textContent = '\uD83D\uDD36 Close!';
       verdict.className = 'results-verdict close';
     } else {
-      verdict.textContent = 'Missed';
+      verdict.textContent = '\u274C Missed';
       verdict.className = 'results-verdict miss';
     }
 
-    document.getElementById('results-score').textContent = `+${results.roundScore} points`;
+    // Peak value
+    const peakEl = document.getElementById('results-peak');
+    if (peakEl) peakEl.textContent = `Peak value: ${results.peakDisplay}`;
+
+    // Score + streak
+    document.getElementById('results-score').textContent = `+${results.roundScore}`;
+    const streakEl = document.getElementById('results-streak');
+    if (streakEl) {
+      streakEl.textContent = results.streak > 1 ? `${results.streak}\u00D7 streak!` : '';
+      streakEl.style.display = results.streak > 1 ? 'inline' : 'none';
+    }
+
     resultsPanel.classList.remove('hidden');
     updateScoreDisplay();
   }

@@ -675,3 +675,74 @@ body {
   background: #6ab4ff;
   transform: scale(1.05);
 }
+
+/* ── Milestone callout (floats center-screen during run) ── */
+#milestone-callout {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  text-shadow: 0 0 20px rgba(255,216,102,0.6), 0 2px 8px rgba(0,0,0,0.8);
+  z-index: 25;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+#milestone-callout.hidden { display: none; }
+.milestone-callout-visible { display: block; }
+.milestone-peak { color: #ff9a4a; }
+.milestone-terminal { color: #4fb06f; }
+
+/* ── Results panel polish ──────────────────────────────── */
+.results-tag-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.results-tag-icon {
+  font-size: 28px;
+}
+.results-tag {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.results-number {
+  font-size: 32px;
+  font-weight: 700;
+  color: #e0e6f0;
+  margin-bottom: 14px;
+}
+.results-stat-vs {
+  font-size: 14px;
+  color: #667799;
+  align-self: center;
+}
+.results-peak {
+  font-size: 12px;
+  color: #889abb;
+  margin-bottom: 12px;
+}
+.results-score-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.results-score {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffd866;
+}
+.results-streak {
+  font-size: 16px;
+  font-weight: 600;
+  color: #4fb06f;
+}

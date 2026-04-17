@@ -100,6 +100,16 @@ let cameraMode = 'overview'; // overview | chase | tactical
 let tacticalWeight = 0;      // 0..1, ramps up on milestones
 let tacticalDecay = 0;
 
+// Launch animation
+let launchPhase = 0;          // 0..1, plunger compression progress
+const LAUNCH_DURATION = 0.6;  // seconds for plunger wind-up
+let plungerRestX = 0;         // original rod/knob X (set in init)
+
+// Milestone callout state (exported for UI to read)
+let milestoneCallout = null;  // { text, timer } or null
+let milestoneTimer = 0;
+const CALLOUT_DURATION = 1.2;
+
 // Density band
 let densityMode = false;
 let densityTexture = null;
@@ -113,6 +123,7 @@ export function setSpeed(mult) { userSpeed = mult; }
 export function getSpeed() { return userSpeed; }
 export function isDensityMode() { return densityMode; }
 export function getHitCount() { return hitCount; }
+export function getMilestoneCallout() { return milestoneCallout; }
 export function formatValue(n) { return fmtValue(n); }
 // Legacy exports (no-ops, kept for import compatibility)
 export const MAX_ORBS = Infinity;
@@ -387,10 +398,11 @@ function launchSequence(n, values) {
   cameraMode = 'overview';
   tacticalWeight = 0;
 
-  // Ball starts at the shooter
+  // Ball starts at the shooter — launch phase begins with plunger compression
   operatorBall.position.set(SHOOTER_X, SHOOTER_Y, 0);
   operatorBall.visible = true;
-  playState = 'traveling';
+  launchPhase = 0;
+  playState = 'launching';  // new state: plunger compresses before firing
 }
 
 export function skipToEnd() {
@@ -412,16 +424,59 @@ export function updateNumberLine(dt) {
 
   const effectiveDt = dt * userSpeed;
 
-  // Advance along the path
+  // Milestone callout timer
+  if (milestoneCallout) {
+    milestoneTimer -= dt;
+    if (milestoneTimer <= 0) milestoneCallout = null;
+  }
+
+  // ── LAUNCHING: plunger compresses, then fires ──────────
+  if (playState === 'launching') {
+    launchPhase += dt / LAUNCH_DURATION;
+
+    // Plunger compression: rod + knob pull back
+    if (shooterMesh && shooterMesh.children.length >= 2) {
+      const rod = shooterMesh.children[0];
+      const knob = shooterMesh.children[1];
+      const pullback = Math.sin(Math.min(launchPhase, 1) * Math.PI * 0.5) * 0.25;
+      rod.position.x = -0.35 - pullback;
+      knob.position.x = -0.6 - pullback;
+    }
+
+    // Progressive glow on shooter body
+    if (shooterMesh) {
+      const glow = Math.min(launchPhase, 1) * 0.8;
+      shooterMesh.material.emissiveIntensity = 0.4 + glow;
+    }
+
+    // Ball glows brighter as launch charges
+    operatorBall.material.emissiveIntensity = 0.5 + Math.min(launchPhase, 1) * 1.0;
+
+    if (launchPhase >= 1) {
+      // FIRE! Snap plunger back, launch the ball
+      if (shooterMesh && shooterMesh.children.length >= 2) {
+        shooterMesh.children[0].position.x = -0.35;
+        shooterMesh.children[1].position.x = -0.6;
+      }
+      if (shooterMesh) shooterMesh.material.emissiveIntensity = 0.4;
+      operatorBall.material.emissiveIntensity = 0.5;
+
+      currentStepFloat = -1;
+      playState = 'traveling';
+      cameraMode = 'overview';
+    }
+    return getCameraTarget();
+  }
+
+  // ── TRAVELING: ball moves along the path ───────────────
   if (currentStepFloat < 0) {
-    // Launch phase: move from shooter to first step position
-    currentStepFloat += effectiveDt / 0.4;  // 0.4s launch
+    // Post-launch flight: shooter → first step position
+    currentStepFloat += effectiveDt / 0.3;
     if (currentStepFloat >= 0) {
       currentStepFloat = 0;
       cameraMode = 'chase';
     }
-    // Interpolate shooter → first position
-    const t = Math.max(0, (currentStepFloat + 1));  // 0..1
+    const t = Math.max(0, currentStepFloat + 1);
     const smooth = t * t * (3 - 2 * t);
     if (pathPositions.length > 0) {
       const start = new THREE.Vector3(SHOOTER_X, SHOOTER_Y, 0);
@@ -483,6 +538,24 @@ export function updateNumberLine(dt) {
     if (importance[currentStep] >= MILESTONE_WEIGHT) {
       tacticalWeight = Math.min(1, tacticalWeight + 0.5);
       tacticalDecay = 0.5;
+    }
+
+    // Milestone callouts
+    const val = sequence[currentStep];
+    if (importance[currentStep] >= TERMINAL_WEIGHT && (val === 4 || val === 4n)) {
+      milestoneCallout = { text: '4 → 2 → 1', type: 'terminal' };
+      milestoneTimer = CALLOUT_DURATION * 1.5;
+    } else if (importance[currentStep] >= MILESTONE_WEIGHT) {
+      // Check if new peak
+      let isPeak = true;
+      const lg = bigLog2(val);
+      for (let j = 0; j < currentStep; j++) {
+        if (bigLog2(sequence[j]) >= lg) { isPeak = false; break; }
+      }
+      if (isPeak && currentStep > 0) {
+        milestoneCallout = { text: `NEW PEAK: ${fmtValue(val)}`, type: 'peak' };
+        milestoneTimer = CALLOUT_DURATION;
+      }
     }
   }
 
