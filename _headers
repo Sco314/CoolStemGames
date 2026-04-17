@@ -16,20 +16,20 @@
   Content-Type: image/png
   Cache-Control: public, max-age=300, must-revalidate
 
-# Everything the site owner edits frequently must be always-fresh.
+# HTML, JS, CSS — browser must revalidate every request.
+# Cloudflare Pages sets ETags automatically, so revalidation is
+# a fast 304 when nothing changed — no wasted bandwidth.
+/*.html
+  Cache-Control: no-cache
+/*.js
+  Cache-Control: no-cache
+/*.css
+  Cache-Control: no-cache
 /
-  Cache-Control: public, max-age=0, must-revalidate
-/index.html
-  Cache-Control: public, max-age=0, must-revalidate
-/apps.js
-  Cache-Control: public, max-age=0, must-revalidate
-/main.js
-  Cache-Control: public, max-age=0, must-revalidate
-/styles.css
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-cache
 
-# App folders: no-cache so edits deploy immediately
+# App folders: same rule, catches nested paths
 /collatz-cascade/*
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-cache
 /fibonacci-zoom/*
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-cache
