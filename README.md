@@ -45,6 +45,13 @@ python3 -m http.server 8080
 
 See [`DEPLOY.md`](./DEPLOY.md) for the one-time Cloudflare Pages + DNS setup.
 
+## Best practices
+
+- **Self-contained apps** — all CSS/JS should be inline or bundled in the app folder. Avoid external CDN dependencies where possible so apps work reliably and don't break when a third-party CDN goes down.
+- **Attribution** — when copying an app from another repo, add a `<!-- Source: ... -->` comment near the top of its `index.html` so the origin is traceable.
+- **Mobile-ready** — every app should include `<meta name="viewport" content="width=device-width, initial-scale=1.0">` and handle touch events.
+- **Card entry** — follow the field reference at the top of `apps.js`. Use `image` for visual cards, `bg` + `sub` for text cards, and `external: true` only for off-site links.
+
 ---
 
 ## Collatz Cascade
@@ -117,4 +124,30 @@ fibonacci-zoom/
   LICENSE             GPL-3.0 (preserved from original repo)
   README.md           original project documentation
   CLAUDE.md           original Claude Code agent context
+```
+
+---
+
+## Confetti Lab
+
+**[coolstemgames.com/confetti-lab/](https://coolstemgames.com/confetti-lab/)**
+
+An interactive particle-effects playground for designing, tweaking, and exporting confetti animations. Click or drag anywhere to launch particles, adjust every parameter in real time, then export a ready-to-paste `<script>` block for your own pages.
+
+Copied from [Sco314/PickerWheelApp](https://github.com/Sco314/PickerWheelApp) (`frontend/public/confetti-demo.html`). Single self-contained HTML file — all CSS and JS inline, zero external dependencies.
+
+### Features
+
+- **Launch modes**: Burst, Bloom (360° overhead), Rain, Fountain
+- **Physics sliders**: count, spread, velocity, gravity, air drag, spin, fade rate, particle size
+- **Shape toggles**: rectangle, circle, star, triangle, ribbon (multi-select)
+- **Color palette**: 10 default swatches (tap to toggle, long-press to edit) + 8 custom slots + background color picker
+- **Presets**: Default, Gentle, Fireworks, Blizzard, Party, Subtle — plus save/load your own
+- **Auto-fire**: continuous launches on a timer
+- **Share via URL**: encodes all settings into query params
+- **Export**: generates a standalone `<script>` + `<canvas>` block you paste before `</body>`
+
+```
+confetti-lab/
+  index.html          the entire app (inline CSS + JS, ~1560 lines)
 ```

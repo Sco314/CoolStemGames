@@ -26,4 +26,10 @@ window.COOL_STEM_APPS = [
     image: "/fibonacci-zoom/assets/images/FibonacciZoomLogo.png",
     bg: "radial-gradient(circle at 50% 50%, #3b1e0d 0%, #0a0f1e 80%)",
   },
+  {
+    title: "Confetti Lab",
+    sub: "Design & test confetti effects",
+    href: "/confetti-lab/",
+    bg: "linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%)",
+  },
 ];

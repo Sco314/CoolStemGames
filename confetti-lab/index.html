@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<!-- confetti-demo.html v3.3 — Confetti Lab -->
+<!-- Source: github.com/sco314/PickerWheelApp/frontend/public/confetti-demo.html -->
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Confetti Lab</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: #111827;
+  font-family: 'Courier New', Courier, monospace;
+  color: #e5e7eb;
+}
+
+/* ── TEST AREA ── */
+#test-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: crosshair;
+  min-height: 200px;
+  background: #1a1a2e;
+}
+
+/* FIX: canvas must be 100% of container or click coords are wrong */
+canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#ch-h, #ch-v {
+  position: absolute;
+  background: rgba(255,255,255,0.1);
+  pointer-events: none;
+  z-index: 1;
+}
+#ch-h { top: 50%; left: 0; right: 0; height: 1px; }
+#ch-v { left: 50%; top: 0; bottom: 0; width: 1px; }
+#ch-dot {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.25);
+  pointer-events: none;
+  z-index: 1;
+}
+#test-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, 18px);
+  color: rgba(255,255,255,0.22);
+  font-size: 0.72rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 0.7s;
+  z-index: 1;
+}
+#particle-count {
+  position: absolute;
+  top: 8px; right: 10px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.18);
+  pointer-events: none;
+  text-transform: uppercase;
+  z-index: 1;
+}
+#launch-center-btn {
+  position: absolute;
+  bottom: 10px; left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 18px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 20px;
+  color: rgba(255,255,255,0.4);
+  font: 0.7rem/1 'Courier New', monospace;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+  z-index: 2;
+  transition: background .2s, color .2s, border-color .2s;
+}
+#launch-center-btn:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  border-color: rgba(255,255,255,0.3);
+}
+
+/* ══════════════════════════════════════════
+   PANEL — responsive wrapping layout
+   Sections wrap into 2-column grid, scrollable
+══════════════════════════════════════════ */
+#panel {
+  flex-shrink: 0;
+  background: #0c0c1e;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: 0;
+  overflow-y: auto;
+  max-height: 55vh;
+  max-height: 55dvh;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Panel row */
+.pr {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.pr:last-child { border-bottom: none; }
+
+/* Panel section */
+.ps {
+  flex: 1 1 48%;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-right: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  overflow: visible;
+}
+.ps:last-child { border-right: none; }
+
+/* Section title */
+.pt {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(78,205,196,0.55);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pt.sub {
+  color: rgba(255,255,255,0.22);
+  font-size: 9px;
+  margin-top: 4px;
+  margin-bottom: 3px;
+}
+
+/* Slider row: [label] [VALUE] then [===bar===] on next line */
+.sr {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  margin-bottom: 3px;
+  flex-shrink: 0;
+}
+.sr label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: rgba(255,255,255,0.42);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sv {
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: 11px;
+  color: #fde68a;
+  font-variant-numeric: tabular-nums;
+}
+.sr input[type=range] {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: none;
+  accent-color: #4ECDC4;
+  cursor: pointer;
+  height: 20px;
+}
+.sr.dim { opacity: 0.3; pointer-events: none; }
+
+/* Shape toggle buttons */
+.shape-row { display: flex; gap: 4px; flex-wrap: nowrap; margin-top: 2px; }
+.sb {
+  flex: 1; min-width: 0;
+  height: 32px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  color: rgba(255,255,255,0.38);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .1s, color .1s, border-color .1s;
+}
+.sb.on { background: rgba(78,205,196,0.15); border-color: rgba(78,205,196,0.45); color: #4ECDC4; }
+
+/* Mode buttons */
+.mode-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 3px; }
+.mb {
+  flex: 1;
+  padding: 5px 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  color: rgba(255,255,255,0.42);
+  font: 10px/1 'Courier New', monospace;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  transition: all .1s;
+}
+.mb.on { background: rgba(78,205,196,0.14); border-color: rgba(78,205,196,0.4); color: #4ECDC4; }
+
+/* Default palette swatches */
+.sw-row { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 3px; }
+.sw {
+  width: 28px; height: 24px;
+  border-radius: 2px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: opacity .15s, border-color .15s, transform .1s;
+  flex-shrink: 0;
+  position: relative;
+}
+.sw.on  { border-color: rgba(255,255,255,0.8); }
+.sw.off { opacity: 0.15; }
+.sw:hover { transform: scale(1.28); z-index: 1; }
+/* Swatch color input: full overlay, invisible */
+.sw input[type=color], .cslot input[type=color] {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none; padding: 0;
+  pointer-events: none;
+}
+/* Clear button on swatches and slots */
+.swatch-x {
+  display: none;
+  position: absolute;
+  top: -6px; right: -6px;
+  width: 16px; height: 16px;
+  background: #e74c3c;
+  border-radius: 50%;
+  border: none;
+  font-size: 9px;
+  color: #fff;
+  cursor: pointer;
+  z-index: 3;
+  align-items: center; justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+/* Custom color slots */
+.cs-row { display: flex; flex-wrap: wrap; gap: 3px; }
+.cslot {
+  width: 28px; height: 24px;
+  border-radius: 2px;
+  border: 1.5px dashed rgba(255,255,255,0.2);
+  cursor: pointer;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  color: rgba(255,255,255,0.28);
+  transition: opacity .15s, transform .1s;
+  flex-shrink: 0;
+}
+.cslot.has { border-style: solid; border-color: transparent; color: transparent; }
+.cslot.on.has { border-color: rgba(255,255,255,0.8); }
+.cslot.off { opacity: 0.15; }
+.cslot:hover { transform: scale(1.28); z-index: 1; }
+.cslot.has .swatch-x { display: flex; }
+.cslot:not(.has) input[type=color] { pointer-events: auto; }
+
+/* BG color picker row */
+.bg-row { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
+.bg-row label { font-size: 11px; color: rgba(255,255,255,0.4); }
+.bg-row input[type=color] {
+  width: 28px; height: 17px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 2px;
+  cursor: pointer; padding: 1px; background: none;
+}
+
+/* Auto-fire button */
+.af-btn {
+  width: 100%;
+  padding: 7px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  color: rgba(255,255,255,0.45);
+  font: 12px/1 'Courier New', monospace;
+  letter-spacing: 0.05em;
+  cursor: pointer; text-align: center;
+  margin-bottom: 3px;
+  transition: all .12s;
+  text-transform: uppercase;
+}
+.af-btn.on { background: rgba(251,191,36,0.13); border-color: rgba(251,191,36,0.4); color: #fbbf24; }
+
+/* Preset select */
+.p-sel {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  color: rgba(255,255,255,0.6);
+  font: 12px/1 'Courier New', monospace;
+  padding: 7px 8px;
+  cursor: pointer; margin-bottom: 2px;
+}
+
+/* Action buttons */
+.ab {
+  padding: 8px 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  color: rgba(255,255,255,0.5);
+  font: 11px/1 'Courier New', monospace;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-align: center; text-transform: uppercase;
+  transition: background .12s, color .12s;
+  white-space: nowrap;
+}
+.ab:hover { background: rgba(255,255,255,0.09); color: #fff; }
+.ab.hi { background: rgba(78,205,196,0.11); border-color: rgba(78,205,196,0.33); color: #4ECDC4; }
+.ab.hi:hover { background: rgba(78,205,196,0.2); }
+
+/* ── OUTPUT MODAL ── */
+#out-modal {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.82);
+  z-index: 200;
+  align-items: center; justify-content: center;
+  padding: 14px;
+}
+#out-modal.open { display: flex; }
+.m-box {
+  background: #0a0a1e;
+  border: 1px solid rgba(78,205,196,0.18);
+  border-radius: 8px;
+  width: min(820px, 100%);
+  max-height: 88vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 0 50px rgba(78,205,196,0.07);
+}
+.m-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 13px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+.m-head h2 { flex: 1; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #4ECDC4; }
+.m-head p  { font-size: 9px; color: rgba(255,255,255,0.3); }
+.m-copy {
+  padding: 4px 13px;
+  background: #4ECDC4; border: none; border-radius: 3px;
+  color: #000; font: 700 9.5px/1 'Courier New', monospace;
+  letter-spacing: 0.06em; cursor: pointer; text-transform: uppercase;
+}
+.m-close {
+  padding: 4px 9px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px; color: rgba(255,255,255,0.45);
+  font: 9.5px/1 'Courier New', monospace; cursor: pointer;
+}
+#out-code {
+  flex: 1; overflow: auto;
+  margin: 9px 11px; padding: 11px 13px;
+  background: #05050f; border-radius: 4px;
+  font: 11px/1.65 'Courier New', monospace;
+  color: #9dd8c0; white-space: pre; tab-size: 2;
+}
+#out-fb {
+  text-align: center; font-size: 9.5px;
+  letter-spacing: 0.06em; color: #4ECDC4;
+  padding: 0 13px 9px; min-height: 20px; flex-shrink: 0;
+}
+
+/* ── MOBILE TWEAKS ── */
+@media (max-width: 768px) {
+  body { overflow: auto; height: auto; min-height: 100vh; min-height: 100dvh; }
+  #test-area {
+    min-height: 45vh;
+    flex: none;
+    touch-action: none;
+  }
+  #test-hint {
+    font-size: 0.65rem;
+    white-space: normal;
+    padding: 0 12px;
+  }
+  #launch-center-btn { font-size: 0.8rem; padding: 8px 24px; }
+
+  /* 2-column layout on phones */
+  .ps { min-width: 160px; }
+}
+</style>
+</head>
+<body>
+
+<!-- TEST AREA -->
+<div id="test-area">
+  <canvas id="c"></canvas>
+  <div id="ch-h"></div>
+  <div id="ch-v"></div>
+  <div id="ch-dot"></div>
+  <div id="test-hint">Click anywhere to test &nbsp;·&nbsp; drag to stream &nbsp;·&nbsp; [Space] center-launch</div>
+  <div id="particle-count">particles: 0</div>
+  <button id="launch-center-btn">🚀 Launch from Center</button>
+</div>
+
+<!-- CONTROL PANEL — 2 rows, no horizontal scroll -->
+<div id="panel">
+
+  <!-- ROW 1: physics/spawn settings -->
+  <div class="pr">
+
+    <div class="ps">
+      <div class="pt">Spawn</div>
+      <div class="sr">
+        <label>Count</label>
+        <span class="sv" id="v_count">115</span>
+        <input type="range" id="s_count" min="10" max="500" step="5" value="115">
+      </div>
+      <div class="sr">
+        <label>Spread px</label>
+        <span class="sv" id="v_spread">0</span>
+        <input type="range" id="s_spread" min="0" max="300" step="5" value="0">
+      </div>
+      <div class="pt sub">Shapes <span style="opacity:.4;font-size:7px;font-weight:400;letter-spacing:0;text-transform:none">— multi-select</span></div>
+      <div class="shape-row">
+        <button class="sb on" data-shape="rect"   title="Rectangle">▬</button>
+        <button class="sb on" data-shape="circle" title="Circle">●</button>
+        <button class="sb on" data-shape="star"   title="Star">★</button>
+        <button class="sb"    data-shape="tri"    title="Triangle">▲</button>
+        <button class="sb"    data-shape="line"   title="Ribbon">━</button>
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Launch Mode</div>
+      <div class="mode-row">
+        <button class="mb"    data-mode="burst">💥 Burst</button>
+        <button class="mb on" data-mode="bloom">🌸 Bloom</button>
+        <button class="mb"    data-mode="rain">🌧 Rain</button>
+        <button class="mb"    data-mode="fountain">⛲ Fount</button>
+      </div>
+      <div class="pt sub">Preset</div>
+      <div style="display:flex;gap:3px;align-items:stretch">
+        <select class="p-sel" id="preset-sel" style="flex:1">
+          <option value="">— Load preset —</option>
+          <option value="default">🎉 Default</option>
+          <option value="gentle">🌸 Gentle</option>
+          <option value="fireworks">🎆 Fireworks</option>
+          <option value="blizzard">❄️ Blizzard</option>
+          <option value="party">🥳 Party</option>
+          <option value="subtle">✨ Subtle</option>
+        </select>
+        <button class="ab" id="save-preset-btn" title="Save current settings">💾</button>
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Velocity</div>
+      <div class="sr">
+        <label>Horizontal</label>
+        <span class="sv" id="v_vx">14</span>
+        <input type="range" id="s_vx" min="0" max="30" step="0.5" value="14">
+      </div>
+      <div class="sr">
+        <label>Launch up</label>
+        <span class="sv" id="v_vy">16</span>
+        <input type="range" id="s_vy" min="1" max="40" step="0.5" value="16">
+      </div>
+      <div class="sr">
+        <label>Min upward</label>
+        <span class="sv" id="v_vyMin">4</span>
+        <input type="range" id="s_vyMin" min="0" max="20" step="0.5" value="4">
+      </div>
+      <div class="sr">
+        <label>Wind drift</label>
+        <span class="sv" id="v_wind">0.00</span>
+        <input type="range" id="s_wind" min="-3" max="3" step="0.05" value="0">
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Physics</div>
+      <div class="sr">
+        <label>Gravity</label>
+        <span class="sv" id="v_gravity">0.55</span>
+        <input type="range" id="s_gravity" min="0" max="2" step="0.01" value="0.55">
+      </div>
+      <div class="sr">
+        <label>Air drag %</label>
+        <span class="sv" id="v_drag">0%</span>
+        <input type="range" id="s_drag" min="0.9" max="1" step="0.002" value="1">
+      </div>
+      <div class="sr">
+        <label>Spin speed</label>
+        <span class="sv" id="v_spin">0.30</span>
+        <input type="range" id="s_spin" min="0" max="0.5" step="0.01" value="0.3">
+      </div>
+      <div class="sr">
+        <label>Fade rate</label>
+        <span class="sv" id="v_fade">0.005</span>
+        <input type="range" id="s_fade" min="0.001" max="0.04" step="0.001" value="0.005">
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Particle Size</div>
+      <div class="sr">
+        <label>Max width</label>
+        <span class="sv" id="v_w">8</span>
+        <input type="range" id="s_w" min="2" max="50" step="1" value="8">
+      </div>
+      <div class="sr">
+        <label>Max height</label>
+        <span class="sv" id="v_h">6</span>
+        <input type="range" id="s_h" min="1" max="50" step="1" value="6">
+      </div>
+      <div class="sr">
+        <label>Variance</label>
+        <span class="sv" id="v_sizeVar">50%</span>
+        <input type="range" id="s_sizeVar" min="0" max="1" step="0.05" value="0.5">
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Output</div>
+      <div style="display:flex;gap:4px">
+        <button class="ab hi" id="out-btn" style="flex:1">📋 Export</button>
+        <button class="ab" id="share-btn" style="flex:1">🔗 Share</button>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:3px">
+        <button class="ab" id="clear-btn" style="flex:1">🧹 Clear</button>
+        <button class="ab" id="reset-btn" style="flex:1">↩ Reset</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:5px;margin-top:4px;font-size:8.5px;color:rgba(255,255,255,0.4);cursor:pointer">
+        <input type="checkbox" id="auto-preview-cb" checked> Auto-preview
+      </label>
+      <button class="af-btn" id="af-btn" style="margin-top:4px">▶ Auto-fire: Off</button>
+      <div class="sr dim" id="rate-row">
+        <label>Rate (sec)</label>
+        <span class="sv" id="v_rate">2.0</span>
+        <input type="range" id="s_rate" min="0.3" max="6" step="0.1" value="2">
+      </div>
+    </div>
+
+  </div><!-- /pr row 1 -->
+
+  <!-- ROW 2: colors (full width) -->
+  <div class="pr">
+
+    <div class="ps" style="flex:1">
+      <div class="pt">Palette <span style="opacity:.4;font-size:7px;font-weight:400;letter-spacing:0;text-transform:none">tap=toggle · hold=edit</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center">
+        <div class="sw-row" id="sw-default" style="display:contents"></div>
+        <div class="cs-row" id="sw-custom" style="display:contents"></div>
+        <div class="bg-row" style="margin:0;flex-shrink:0">
+          <label>BG</label>
+          <input type="color" id="bg-color" value="#1a1a2e" title="Test area background">
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /pr row 2 -->
+
+</div><!-- /panel -->
+
+<!-- OUTPUT MODAL -->
+<div id="out-modal">
+  <div class="m-box">
+    <div class="m-head">
+      <div style="flex:1">
+        <h2>📋 Export Confetti Code</h2>
+        <p>Paste before &lt;/body&gt; · call launchConfetti(x, y)</p>
+      </div>
+      <button class="m-copy"  id="m-copy-btn">Copy All</button>
+      <button class="m-close" id="m-close-btn">✕ Close</button>
+    </div>
+    <pre id="out-code"></pre>
+    <div id="out-fb"></div>
+  </div>
+</div>
+
+<script>
+
+// ═══════════════════════════════════════════
+//  Confetti Lab java script 
+// ═══════════════════════════════════════════
+
+const testArea = document.getElementById('test-area');
+const canvas   = document.getElementById('c');
+const ctx      = canvas.getContext('2d');
+const pcEl     = document.getElementById('particle-count');
+
+// ── Canvas resize ──────────────────────────
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const r   = testArea.getBoundingClientRect();
+  canvas.width  = r.width  * dpr;
+  canvas.height = r.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── BG color ───────────────────────────────
+document.getElementById('bg-color').addEventListener('input', e => {
+  testArea.style.background = e.target.value;
+});
+
+// ── Default palette ────────────────────────
+const PALETTE_HEX = [
+  '#FF6B6B','#4ECDC4','#45B7D1','#FFEAA7','#DDA0DD',
+  '#F7DC6F','#BB8FCE','#85C1E9','#F0B27A','#82E0AA'
+];
+const palette = PALETTE_HEX.map((hex, i) => ({ hex, orig: hex, on: true }));
+const swDefault = document.getElementById('sw-default');
+palette.forEach((c, i) => {
+  const el = document.createElement('div');
+  el.className = 'sw on';
+  el.style.background = c.hex;
+
+  // Color input inside swatch (for long-press edit)
+  const inp = document.createElement('input');
+  inp.type = 'color';
+  inp.value = c.hex;
+  el.appendChild(inp);
+
+  // Reset button (shows if color was changed from original)
+  const xBtn = document.createElement('button');
+  xBtn.className = 'swatch-x';
+  xBtn.textContent = '↺';
+  xBtn.title = 'Reset to original';
+  el.appendChild(xBtn);
+
+  function refresh() {
+    el.style.background = c.hex;
+    el.classList.toggle('on', c.on);
+    el.classList.toggle('off', !c.on);
+    inp.value = c.hex;
+    xBtn.style.display = (c.hex !== c.orig) ? 'flex' : 'none';
+  }
+
+  // Tap = toggle on/off
+  // Long-press = open color picker
+  let pressTimer = null, didLongPress = false;
+  el.addEventListener('pointerdown', e => {
+    if (e.target === xBtn) return;
+    didLongPress = false;
+    pressTimer = setTimeout(() => { didLongPress = true; inp.click(); }, 500);
+  });
+  el.addEventListener('pointerup', e => {
+    clearTimeout(pressTimer);
+    if (e.target === xBtn) return;
+    if (!didLongPress && e.target !== inp) {
+      c.on = !c.on;
+      refresh();
+    }
+  });
+  el.addEventListener('pointerleave', () => clearTimeout(pressTimer));
+
+  // Color changed via picker
+  inp.addEventListener('input', () => {
+    c.hex = inp.value;
+    c.on = true;
+    refresh();
+  });
+
+  // Reset to original
+  xBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    c.hex = c.orig;
+    c.on = true;
+    refresh();
+  });
+
+  swDefault.appendChild(el);
+});
+
+// ── Custom color slots (8) ─────────────────
+const customPalette = Array.from({ length: 8 }, () => ({ hex: null, on: false }));
+const swCustom = document.getElementById('sw-custom');
+
+customPalette.forEach(c => {
+  const slot = document.createElement('div');
+  slot.className = 'cslot';
+
+  const plus = document.createTextNode('+');
+  slot.appendChild(plus);
+
+  // Color input: fills the slot as invisible overlay
+  // When slot is empty, pointer-events: auto (CSS handles this)
+  // so tapping the slot directly opens the native picker
+  const inp = document.createElement('input');
+  inp.type = 'color';
+  inp.value = '#ff6b6b';
+  slot.appendChild(inp);
+
+  // Clear button
+  const xBtn = document.createElement('button');
+  xBtn.className = 'swatch-x';
+  xBtn.textContent = '✕';
+  xBtn.title = 'Clear color';
+  slot.appendChild(xBtn);
+
+  function refresh() {
+    if (c.hex) {
+      slot.style.background = c.hex;
+      plus.textContent = '';
+      slot.classList.add('has');
+      slot.classList.toggle('on', c.on);
+      slot.classList.toggle('off', !c.on);
+      inp.value = c.hex;
+      inp.style.pointerEvents = 'none';
+    } else {
+      slot.style.background = '';
+      plus.textContent = '+';
+      slot.classList.remove('has', 'on', 'off');
+      inp.style.pointerEvents = 'auto';
+    }
+  }
+
+  // Tap on filled slot = toggle on/off
+  // Long-press on filled slot = edit color
+  let pressTimer = null, didLongPress = false;
+  slot.addEventListener('pointerdown', e => {
+    if (e.target === xBtn || e.target === inp) return;
+    if (!c.hex) return; // empty slots: input handles it
+    didLongPress = false;
+    pressTimer = setTimeout(() => { didLongPress = true; inp.click(); }, 500);
+  });
+  slot.addEventListener('pointerup', e => {
+    clearTimeout(pressTimer);
+    if (e.target === xBtn || e.target === inp) return;
+    if (!c.hex) return;
+    if (!didLongPress) {
+      c.on = !c.on;
+      refresh();
+    }
+  });
+  slot.addEventListener('pointerleave', () => clearTimeout(pressTimer));
+
+  // Color picked (new or edited)
+  inp.addEventListener('input', () => {
+    c.hex = inp.value;
+    c.on = true;
+    refresh();
+  });
+
+  // Clear slot
+  xBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    c.hex = null;
+    c.on = false;
+    refresh();
+  });
+
+  swCustom.appendChild(slot);
+  refresh();
+});
+
+// ── Active colors ──────────────────────────
+function getColors() {
+  const a = [
+    ...palette.filter(c => c.on).map(c => c.hex),
+    ...customPalette.filter(c => c.hex && c.on).map(c => c.hex),
+  ];
+  return a.length ? a : PALETTE_HEX;
+}
+
+// ── Slider wiring ──────────────────────────
+const DEFAULTS = {
+  count:115, spread:0, vx:14, vy:16, vyMin:4,
+  wind:0, gravity:0.55, drag:1, spin:0.3, fade:0.005,
+  w:8, h:6, sizeVar:0.5,
+};
+const cfg = { ...DEFAULTS };
+
+const FMT = {
+  drag:    v => ((1 - parseFloat(v)) * 100).toFixed(0) + '%',
+  sizeVar: v => (parseFloat(v) * 100).toFixed(0) + '%',
+  wind:    v => parseFloat(v).toFixed(2),
+  gravity: v => parseFloat(v).toFixed(2),
+  fade:    v => parseFloat(v).toFixed(3),
+  spin:    v => parseFloat(v).toFixed(2),
+};
+// ── Auto-preview on slider change ─────────
+let previewTimer = null;
+const autoPreviewCb = document.getElementById('auto-preview-cb');
+if (localStorage.getItem('confetti-lab-autopreview') === 'off') autoPreviewCb.checked = false;
+autoPreviewCb.addEventListener('change', () => {
+  localStorage.setItem('confetti-lab-autopreview', autoPreviewCb.checked ? 'on' : 'off');
+});
+function schedulePreview() {
+  if (!initDone || suppressPreview || !autoPreviewCb.checked) return;
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => {
+    const alive = particles.filter(p => p.alpha > 0).length;
+    if (alive > 50) return;
+    const W = testArea.clientWidth, H = testArea.clientHeight;
+    const origCount = cfg.count;
+    cfg.count = 18;
+    if (mode === 'bloom') spawnBloom(W/2, H/2);
+    else if (mode === 'rain') spawnRain();
+    else if (mode === 'fountain') spawnFountain();
+    else burst(W/2, H/2);
+    cfg.count = origCount;
+  }, 400);
+}
+
+let initDone = false, suppressPreview = false;
+Object.keys(DEFAULTS).forEach(key => {
+  const inp = document.getElementById('s_' + key);
+  const val = document.getElementById('v_' + key);
+  if (!inp || !val) return;
+  const upd = () => { cfg[key] = parseFloat(inp.value); val.textContent = FMT[key] ? FMT[key](inp.value) : inp.value; schedulePreview(); };
+  inp.addEventListener('input', upd);
+  upd();
+});
+initDone = true;
+
+// ── Shape selection ────────────────────────
+let activeShapes = ['rect','circle','star'];
+document.querySelectorAll('.sb').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('on');
+    const on = [...document.querySelectorAll('.sb.on')].map(b => b.dataset.shape);
+    activeShapes = on.length ? on : ['rect'];
+  });
+});
+
+// ── Particles 	─────────────────────────────
+let particles = [], animId = null;
+
+function mkParticle(x, y, ov = {}) {
+  const vm = cfg.sizeVar, colors = getColors();
+  return {
+    x: x + (Math.random() - 0.5) * cfg.spread, y,
+    vx: (Math.random() - 0.5) * cfg.vx,
+    vy: -(Math.random() * cfg.vy + cfg.vyMin),
+    w:  cfg.w * (1 - vm * 0.5) + Math.random() * cfg.w * vm,
+    h:  cfg.h * (1 - vm * 0.5) + Math.random() * cfg.h * vm,
+    color:    colors[Math.floor(Math.random() * colors.length)],
+    rotation: Math.random() * Math.PI * 2,
+    rv:       (Math.random() - 0.5) * cfg.spin,
+    alpha:    1,
+    shape:    activeShapes[Math.floor(Math.random() * activeShapes.length)],
+    ...ov,
+  };
+}
+
+function drawShape(p) {
+  const hw = p.w / 2, hh = p.h / 2;
+  ctx.fillStyle = p.color;
+  switch (p.shape) {
+    case 'rect':   ctx.fillRect(-hw,-hh,p.w,p.h); break;
+    case 'circle': ctx.beginPath(); ctx.ellipse(0,0,hw,hh,0,0,Math.PI*2); ctx.fill(); break;
+    case 'tri':    ctx.beginPath(); ctx.moveTo(0,-hh); ctx.lineTo(hw,hh); ctx.lineTo(-hw,hh); ctx.closePath(); ctx.fill(); break;
+    case 'star': {
+      const r = Math.max(hw,hh), ri = r * 0.38;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = i*Math.PI/5 - Math.PI/2, d = i%2===0 ? r : ri;
+        i ? ctx.lineTo(Math.cos(a)*d, Math.sin(a)*d) : ctx.moveTo(Math.cos(a)*d, Math.sin(a)*d);
+      }
+      ctx.closePath(); ctx.fill(); break;
+    }
+    case 'line': { const l = Math.max(hw,hh)*2; ctx.fillRect(-l/2,-1.5,l,3); break; }
+    default: ctx.fillRect(-hw,-hh,p.w,p.h);
+  }
+}
+
+let fc = 0;
+function animate() {
+  const W = testArea.clientWidth, H = testArea.clientHeight;
+  ctx.clearRect(0, 0, W, H);
+  let alive = false;
+  const { drag, gravity: grav, wind, fade } = cfg;
+  for (const p of particles) {
+    if (p._bloom) {
+      p._age++;
+      const t = Math.min(p._age / p._lifespan, 1);
+      p.vx = (p.vx + wind * 0.01) * drag;
+      p.vy = p.vy * drag;
+      if (t > 0.55) {
+        const dx = p._ox - p.x, dy = p._oy - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const pull = grav * 0.3 * Math.min((t - 0.55) / 0.45, 1);
+        p.vx += (dx / dist) * pull;
+        p.vy += (dy / dist) * pull;
+      }
+      let s;
+      if (t < 0.3) {
+        const e = t / 0.3;
+        s = p._birthScale + (p._peakScale - p._birthScale) * (1 - (1 - e) * (1 - e));
+      } else if (t < 0.65) {
+        s = p._peakScale;
+      } else {
+        const e = (t - 0.65) / 0.35;
+        s = p._peakScale + (p._endScale - p._peakScale) * e * e;
+      }
+      p.x += p.vx; p.y += p.vy;
+      p.rotation += p.rv;
+      p.alpha -= fade;
+      if (p.alpha <= 0 || p.x < -80 || p.x > W + 80 || p.y < -80 || p.y > H + 80) continue;
+      alive = true;
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.translate(p.x, p.y);
+      ctx.scale(s, s);
+      ctx.rotate(p.rotation);
+      drawShape(p);
+      ctx.restore();
+    } else {
+      p.vx = (p.vx + wind * 0.01) * drag;
+      p.vy = p.vy * drag + grav;
+      p.x += p.vx; p.y += p.vy;
+      p.rotation += p.rv;
+      p.alpha -= fade;
+      if (p.alpha <= 0 || p.y > H + 80) continue;
+      alive = true;
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+      drawShape(p);
+      ctx.restore();
+    }
+  }
+  if (++fc % 90 === 0) particles = particles.filter(p => p.alpha > 0 && p.x > -80 && p.x < W + 80 && p.y < H + 80 && p.y > -80);
+  if (fc % 10 === 0) pcEl.textContent = 'particles: ' + particles.filter(p => p.alpha > 0).length;
+  if (alive) { animId = requestAnimationFrame(animate); }
+  else { particles = []; animId = null; pcEl.textContent = 'particles: 0'; ctx.clearRect(0,0,W,H); }
+}
+function tick() { if (!animId) animId = requestAnimationFrame(animate); }
+
+function burst(x, y) {
+  for (let i = 0; i < Math.round(cfg.count); i++) particles.push(mkParticle(x, y));
+  tick();
+}
+function spawnRain() {
+  const W = testArea.clientWidth;
+  for (let i = 0; i < Math.max(5, Math.round(cfg.count * 0.12)); i++)
+    particles.push(mkParticle(Math.random()*W, -12, { vy: Math.random()*3+1, vx: (Math.random()-.5)*cfg.vx*0.35 }));
+  tick();
+}
+function spawnFountain() {
+  const W = testArea.clientWidth, H = testArea.clientHeight;
+  for (let i = 0; i < Math.max(5, Math.round(cfg.count * 0.1)); i++)
+    particles.push(mkParticle(W/2+(Math.random()-.5)*40, H-10, {
+      vx: (Math.random()-.5)*cfg.vx*0.5,
+      vy: -(Math.random()*cfg.vy*0.75+cfg.vyMin),
+    }));
+  tick();
+}
+function spawnBloom(x, y) {
+  for (let i = 0; i < Math.round(cfg.count); i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * cfg.vy + cfg.vyMin;
+    const depth = 0.6 + Math.random() * 0.8;
+    particles.push(mkParticle(x, y, {
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      _bloom: true,
+      _ox: x, _oy: y,
+      _age: 0,
+      _lifespan: (1 / Math.max(cfg.fade, 0.001)),
+      _depth: depth,
+      _birthScale: 0.15 + depth * 0.1,
+      _peakScale: 0.7 + depth * 0.55,
+      _endScale: 0.25 + depth * 0.15,
+    }));
+  }
+  tick();
+}
+
+// ── Mode & auto-fire ───────────────────────
+let mode = 'bloom', afOn = false, afInterval = null, afRate = 2;
+
+document.querySelectorAll('.mb').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mb').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    mode = btn.dataset.mode;
+    if (afOn) { stopAF(); startAF(); }
+  });
+});
+
+const afBtn   = document.getElementById('af-btn');
+const rateRow = document.getElementById('rate-row');
+const rateInp = document.getElementById('s_rate');
+const rateVal = document.getElementById('v_rate');
+
+afBtn.addEventListener('click', () => {
+  afOn = !afOn;
+  afBtn.textContent = (afOn ? '⏸' : '▶') + ' Auto-fire: ' + (afOn ? 'On' : 'Off');
+  afBtn.classList.toggle('on', afOn);
+  rateRow.classList.toggle('dim', !afOn);
+  afOn ? startAF() : stopAF();
+});
+rateInp.addEventListener('input', () => {
+  afRate = parseFloat(rateInp.value);
+  rateVal.textContent = afRate.toFixed(1);
+  if (afOn) { stopAF(); startAF(); }
+});
+function fireAuto() {
+  const W = testArea.clientWidth, H = testArea.clientHeight;
+  if (mode === 'rain') spawnRain();
+  else if (mode === 'fountain') spawnFountain();
+  else if (mode === 'bloom') spawnBloom(W / 2, H / 2);
+  else burst(W*0.2+Math.random()*W*0.6, H*0.35+Math.random()*H*0.3);
+}
+function startAF() { stopAF(); fireAuto(); afInterval = setInterval(fireAuto, afRate*1000); }
+function stopAF()  { clearInterval(afInterval); afInterval = null; }
+
+// ── Launch interactions ────────────────────
+const hint = document.getElementById('test-hint');
+let hintGone = false;
+
+function launch(x, y) {
+  if (!hintGone) { hint.style.opacity = '0'; hintGone = true; }
+  if (mode === 'rain') spawnRain();
+  else if (mode === 'fountain') spawnFountain();
+  else if (mode === 'bloom') spawnBloom(x, y);
+  else burst(x, y);
+}
+
+testArea.addEventListener('click', e => {
+  if (e.target.closest('#launch-center-btn')) return;
+  const r = testArea.getBoundingClientRect();
+  launch(e.clientX - r.left, e.clientY - r.top);
+});
+
+let dragging = false;
+testArea.addEventListener('mousedown', e => { if (!e.target.closest('#launch-center-btn')) dragging = true; });
+testArea.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const r = testArea.getBoundingClientRect();
+  for (let i = 0; i < Math.max(2, Math.round(cfg.count * 0.06)); i++)
+    particles.push(mkParticle(e.clientX - r.left, e.clientY - r.top));
+  tick();
+  if (!hintGone) { hint.style.opacity = '0'; hintGone = true; }
+});
+window.addEventListener('mouseup', () => dragging = false);
+
+// ── Touch events (mobile Safari) ──────────────────
+testArea.addEventListener('touchstart', e => {
+  if (e.target.closest('#launch-center-btn')) return;
+  e.preventDefault();
+  dragging = true;
+  const t = e.touches[0];
+  const r = testArea.getBoundingClientRect();
+  launch(t.clientX - r.left, t.clientY - r.top);
+}, { passive: false });
+
+testArea.addEventListener('touchmove', e => {
+  if (!dragging) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  const r = testArea.getBoundingClientRect();
+  for (let i = 0; i < Math.max(2, Math.round(cfg.count * 0.06)); i++)
+    particles.push(mkParticle(t.clientX - r.left, t.clientY - r.top));
+  tick();
+  if (!hintGone) { hint.style.opacity = '0'; hintGone = true; }
+}, { passive: false });
+
+window.addEventListener('touchend', () => dragging = false);
+window.addEventListener('touchcancel', () => dragging = false);
+
+document.getElementById('launch-center-btn').addEventListener('click', () => {
+  launch(testArea.clientWidth/2, testArea.clientHeight/2);
+});
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    launch(testArea.clientWidth/2, testArea.clientHeight/2);
+  }
+});
+
+// ── Presets ────────────────────────────────
+const PRESETS = {
+  default:   { count:115, spread:0,   vx:14, vy:16, vyMin:4, wind:0,   gravity:0.55, drag:1,     spin:0.30, fade:0.005, w:8,  h:6, sizeVar:0.5 },
+  gentle:    { count:50,  spread:100, vx:4,  vy:7,  vyMin:2, wind:0.5, gravity:0.10, drag:0.990, spin:0.08, fade:0.003, w:6,  h:5, sizeVar:0.7 },
+  fireworks: { count:200, spread:8,   vx:20, vy:24, vyMin:5, wind:0,   gravity:0.38, drag:0.980, spin:0.45, fade:0.007, w:6,  h:6, sizeVar:0.9 },
+  blizzard:  { count:100, spread:180, vx:3,  vy:3,  vyMin:1, wind:1.2, gravity:0.06, drag:0.997, spin:0.05, fade:0.003, w:7,  h:7, sizeVar:0.6 },
+  party:     { count:300, spread:80,  vx:16, vy:20, vyMin:6, wind:0,   gravity:0.28, drag:1,     spin:0.35, fade:0.004, w:10, h:8, sizeVar:0.5 },
+  subtle:    { count:35,  spread:40,  vx:6,  vy:9,  vyMin:2, wind:0,   gravity:0.18, drag:0.990, spin:0.12, fade:0.009, w:5,  h:4, sizeVar:0.4 },
+};
+// ── Shared state helpers ──────────────────
+function getCurrentState() {
+  return {
+    cfg: { ...cfg },
+    colors: palette.map(c => ({ hex: c.hex, on: c.on })),
+    custom: customPalette.map(c => ({ hex: c.hex, on: c.on })),
+    shapes: [...activeShapes],
+    mode: mode,
+  };
+}
+function applyState(state) {
+  suppressPreview = true;
+  if (state.cfg) {
+    Object.entries(state.cfg).forEach(([k,v]) => {
+      const inp = document.getElementById('s_'+k);
+      if (inp) { inp.value = v; inp.dispatchEvent(new Event('input')); }
+    });
+  }
+  if (state.colors) {
+    state.colors.forEach((c, i) => {
+      if (!palette[i]) return;
+      palette[i].hex = c.hex; palette[i].on = c.on;
+      const el = swDefault.children[i];
+      if (!el) return;
+      el.style.background = c.hex;
+      el.classList.toggle('on', c.on);
+      el.classList.toggle('off', !c.on);
+      const cinp = el.querySelector('input[type=color]');
+      if (cinp) cinp.value = c.hex;
+      const xb = el.querySelector('.swatch-x');
+      if (xb) xb.style.display = (c.hex !== palette[i].orig) ? 'flex' : 'none';
+    });
+  }
+  if (state.custom) {
+    state.custom.forEach((c, i) => {
+      if (!customPalette[i]) return;
+      customPalette[i].hex = c.hex; customPalette[i].on = c.on;
+      const slot = swCustom.children[i];
+      if (!slot) return;
+      if (c.hex) {
+        slot.style.background = c.hex;
+        slot.childNodes[0].textContent = '';
+        slot.classList.add('has');
+        slot.classList.toggle('on', c.on);
+        slot.classList.toggle('off', !c.on);
+        const cinp = slot.querySelector('input[type=color]');
+        if (cinp) { cinp.value = c.hex; cinp.style.pointerEvents = 'none'; }
+      } else {
+        slot.style.background = '';
+        slot.childNodes[0].textContent = '+';
+        slot.classList.remove('has','on','off');
+        const cinp = slot.querySelector('input[type=color]');
+        if (cinp) cinp.style.pointerEvents = 'auto';
+      }
+    });
+  }
+  if (state.shapes) {
+    activeShapes = [...state.shapes];
+    document.querySelectorAll('.sb').forEach(btn => {
+      btn.classList.toggle('on', activeShapes.includes(btn.dataset.shape));
+    });
+  }
+  if (state.mode) {
+    mode = state.mode;
+    document.querySelectorAll('.mb').forEach(b => {
+      b.classList.toggle('on', b.dataset.mode === mode);
+    });
+  }
+  suppressPreview = false;
+}
+
+// ── Save/load custom presets ──────────────
+const STORAGE_KEY = 'confetti-lab-presets';
+function getSavedPresets() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+function saveSavedPresets(list) { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+function rebuildPresetDropdown() {
+  const sel = document.getElementById('preset-sel');
+  const old = sel.querySelector('optgroup');
+  if (old) old.remove();
+  const saved = getSavedPresets();
+  if (!saved.length) return;
+  const group = document.createElement('optgroup');
+  group.label = 'Saved';
+  saved.forEach((p, i) => {
+    const opt = document.createElement('option');
+    opt.value = '__saved_' + i;
+    opt.textContent = '⭐ ' + p.name;
+    group.appendChild(opt);
+  });
+  sel.appendChild(group);
+}
+document.getElementById('save-preset-btn').addEventListener('click', () => {
+  const name = prompt('Preset name:');
+  if (!name || !name.trim()) return;
+  const saved = getSavedPresets();
+  saved.push({ name: name.trim(), state: getCurrentState() });
+  saveSavedPresets(saved);
+  rebuildPresetDropdown();
+});
+
+document.getElementById('preset-sel').addEventListener('change', e => {
+  const val = e.target.value;
+  if (!val) return;
+  if (val.startsWith('__saved_')) {
+    const idx = parseInt(val.replace('__saved_', ''));
+    const saved = getSavedPresets();
+    if (saved[idx]) applyState(saved[idx].state);
+  } else {
+    const p = PRESETS[val];
+    if (!p) return;
+    suppressPreview = true;
+    Object.entries(p).forEach(([k,v]) => {
+      const inp = document.getElementById('s_'+k);
+      if (inp) { inp.value = v; inp.dispatchEvent(new Event('input')); }
+    });
+    suppressPreview = false;
+  }
+  e.target.value = '';
+});
+
+// Long-press on save button to delete a saved preset
+let savePressTimer = null;
+const saveBtn = document.getElementById('save-preset-btn');
+saveBtn.addEventListener('pointerdown', () => {
+  savePressTimer = setTimeout(() => {
+    const saved = getSavedPresets();
+    if (!saved.length) { alert('No saved presets to delete.'); return; }
+    const names = saved.map((p, i) => (i + 1) + '. ' + p.name).join('\n');
+    const idx = prompt('Delete which preset? Enter number:\n' + names);
+    if (idx === null) return;
+    const n = parseInt(idx) - 1;
+    if (n >= 0 && n < saved.length) {
+      saved.splice(n, 1);
+      saveSavedPresets(saved);
+      rebuildPresetDropdown();
+    }
+  }, 500);
+});
+saveBtn.addEventListener('pointerup', () => clearTimeout(savePressTimer));
+saveBtn.addEventListener('pointerleave', () => clearTimeout(savePressTimer));
+
+rebuildPresetDropdown();
+
+// ── Share via URL ─────────────────────────
+document.getElementById('share-btn').addEventListener('click', () => {
+  const params = new URLSearchParams();
+  Object.entries(cfg).forEach(([k, v]) => {
+    if (v !== DEFAULTS[k]) params.set(k, v);
+  });
+  const colorsOn = palette.filter(c => c.on).map(c => c.hex);
+  const defaultOn = PALETTE_HEX;
+  if (JSON.stringify(colorsOn) !== JSON.stringify(defaultOn)) {
+    params.set('pal', palette.map(c => c.on ? c.hex : '0').join(','));
+  }
+  const custStr = customPalette.filter(c => c.hex).map(c => (c.on ? '' : '!') + c.hex).join(',');
+  if (custStr) params.set('cust', custStr);
+  if (activeShapes.join(',') !== 'rect') params.set('shapes', activeShapes.join(','));
+  if (mode !== 'burst') params.set('mode', mode);
+  const url = location.origin + location.pathname + '?' + params.toString();
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('share-btn');
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '🔗 Share', 2000);
+  }).catch(() => {
+    prompt('Copy this URL:', url);
+  });
+});
+
+// ── Clear / Reset ──────────────────────────
+document.getElementById('clear-btn').addEventListener('click', () => {
+  particles = [];
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  ctx.clearRect(0, 0, testArea.clientWidth, testArea.clientHeight);
+  pcEl.textContent = 'particles: 0';
+});
+document.getElementById('reset-btn').addEventListener('click', () => {
+  Object.entries(DEFAULTS).forEach(([k,v]) => {
+    const inp = document.getElementById('s_'+k);
+    if (inp) { inp.value = v; inp.dispatchEvent(new Event('input')); }
+  });
+  document.getElementById('bg-color').value = '#1a1a2e';
+  testArea.style.background = '#1a1a2e';
+  // Reset default palette to original colors
+  palette.forEach((c,i) => {
+    c.hex = c.orig; c.on = true;
+    const el = swDefault.children[i];
+    el.style.background = c.hex;
+    el.classList.remove('off'); el.classList.add('on');
+    el.querySelector('input[type=color]').value = c.hex;
+    el.querySelector('.swatch-x').style.display = 'none';
+  });
+  // Clear custom slots
+  customPalette.forEach((c,i) => {
+    c.hex = null; c.on = false;
+    const slot = swCustom.children[i];
+    slot.style.background = '';
+    slot.childNodes[0].textContent = '+';
+    slot.classList.remove('has','on','off');
+    slot.querySelector('input[type=color]').style.pointerEvents = 'auto';
+  });
+});
+
+// ── Export code ────────────────────────────
+function genCode() {
+  const colors = getColors(), shapes = activeShapes, c = cfg;
+  return `<!-- ══════════════════════════════════════════════════════════
+  Confetti Effect — generated by Confetti Lab v3.2
+  ────────────────────────────────────────────────────────────
+  1. Paste this entire block before </body> in your HTML page.
+  2. Call launchConfetti(x, y) or launchConfettiBloom(x, y).
+
+     // Side-view burst on click:
+     document.addEventListener('click', e =>
+       launchConfetti(e.clientX, e.clientY));
+
+     // Bloom Burst (overhead 360° bloom):
+     document.getElementById('myBtn').addEventListener('click', () =>
+       launchConfettiBloom(innerWidth / 2, innerHeight / 2));
+
+     // Side-view from center on button:
+     document.getElementById('myBtn').addEventListener('click', () =>
+       launchConfetti(innerWidth / 2, innerHeight / 2));
+═══════════════════════════════════════════════════════════ -->
+
+<canvas id="confetti-canvas" style="position:fixed;inset:0;
+  width:100%;height:100%;pointer-events:none;z-index:9999;"></canvas>
+
+<script>
+(function () {
+
+  /* ── Your settings (exported from Confetti Lab session) ─ */
+  const C = {
+    count:   ${Math.round(c.count)},    // particles per burst
+    spread:  ${c.spread},   // spawn radius px around origin
+    vx:      ${c.vx},       // horizontal velocity range (±half)
+    vy:      ${c.vy},       // max upward velocity
+    vyMin:   ${c.vyMin},    // min upward velocity
+    wind:    ${c.wind},     // drift per frame (neg=left, pos=right)
+    gravity: ${c.gravity},  // downward acceleration per frame
+    drag:    ${c.drag},     // velocity multiplier (1=off, 0.98=some air)
+    spin:    ${c.spin},     // max tumble rad/frame
+    fade:    ${c.fade},  // alpha lost per frame (lower = longer life)
+    wMax:    ${c.w},        // max particle width px
+    hMax:    ${c.h},        // max particle height px
+    sizeVar: ${c.sizeVar},  // size randomness: 0=uniform 1=max
+    shapes:  ${JSON.stringify(shapes)},
+    colors:  ${JSON.stringify(colors)},
+  };
+
+  /* ── Canvas ─────────────────────────────────────────────── */
+  const cv = document.getElementById('confetti-canvas');
+  const cx = cv.getContext('2d');
+  function resize() {
+    const d = devicePixelRatio || 1;
+    cv.width = innerWidth * d; cv.height = innerHeight * d;
+    cx.setTransform(d, 0, 0, d, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  /* ── Public API ─────────────────────────────────────────── */
+  let P = [], rid = null;
+  window.launchConfetti = function (x, y) {
+    const vm = C.sizeVar;
+    for (let i = 0; i < C.count; i++) P.push({
+      x: x + (Math.random()-.5)*C.spread, y,
+      vx: (Math.random()-.5)*C.vx,
+      vy: -(Math.random()*C.vy+C.vyMin),
+      w: C.wMax*(1-vm*.5)+Math.random()*C.wMax*vm,
+      h: C.hMax*(1-vm*.5)+Math.random()*C.hMax*vm,
+      color: C.colors[Math.floor(Math.random()*C.colors.length)],
+      rotation: Math.random()*Math.PI*2,
+      rv: (Math.random()-.5)*C.spin,
+      alpha: 1,
+      shape: C.shapes[Math.floor(Math.random()*C.shapes.length)],
+    });
+    if (!rid) rid = requestAnimationFrame(tick);
+  };
+
+  /* ── Bloom Burst (overhead 360° bloom) ─────────────── */
+  const BL = 1 / Math.max(C.fade, 0.001);
+  window.launchConfettiBloom = function (x, y) {
+    const vm = C.sizeVar;
+    for (let i = 0; i < C.count; i++) {
+      const a = Math.random()*Math.PI*2;
+      const sp = Math.random()*C.vy+C.vyMin;
+      const d = 0.6+Math.random()*0.8;
+      P.push({
+        x, y, _ox:x, _oy:y,
+        vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+        w: C.wMax*(1-vm*.5)+Math.random()*C.wMax*vm,
+        h: C.hMax*(1-vm*.5)+Math.random()*C.hMax*vm,
+        color: C.colors[Math.floor(Math.random()*C.colors.length)],
+        rotation: Math.random()*Math.PI*2,
+        rv: (Math.random()-.5)*C.spin,
+        alpha:1, _a:0, _l:BL, _d:d,
+        _bs:0.15+d*0.1, _ps:0.7+d*0.55, _es:0.25+d*0.15,
+        shape: C.shapes[Math.floor(Math.random()*C.shapes.length)],
+      });
+    }
+    if (!rid) rid = requestAnimationFrame(tick);
+  };
+
+  /* ── Shape renderer ─────────────────────────────────────── */
+  function draw(p) {
+    const hw=p.w/2, hh=p.h/2; cx.fillStyle=p.color;
+    switch(p.shape){
+      case 'rect':cx.fillRect(-hw,-hh,p.w,p.h);break;
+      case 'circle':cx.beginPath();cx.ellipse(0,0,hw,hh,0,0,Math.PI*2);cx.fill();break;
+      case 'tri':cx.beginPath();cx.moveTo(0,-hh);cx.lineTo(hw,hh);cx.lineTo(-hw,hh);cx.closePath();cx.fill();break;
+      case 'star':{const r=Math.max(hw,hh),ri=r*.38;cx.beginPath();
+        for(let i=0;i<10;i++){const a=i*Math.PI/5-Math.PI/2,d=i%2?ri:r;
+        i?cx.lineTo(Math.cos(a)*d,Math.sin(a)*d):cx.moveTo(Math.cos(a)*d,Math.sin(a)*d);}
+        cx.closePath();cx.fill();break;}
+      case 'line':{const l=Math.max(hw,hh)*2;cx.fillRect(-l/2,-1.5,l,3);break;}
+      default:cx.fillRect(-hw,-hh,p.w,p.h);
+    }
+  }
+
+  /* ── Animation loop ─────────────────────────────────────── */
+  function tick() {
+    cx.clearRect(0,0,innerWidth,innerHeight);
+    let alive=false;
+    for(const p of P){
+      let sc=1;
+      if(p._bs!=null){
+        p._a++;
+        const t=Math.min(p._a/p._l,1);
+        p.vx=(p.vx+C.wind*.01)*C.drag; p.vy=p.vy*C.drag;
+        if(t>0.55){const dx=p._ox-p.x,dy=p._oy-p.y,di=Math.sqrt(dx*dx+dy*dy)||1;
+          const pl=C.gravity*0.3*Math.min((t-0.55)/0.45,1);
+          p.vx+=(dx/di)*pl; p.vy+=(dy/di)*pl;}
+        if(t<0.3){const e=t/0.3;sc=p._bs+(p._ps-p._bs)*(1-(1-e)*(1-e));}
+        else if(t<0.65){sc=p._ps;}
+        else{const e=(t-0.65)/0.35;sc=p._ps+(p._es-p._ps)*e*e;}
+      }else{
+        p.vx=(p.vx+C.wind*.01)*C.drag; p.vy=p.vy*C.drag+C.gravity;
+      }
+      p.x+=p.vx; p.y+=p.vy; p.rotation+=p.rv; p.alpha-=C.fade;
+      if(p.alpha<=0||p.x<-80||p.x>innerWidth+80||p.y<-80||p.y>innerHeight+80) continue;
+      alive=true;
+      cx.save(); cx.globalAlpha=p.alpha; cx.translate(p.x,p.y);
+      if(p._bs!=null) cx.scale(sc,sc);
+      cx.rotate(p.rotation);
+      draw(p); cx.restore();
+    }
+    if(alive){rid=requestAnimationFrame(tick);}else{P=[];rid=null;}
+  }
+
+})();
+<\/script>`;
+}
+
+// ── Modal wiring ───────────────────────────
+const modal = document.getElementById('out-modal');
+document.getElementById('out-btn').addEventListener('click', () => {
+  document.getElementById('out-code').textContent = genCode();
+  modal.classList.add('open');
+  document.getElementById('out-fb').textContent = '';
+});
+document.getElementById('m-close-btn').addEventListener('click', () => modal.classList.remove('open'));
+modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+document.getElementById('m-copy-btn').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('out-code').textContent)
+    .then(() => {
+      const fb = document.getElementById('out-fb');
+      fb.textContent = '✅ Copied to clipboard!';
+      setTimeout(() => fb.textContent = '', 2500);
+    })
+    .catch(() => {
+      document.getElementById('out-fb').textContent = '⚠️ Copy failed — select all text manually (Ctrl+A)';
+    });
+});
+
+// ── Apply URL params on load ──────────────
+(function() {
+  const params = new URLSearchParams(location.search);
+  if (params.size === 0) return;
+  suppressPreview = true;
+  Object.keys(DEFAULTS).forEach(k => {
+    if (params.has(k)) {
+      const v = parseFloat(params.get(k));
+      if (!isNaN(v)) {
+        const inp = document.getElementById('s_' + k);
+        if (inp) { inp.value = v; inp.dispatchEvent(new Event('input')); }
+      }
+    }
+  });
+  if (params.has('pal')) {
+    params.get('pal').split(',').forEach((v, i) => {
+      if (!palette[i]) return;
+      if (v === '0') { palette[i].on = false; }
+      else { palette[i].hex = v; palette[i].on = true; }
+      const el = swDefault.children[i];
+      if (!el) return;
+      el.style.background = palette[i].hex;
+      el.classList.toggle('on', palette[i].on);
+      el.classList.toggle('off', !palette[i].on);
+      const cinp = el.querySelector('input[type=color]');
+      if (cinp) cinp.value = palette[i].hex;
+      const xb = el.querySelector('.swatch-x');
+      if (xb) xb.style.display = (palette[i].hex !== palette[i].orig) ? 'flex' : 'none';
+    });
+  }
+  if (params.has('cust')) {
+    params.get('cust').split(',').forEach((v, i) => {
+      if (!customPalette[i]) return;
+      const off = v.startsWith('!');
+      const hex = off ? v.slice(1) : v;
+      customPalette[i].hex = hex;
+      customPalette[i].on = !off;
+      const slot = swCustom.children[i];
+      if (!slot) return;
+      slot.style.background = hex;
+      slot.childNodes[0].textContent = '';
+      slot.classList.add('has');
+      slot.classList.toggle('on', !off);
+      slot.classList.toggle('off', off);
+      const cinp = slot.querySelector('input[type=color]');
+      if (cinp) { cinp.value = hex; cinp.style.pointerEvents = 'none'; }
+    });
+  }
+  if (params.has('shapes')) {
+    activeShapes = params.get('shapes').split(',');
+    document.querySelectorAll('.sb').forEach(btn => {
+      btn.classList.toggle('on', activeShapes.includes(btn.dataset.shape));
+    });
+  }
+  if (params.has('mode')) {
+    mode = params.get('mode');
+    document.querySelectorAll('.mb').forEach(b => {
+      b.classList.toggle('on', b.dataset.mode === mode);
+    });
+  }
+  suppressPreview = false;
+  history.replaceState(null, '', location.pathname);
+})();
+
+console.log('✅ Confetti Lab v3.3 loaded');
+
+</script>
+</body>
+</html>
