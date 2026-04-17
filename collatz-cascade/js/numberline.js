@@ -1,14 +1,30 @@
 /**
  * Collatz Cascade — Hybrid Path Traversal
  *
- * The ball travels along a step-based path where:
- *   X = stepIndex * STEP_SPACING (primary travel axis)
- *   Y = log2(value) * MAGNITUDE_SCALE (vertical = value magnitude)
+ * Design doc: Orb-run controller state machine
+ * ------------------------------------------------------------
+ * States:
+ * - idle: no active run.
+ * - building: sequence/path prep.
+ * - intro: pre-run plunger/charge animation.
+ * - hop_approach: orb travels toward the next target orb.
+ * - hop_impact: short settle/pause on landing.
+ * - hop_grow: landed orb receives a growth pop.
+ * - hop_launch: short handoff before the next hop.
+ * - terminal_mark: brief terminal emphasis before finish.
+ * - complete: run finished.
+ * - aborted: run canceled/reset externally.
  *
- * This replaces the old literal number line where x = value * 0.3,
- * which broke at large values. The new layout keeps every sequence
- * readable regardless of peak value — the player sees a "mountain
- * profile" of the Collatz journey.
+ * Timing defaults:
+ * - approach duration: clamp(base + distance * k, min, max)
+ * - impact pause: 40–80ms
+ * - growth: 120–220ms (ease-out-back)
+ * - launch handoff: 40–70ms
+ *
+ * Runtime notes:
+ * - Updates use dt-based absolute accumulators (stateElapsed).
+ * - No chained setTimeout calls are used for sequencing.
+ * - dt is clamped to limit mobile frame-drop spikes.
  */
 
 import * as THREE from 'three';
@@ -85,7 +101,7 @@ let totalSteps = 0;
 
 // Playback
 let currentStepFloat = 0;   // fractional step progress
-let playState = 'idle';      // idle | traveling | complete
+let playState = 'idle';
 let userSpeed = 1;
 let hitCount = 0;
 let mathDisplay = null;
@@ -112,6 +128,28 @@ let tacticalDecay = 0;
 let launchPhase = 0;          // 0..1, plunger compression progress
 const LAUNCH_DURATION = 0.6;  // seconds for plunger wind-up
 let plungerRestX = 0;         // original rod/knob X (set in init)
+let stateElapsed = 0;
+let hopFromStep = -1;
+let hopToStep = 0;
+let hopApproachDuration = 0.2;
+let hopImpactDuration = 0.06;
+let hopGrowthDuration = 0.16;
+let hopLaunchDuration = 0.055;
+let growthStepIdx = -1;
+let growthBaseScale = 1.0;
+
+const DT_CLAMP_MAX = 0.05;
+const APPROACH_BASE = 0.06;
+const APPROACH_K = 0.12;
+const APPROACH_MIN = 0.08;
+const APPROACH_MAX = 0.34;
+const IMPACT_MIN = 0.04;
+const IMPACT_MAX = 0.08;
+const GROWTH_MIN = 0.12;
+const GROWTH_MAX = 0.22;
+const LAUNCH_HANDOFF_MIN = 0.04;
+const LAUNCH_HANDOFF_MAX = 0.07;
+const TERMINAL_MARK_DURATION = 0.12;
 
 // Milestone callout state (exported for UI to read)
 let milestoneCallout = null;  // { text, timer } or null
@@ -215,6 +253,10 @@ export function clearNumberLine() {
   terminalFlashDone = false;
   currentStepFloat = 0;
   playState = 'idle';
+  stateElapsed = 0;
+  hopFromStep = -1;
+  hopToStep = 0;
+  growthStepIdx = -1;
   hitCount = 0;
   mathDisplay = null;
   lastReportedStep = -1;
@@ -272,6 +314,50 @@ function getBaseTimePerStep(seqLen) {
     if (seqLen <= p.maxSteps) return p.timePerStep;
   }
   return 0.1;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function midpoint(min, max) {
+  return (min + max) * 0.5;
+}
+
+function smoothstep01(t) {
+  const x = clamp(t, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
+function easeOutBack01(t) {
+  const x = clamp(t, 0, 1);
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * ((x - 1) ** 3) + c1 * ((x - 1) ** 2);
+}
+
+function beginState(nextState) {
+  playState = nextState;
+  stateElapsed = 0;
+}
+
+function getStepPosition(stepIdx) {
+  if (stepIdx < 0) return new THREE.Vector3(SHOOTER_X, SHOOTER_Y, 0);
+  if (stepIdx >= pathPositions.length) return pathPositions[pathPositions.length - 1]?.clone() ?? new THREE.Vector3();
+  return pathPositions[stepIdx].clone();
+}
+
+function configureHop(nextStep) {
+  hopFromStep = nextStep - 1;
+  hopToStep = nextStep;
+  const start = getStepPosition(hopFromStep);
+  const end = getStepPosition(hopToStep);
+  const dist = start.distanceTo(end);
+  hopApproachDuration = clamp(APPROACH_BASE + dist * APPROACH_K, APPROACH_MIN, APPROACH_MAX);
+  hopImpactDuration = midpoint(IMPACT_MIN, IMPACT_MAX);
+  const growthBias = importance[hopToStep] >= MILESTONE_WEIGHT ? 1 : 0;
+  hopGrowthDuration = GROWTH_MIN + (GROWTH_MAX - GROWTH_MIN) * growthBias;
+  hopLaunchDuration = midpoint(LAUNCH_HANDOFF_MIN, LAUNCH_HANDOFF_MAX);
 }
 
 function buildPath(seq) {
@@ -428,7 +514,7 @@ function launchSequence(n, values) {
   operatorBall.position.set(SHOOTER_X, SHOOTER_Y, 0);
   operatorBall.visible = true;
   launchPhase = 0;
-  playState = 'launching';  // new state: plunger compresses before firing
+  beginState('building');
 }
 
 export function skipToEnd() {
@@ -438,7 +524,7 @@ export function skipToEnd() {
     operatorBall.position.copy(pathPositions[totalSteps - 1]);
   }
   hitCount = totalSteps;
-  playState = 'complete';
+  beginState('complete');
   markTerminalLoopOnce();
   mathDisplay = { value: 1, isEven: false, label: 'DONE', rule: '', operation: '', result: '' };
   if (trailLine) trailLine.geometry.setDrawRange(0, totalSteps);
@@ -447,12 +533,14 @@ export function skipToEnd() {
 
 // ── Update (called each frame) ──────────────────────────
 export function updateNumberLine(dt) {
+  const clampedDt = clamp(dt, 0, DT_CLAMP_MAX);
+
   // Spin the start orb whenever it's visible
   if (operatorBall && operatorBall.visible) {
-    operatorBall.rotation.y += ORB_SPIN_SPEED * dt;
+    operatorBall.rotation.y += ORB_SPIN_SPEED * clampedDt;
   }
 
-  if (!active || playState === 'idle') return null;
+  if (!active || playState === 'idle' || playState === 'aborted') return null;
   if (playState === 'complete') {
     if (terminalFlashTimer > 0) {
       terminalFlashTimer = Math.max(0, terminalFlashTimer - dt);
@@ -462,21 +550,22 @@ export function updateNumberLine(dt) {
     return null;
   }
 
-  const effectiveDt = dt * userSpeed;
+  stateElapsed += clampedDt;
 
   // Milestone callout timer
   if (milestoneCallout) {
-    milestoneTimer -= dt;
+    milestoneTimer -= clampedDt;
     if (milestoneTimer <= 0) milestoneCallout = null;
   }
 
-  if (terminalFlashTimer > 0) {
-    terminalFlashTimer = Math.max(0, terminalFlashTimer - dt);
+  if (playState === 'building') {
+    beginState('intro');
+    return getCameraTarget();
   }
 
-  // ── LAUNCHING: plunger compresses, then fires ──────────
-  if (playState === 'launching') {
-    launchPhase += dt / LAUNCH_DURATION;
+  // ── INTRO: plunger compresses before firing ─────────────
+  if (playState === 'intro') {
+    launchPhase = clamp(stateElapsed / LAUNCH_DURATION, 0, 1);
 
     // Plunger compression: rod + knob pull back
     if (shooterMesh && shooterMesh.children.length >= 2) {
@@ -499,7 +588,6 @@ export function updateNumberLine(dt) {
     operatorBall.material.emissiveIntensity = charge * 0.8;
 
     if (launchPhase >= 1) {
-      // FIRE! Snap plunger back, launch the ball
       if (shooterMesh && shooterMesh.children.length >= 2) {
         shooterMesh.children[0].position.x = -0.35;
         shooterMesh.children[1].position.x = -0.6;
@@ -507,113 +595,106 @@ export function updateNumberLine(dt) {
       if (shooterMesh) shooterMesh.material.emissiveIntensity = 0.4;
       operatorBall.material.emissive.setHex(0x000000);
       operatorBall.material.emissiveIntensity = 0;
-
-      currentStepFloat = -1;
-      playState = 'traveling';
-      cameraMode = 'overview';
+      cameraMode = 'chase';
+      configureHop(0);
+      beginState('hop_approach');
     }
     return getCameraTarget();
   }
 
-  // ── TRAVELING: ball moves along the path ───────────────
-  if (currentStepFloat < 0) {
-    // Post-launch flight: shooter → first step position
-    currentStepFloat += effectiveDt / 0.3;
-    if (currentStepFloat >= 0) {
-      currentStepFloat = 0;
-      cameraMode = 'chase';
-    }
-    const t = Math.max(0, currentStepFloat + 1);
-    const smooth = t * t * (3 - 2 * t);
-    if (pathPositions.length > 0) {
-      const start = new THREE.Vector3(SHOOTER_X, SHOOTER_Y, 0);
-      operatorBall.position.lerpVectors(start, pathPositions[0], smooth);
-    }
-  } else {
-    // Main traversal: advance by importance-weighted time
-    const stepIdx = Math.floor(currentStepFloat);
-    const imp = (stepIdx >= 0 && stepIdx < importance.length) ? importance[stepIdx] : 1.0;
-    const stepTime = baseTimePerStep * imp;
-    currentStepFloat += effectiveDt / stepTime;
+  if (playState === 'hop_approach') {
+    const t = hopApproachDuration > 0 ? clamp(stateElapsed / hopApproachDuration, 0, 1) : 1;
+    const smooth = smoothstep01(t);
+    currentStepFloat = hopFromStep + smooth;
+    const start = getStepPosition(hopFromStep);
+    const end = getStepPosition(hopToStep);
+    operatorBall.position.lerpVectors(start, end, smooth);
 
-    if (currentStepFloat >= totalSteps - 1) {
+    if (t >= 1) {
+      currentStepFloat = hopToStep;
+      lastReportedStep = hopToStep;
+      hitCount = hopToStep + 1;
+
+      const val = sequence[hopToStep];
+      if (hopToStep < sequence.length - 1) {
+        const next = sequence[hopToStep + 1];
+        const even = isEven(val);
+        mathDisplay = {
+          value: val, isEven: even,
+          label: even ? 'EVEN' : 'ODD',
+          rule: even ? 'n ÷ 2' : '3n + 1',
+          operation: even ? `${fmtValue(val)} ÷ 2` : `${fmtValue(val)} × 3 + 1`,
+          result: fmtValue(next),
+        };
+      } else {
+        mathDisplay = { value: val, isEven: false, label: 'DONE', rule: '', operation: '', result: '' };
+      }
+
+      if (stepOrbs[hopToStep] && !stepOrbs[hopToStep].activated) {
+        activateOrb(stepOrbs[hopToStep]);
+      }
+      if (trailLine) trailLine.geometry.setDrawRange(0, hopToStep + 1);
+      if (importance[hopToStep] >= MILESTONE_WEIGHT) {
+        tacticalWeight = Math.min(1, tacticalWeight + 0.5);
+        tacticalDecay = 0.5;
+      }
+      if (importance[hopToStep] >= TERMINAL_WEIGHT && (val === 4 || val === 4n)) {
+        milestoneCallout = { text: '4 → 2 → 1', type: 'terminal' };
+        milestoneTimer = CALLOUT_DURATION * 1.5;
+      } else if (importance[hopToStep] >= MILESTONE_WEIGHT) {
+        let isPeak = true;
+        const lg = bigLog2(val);
+        for (let j = 0; j < hopToStep; j++) {
+          if (bigLog2(sequence[j]) >= lg) { isPeak = false; break; }
+        }
+        if (isPeak && hopToStep > 0) {
+          milestoneCallout = { text: `NEW PEAK: ${fmtValue(val)}`, type: 'peak' };
+          milestoneTimer = CALLOUT_DURATION;
+        }
+      }
+      beginState('hop_impact');
+    }
+  } else if (playState === 'hop_impact') {
+    if (stateElapsed >= hopImpactDuration) {
+      growthStepIdx = hopToStep;
+      growthBaseScale = stepOrbs[growthStepIdx]?.mesh?.scale?.x ?? 1;
+      beginState('hop_grow');
+    }
+  } else if (playState === 'hop_grow') {
+    const t = hopGrowthDuration > 0 ? clamp(stateElapsed / hopGrowthDuration, 0, 1) : 1;
+    const grow = easeOutBack01(t);
+    const maxScale = ORB_RADIUS_ACTIVE / ORB_RADIUS;
+    const scale = growthBaseScale + (maxScale - growthBaseScale) * grow;
+    if (stepOrbs[growthStepIdx]) stepOrbs[growthStepIdx].mesh.scale.setScalar(scale);
+    if (t >= 1) {
+      beginState('hop_launch');
+    }
+  } else if (playState === 'hop_launch') {
+    if (stateElapsed >= hopLaunchDuration) {
+      if (hopToStep >= totalSteps - 1) {
+        beginState('terminal_mark');
+      } else {
+        configureHop(hopToStep + 1);
+        beginState('hop_approach');
+      }
+    }
+  } else if (playState === 'terminal_mark') {
+    if (stateElapsed >= TERMINAL_MARK_DURATION) {
       currentStepFloat = totalSteps - 1;
-      playState = 'complete';
+      beginState('complete');
       markTerminalLoopOnce();
-    }
-
-    // Position ball on the spline
-    if (pathSpline && totalSteps > 1) {
-      const t = Math.min(1, Math.max(0, currentStepFloat / (totalSteps - 1)));
-      const pos = pathSpline.getPoint(t);
-      operatorBall.position.copy(pos);
-    }
-  }
-
-  // Per-step events
-  const currentStep = Math.floor(Math.max(0, currentStepFloat));
-  if (currentStep !== lastReportedStep && currentStep < totalSteps) {
-    lastReportedStep = currentStep;
-    hitCount = currentStep + 1;
-
-    // Update math display
-    const val = sequence[currentStep];
-    if (currentStep < sequence.length - 1) {
-      const next = sequence[currentStep + 1];
-      const even = isEven(val);
-      mathDisplay = {
-        value: val, isEven: even,
-        label: even ? 'EVEN' : 'ODD',
-        rule: even ? 'n ÷ 2' : '3n + 1',
-        operation: even ? `${fmtValue(val)} ÷ 2` : `${fmtValue(val)} × 3 + 1`,
-        result: fmtValue(next),
-      };
-    } else {
-      mathDisplay = { value: val, isEven: false, label: 'DONE', rule: '', operation: '', result: '' };
-    }
-
-    // Activate orb
-    if (stepOrbs[currentStep] && !stepOrbs[currentStep].activated) {
-      activateOrb(stepOrbs[currentStep]);
-    }
-
-    // Trail grows
-    if (trailLine) {
-      trailLine.geometry.setDrawRange(0, currentStep + 1);
-    }
-
-    // Camera: tactical bump on milestones
-    if (importance[currentStep] >= MILESTONE_WEIGHT) {
-      tacticalWeight = Math.min(1, tacticalWeight + 0.5);
-      tacticalDecay = 0.5;
-    }
-
-    // Milestone callouts
-    if (importance[currentStep] >= TERMINAL_WEIGHT && (val === 4 || val === 4n)) {
-      milestoneCallout = { text: '4 → 2 → 1', type: 'terminal' };
-      milestoneTimer = CALLOUT_DURATION * 1.5;
-    } else if (importance[currentStep] >= MILESTONE_WEIGHT) {
-      // Check if new peak
-      let isPeak = true;
-      const lg = bigLog2(val);
-      for (let j = 0; j < currentStep; j++) {
-        if (bigLog2(sequence[j]) >= lg) { isPeak = false; break; }
-      }
-      if (isPeak && currentStep > 0) {
-        milestoneCallout = { text: `NEW PEAK: ${fmtValue(val)}`, type: 'peak' };
-        milestoneTimer = CALLOUT_DURATION;
-      }
     }
   }
 
   // Decay tactical weight
   if (tacticalDecay > 0) {
-    tacticalDecay -= dt;
+    tacticalDecay -= clampedDt;
   } else if (tacticalWeight > 0) {
-    tacticalWeight = Math.max(0, tacticalWeight - dt * 2);
+    tacticalWeight = Math.max(0, tacticalWeight - clampedDt * 2);
   }
 
   // Update orb tiers
+  const currentStep = Math.floor(Math.max(0, currentStepFloat));
   updateOrbTiers(currentStep, dt);
 
   return getCameraTarget();
