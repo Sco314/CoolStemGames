@@ -25,7 +25,7 @@ const MAGNITUDE_SCALE = 0.15;    // world units per log2 unit (Y axis)
 const ORB_RADIUS = 0.10;
 const ORB_RADIUS_ACTIVE = 0.14;
 const OPERATOR_RADIUS = 0.18;
-const ORB_SPIN_SPEED = 0.3;      // radians per second (Y-axis rotation)
+const ORB_SPIN_SPEED = 0.8;      // radians per second (Y-axis rotation)
 const LABEL_SCALE = 0.40;
 const EXTRA_CYCLES = 2;
 
@@ -142,10 +142,11 @@ export function initNumberLine(scene) {
   orbTexture.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.MeshStandardMaterial({
     map: orbTexture,
-    emissive: new THREE.Color(0xd4a44a),
-    emissiveIntensity: 0.4,
-    metalness: 0.35,
-    roughness: 0.35,
+    color: new THREE.Color(0xC8BFE7),
+    emissive: new THREE.Color(0x000000),
+    emissiveIntensity: 0,
+    metalness: 0.1,
+    roughness: 0.6,
   });
   operatorBall = new THREE.Mesh(geo, mat);
   operatorBall.visible = false;
@@ -460,7 +461,9 @@ export function updateNumberLine(dt) {
     }
 
     // Ball glows brighter as launch charges
-    operatorBall.material.emissiveIntensity = 0.5 + Math.min(launchPhase, 1) * 1.0;
+    const charge = Math.min(launchPhase, 1);
+    operatorBall.material.emissive.setHex(0xC8BFE7);
+    operatorBall.material.emissiveIntensity = charge * 0.8;
 
     if (launchPhase >= 1) {
       // FIRE! Snap plunger back, launch the ball
@@ -469,7 +472,8 @@ export function updateNumberLine(dt) {
         shooterMesh.children[1].position.x = -0.6;
       }
       if (shooterMesh) shooterMesh.material.emissiveIntensity = 0.4;
-      operatorBall.material.emissiveIntensity = 0.5;
+      operatorBall.material.emissive.setHex(0x000000);
+      operatorBall.material.emissiveIntensity = 0;
 
       currentStepFloat = -1;
       playState = 'traveling';
