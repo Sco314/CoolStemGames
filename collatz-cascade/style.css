@@ -451,6 +451,26 @@ body {
   margin-top: 2px;
 }
 
+/* ── Panel close button + backdrop ─────────────────────── */
+.panel-close {
+  position: absolute;
+  top: 6px; right: 8px;
+  background: none; border: none;
+  color: #667799;
+  font-size: 1.5rem; line-height: 1;
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 4px;
+  z-index: 1;
+}
+.panel-close:hover { color: #e0e6f0; background: rgba(255,255,255,0.1); }
+
+.panel-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 25;
+}
+
 /* ── Utility ───────────────────────────────────────────── */
 .hidden { display: none !important; }
 

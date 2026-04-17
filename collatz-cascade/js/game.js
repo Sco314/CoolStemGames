@@ -319,6 +319,14 @@ export function nextRound() {
   gameState = 'idle';
 }
 
+export function cancelPrediction() {
+  if (gameState === 'predict') {
+    gameState = 'idle';
+    currentNumber = null;
+    selectedBucket = -1;
+  }
+}
+
 export function resetGame() {
   nextRound();
   totalScore = 0;
