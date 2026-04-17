@@ -1,147 +1,152 @@
 /**
- * Number Line mode: horizontal number line with animated operator ball
- * that bounces through Collatz sequences.
+ * Collatz Cascade — Hybrid Path Traversal
+ *
+ * The ball travels along a step-based path where:
+ *   X = stepIndex * STEP_SPACING (primary travel axis)
+ *   Y = log2(value) * MAGNITUDE_SCALE (vertical = value magnitude)
+ *
+ * This replaces the old literal number line where x = value * 0.3,
+ * which broke at large values. The new layout keeps every sequence
+ * readable regardless of peak value — the player sees a "mountain
+ * profile" of the Collatz journey.
  */
 
 import * as THREE from 'three';
 import { collatzValues } from './collatz.js';
 import {
-  isBig, isEven, isOne, log10 as bigLog10, log2 as bigLog2,
+  isBig, isEven, isOne, log2 as bigLog2,
   valueKey, formatValue as fmtValue,
 } from './valueUtils.js';
-import { scheduleBatch } from './scheduler.js';
 import { computeSequenceAsync } from './collatz-client.js';
 
-// ── Memory ceilings ──────────────────────────────────────
-export const MAX_ORBS = Infinity;
-let visibleMax = Infinity;
+// ── Path layout constants ───────────────────────────────
+const STEP_SPACING = 0.5;        // world units per step (X axis)
+const MAGNITUDE_SCALE = 0.15;    // world units per log2 unit (Y axis)
+const ORB_RADIUS = 0.10;
+const ORB_RADIUS_ACTIVE = 0.14;
+const OPERATOR_RADIUS = 0.18;
+const LABEL_SCALE = 0.40;
+const EXTRA_CYCLES = 2;
 
-// Sequences longer than this auto-switch to density band rendering
+// Pacing: base time per step (seconds) by sequence length
+const PACING = [
+  { maxSteps: 15,       timePerStep: 0.8 },   // short: dramatic
+  { maxSteps: 60,       timePerStep: 0.4 },   // medium: balanced
+  { maxSteps: 160,      timePerStep: 0.2 },   // long: faster
+  { maxSteps: Infinity, timePerStep: 0.1 },   // very long: sprint
+];
+const MILESTONE_WEIGHT = 2.0;  // milestones take 2× normal time
+const TERMINAL_WEIGHT = 3.0;   // final 4→2→1 takes 3× normal
+
+// Camera offsets
+const CHASE_OFFSET = new THREE.Vector3(-1.5, 1.5, 3.0);
+const CHASE_LOOK_AHEAD_STEPS = 4;
+const TACTICAL_OFFSET = new THREE.Vector3(0, 2.5, 4.0);
+const OVERVIEW_HEIGHT = 8;
+const OVERVIEW_DIST = 12;
+
+// Orb tier distances (in steps from ball)
+const ACTIVE_RANGE = 5;    // full size + label + glow
+const VISIBLE_RANGE = 25;  // visible but small, no label
+
+// Colors
+const ORB_COLOR_FUTURE = new THREE.Color(0.3, 0.35, 0.5);
+const ORB_COLOR_VISITED = new THREE.Color(0.2, 0.45, 0.9);
+const ORB_COLOR_ACTIVE = new THREE.Color(1.0, 0.85, 0.3);
+const TRAIL_COLOR_BRIGHT = 0x4a9aff;
+const TRAIL_COLOR_FAINT = 0x223355;
+const OPERATOR_COLOR = new THREE.Color(1, 1, 1);
+
+// Density band threshold
 const DENSITY_THRESHOLD = 2000;
 const DENSITY_BINS = 512;
 
-// ── Constants ────────────────────────────────────────────
-const SPACING = 0.3;          // world units per integer
-const ORB_RADIUS = 0.12;
-const OPERATOR_RADIUS = 0.18;
-const LINE_Y = 0;
-const LABEL_SCALE = 0.45;
-
-// Rebound arc: low, direct trajectory (pinball feel)
-const ARC_MIN_HEIGHT = 0.15;
-const ARC_HEIGHT_FACTOR = 0.06;
-
-// Colors
-const ORB_COLOR_DEFAULT = new THREE.Color(0.85, 0.35, 0.15);  // reddish orange
-const ORB_COLOR_VISITED = new THREE.Color(0.2, 0.45, 0.9);    // complement blue
-const OPERATOR_COLOR = new THREE.Color(1, 1, 1);
-
-// Timing (seconds) — fast pinball pacing
-const TRAVEL_MIN = 0.3;          // minimum travel time (short hops)
-const TRAVEL_MAX = 0.8;          // maximum travel time (long travels)
-const PAUSE_DURATION = 0.12;     // brief impact flash
-const EXTRA_CYCLES = 2;          // repeat 4→2→1 this many times
-
-// Bounce animation during pause: single dramatic upward hop
-const BOUNCE_HEIGHT = 0.15;      // tiny impact rebound
-
-// Pinball shooter position (just left of the number line origin)
+// Shooter position
 const SHOOTER_X = -0.6;
-const SHOOTER_Y = LINE_Y;
+const SHOOTER_Y = 0;
 
 // ── State ────────────────────────────────────────────────
 let nlGroup = null;
-let lineObj = null;
-let scaleLabels = [];            // array of sprite labels at major ticks
-let orbs = new Map();
 let operatorBall = null;
 let operatorLight = null;
-let tickMarks = null;
-
-// Sequence playback
-let sequence = [];
-let stepIndex = 0;
-let playState = 'idle';       // idle | traveling | paused | complete
-let travelProgress = 0;
-let travelDuration = 2;       // computed per-arc
-let pauseTimer = 0;
-
-// User-controlled speed multiplier (1x, 2x, 4x, 8x)
-let userSpeed = 1;
-
-// Scale mode: 'linear' or 'log'
-let scaleMode = 'linear';
-const LOG_SCALE_UNIT = 3.0;  // world units per decade in log mode
-
-// Bounce during pause
-let pauseElapsed = 0;
-let pauseOrbY = 0;             // Y position of the target orb (to bounce above)
-
-// Positions for current travel arc
-let arcStart = new THREE.Vector3();
-let arcEnd = new THREE.Vector3();
-let arcControl = new THREE.Vector3();
-
-// Display data for math overlay — persists until next number reached
-let mathDisplay = null;
-
-// Visited tracking across all runs
-const allVisited = new Set();
-let maxOnLine = 0;
-
-// Hit counter
-let hitCount = 0;
-
-// Pinball shooter mesh
 let shooterMesh = null;
+let active = false;
 
-// Density band state (for sequences above DENSITY_THRESHOLD steps)
+// Sequence + path
+let sequence = [];
+let pathPositions = [];     // THREE.Vector3[] per step
+let pathSpline = null;      // CatmullRomCurve3
+let importance = [];        // per-step weight (1.0 normal, 2.0+ milestone)
+let baseTimePerStep = 0.4;  // from pacing table
+let totalSteps = 0;
+
+// Playback
+let currentStepFloat = 0;   // fractional step progress
+let playState = 'idle';      // idle | traveling | complete
+let userSpeed = 1;
+let hitCount = 0;
+let mathDisplay = null;
+let lastReportedStep = -1;   // for triggering per-step events
+
+// Trail meshes
+let previewLine = null;      // full path, faint
+let trailLine = null;        // traversed portion, bright
+
+// Step orbs
+let stepOrbs = [];           // { mesh, label, stepIdx }
+
+// Camera blending
+let cameraMode = 'overview'; // overview | chase | tactical
+let tacticalWeight = 0;      // 0..1, ramps up on milestones
+let tacticalDecay = 0;
+
+// Density band
 let densityMode = false;
 let densityTexture = null;
 let densityMesh = null;
 
-// Active state
-let active = false;
-
+// ── Exports ─────────────────────────────────────────────
+export function isNumberLineActive() { return active; }
+export function getMathDisplay() { return mathDisplay; }
+export function getPlayState() { return playState; }
+export function setSpeed(mult) { userSpeed = mult; }
+export function getSpeed() { return userSpeed; }
 export function isDensityMode() { return densityMode; }
 export function getHitCount() { return hitCount; }
+export function formatValue(n) { return fmtValue(n); }
+// Legacy exports (no-ops, kept for import compatibility)
+export const MAX_ORBS = Infinity;
+export function setOrbVisibleMax() {}
+export function getOrbVisibleMax() { return Infinity; }
 
-// ── Public API ───────────────────────────────────────────
-
+// ── Init ────────────────────────────────────────────────
 export function initNumberLine(scene) {
   nlGroup = new THREE.Group();
   nlGroup.visible = false;
   scene.add(nlGroup);
 
+  // Operator ball
   const geo = new THREE.SphereGeometry(OPERATOR_RADIUS, 20, 14);
   const mat = new THREE.MeshStandardMaterial({
-    color: OPERATOR_COLOR,
-    emissive: OPERATOR_COLOR,
-    emissiveIntensity: 0.5,
-    metalness: 0.3,
-    roughness: 0.4,
+    color: OPERATOR_COLOR, emissive: OPERATOR_COLOR,
+    emissiveIntensity: 0.5, metalness: 0.3, roughness: 0.4,
   });
   operatorBall = new THREE.Mesh(geo, mat);
   operatorBall.visible = false;
   nlGroup.add(operatorBall);
-
   operatorLight = new THREE.PointLight(0xffeedd, 1.0, 8, 2);
   operatorBall.add(operatorLight);
 
-  // Pinball shooter: a small housing that the ball launches from
-  const shooterGeo = new THREE.BoxGeometry(0.6, 0.35, 0.35);
-  const shooterMat = new THREE.MeshStandardMaterial({
-    color: 0x6688aa,
-    emissive: 0x445566,
-    emissiveIntensity: 0.4,
-    metalness: 0.4,
-    roughness: 0.35,
+  // Pinball shooter
+  const sGeo = new THREE.BoxGeometry(0.6, 0.35, 0.35);
+  const sMat = new THREE.MeshStandardMaterial({
+    color: 0x6688aa, emissive: 0x445566,
+    emissiveIntensity: 0.4, metalness: 0.4, roughness: 0.35,
   });
-  shooterMesh = new THREE.Mesh(shooterGeo, shooterMat);
+  shooterMesh = new THREE.Mesh(sGeo, sMat);
   shooterMesh.position.set(SHOOTER_X, SHOOTER_Y, 0);
   nlGroup.add(shooterMesh);
 
-  // Plunger rod inside the shooter
   const rodGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8);
   const rodMat = new THREE.MeshStandardMaterial({ color: 0x889abb, metalness: 0.8, roughness: 0.2 });
   const rod = new THREE.Mesh(rodGeo, rodMat);
@@ -149,7 +154,6 @@ export function initNumberLine(scene) {
   rod.position.set(-0.35, 0, 0);
   shooterMesh.add(rod);
 
-  // Plunger knob
   const knobGeo = new THREE.SphereGeometry(0.09, 12, 8);
   const knobMat = new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0xff2222, emissiveIntensity: 0.4 });
   const knob = new THREE.Mesh(knobGeo, knobMat);
@@ -160,15 +164,6 @@ export function initNumberLine(scene) {
 export function showNumberLine() {
   if (nlGroup) nlGroup.visible = true;
   active = true;
-  // Pre-load orbs 0, 1, 2 so the number line has visible reference
-  // points on first load (before the user enters a number).
-  if (orbs.size === 0) {
-    maxOnLine = 2;
-    rebuildLine();
-    ensureOrb(0);
-    ensureOrb(1);
-    ensureOrb(2);
-  }
 }
 
 export function hideNumberLine() {
@@ -179,137 +174,430 @@ export function hideNumberLine() {
   mathDisplay = null;
 }
 
-export function isNumberLineActive() { return active; }
-export function getMathDisplay() { return mathDisplay; }
-export function getPlayState() { return playState; }
-
-export function setSpeed(mult) { userSpeed = mult; }
-export function getSpeed() { return userSpeed; }
-
-/**
- * Format a value (Number or BigInt) for display.
- */
-export function formatValue(n) {
-  return fmtValue(n);
+export function clearNumberLine() {
+  disposePath();
+  sequence = [];
+  pathPositions = [];
+  pathSpline = null;
+  importance = [];
+  stepOrbs = [];
+  currentStepFloat = 0;
+  playState = 'idle';
+  hitCount = 0;
+  mathDisplay = null;
+  lastReportedStep = -1;
+  if (operatorBall) operatorBall.visible = false;
+  cleanupDensityBand();
 }
 
-/**
- * Start a Collatz sequence from number n on the number line.
- * For BigInt or huge sequences, uses the Web Worker for off-thread compute.
- * Sequences above DENSITY_THRESHOLD steps auto-switch to density band rendering.
- */
+// ── Path computation ────────────────────────────────────
+function pathPosition(stepIdx, value) {
+  const x = stepIdx * STEP_SPACING;
+  const lg = Math.max(0, bigLog2(value));
+  const y = lg * MAGNITUDE_SCALE;
+  return new THREE.Vector3(x, y, 0);
+}
+
+function computeImportance(seq) {
+  const imp = new Array(seq.length).fill(1.0);
+  let peakSoFar = 0;
+
+  for (let i = 0; i < seq.length; i++) {
+    const v = typeof seq[i] === 'bigint' ? Number(seq[i]) : seq[i];
+    const lg = bigLog2(seq[i]);
+
+    // New peak
+    if (lg > peakSoFar) {
+      peakSoFar = lg;
+      imp[i] = MILESTONE_WEIGHT;
+    }
+
+    // Big drop (value falls >50% in one step)
+    if (i > 0) {
+      const prevLg = bigLog2(seq[i - 1]);
+      if (prevLg - lg > 1) imp[i] = Math.max(imp[i], MILESTONE_WEIGHT);
+    }
+
+    // Terminal 4→2→1
+    if (i >= 2 && seq[i] === 1 &&
+        (seq[i - 1] === 2 || seq[i - 1] === 2n) &&
+        (seq[i - 2] === 4 || seq[i - 2] === 4n)) {
+      imp[i] = TERMINAL_WEIGHT;
+      imp[i - 1] = TERMINAL_WEIGHT;
+      imp[i - 2] = TERMINAL_WEIGHT;
+    }
+
+    // Round step markers
+    if (i === 10 || i === 25 || i === 50 || i === 100) {
+      imp[i] = Math.max(imp[i], MILESTONE_WEIGHT);
+    }
+  }
+  return imp;
+}
+
+function getBaseTimePerStep(seqLen) {
+  for (const p of PACING) {
+    if (seqLen <= p.maxSteps) return p.timePerStep;
+  }
+  return 0.1;
+}
+
+function buildPath(seq) {
+  disposePath();
+
+  totalSteps = seq.length;
+  pathPositions = seq.map((v, i) => pathPosition(i, v));
+  importance = computeImportance(seq);
+  baseTimePerStep = getBaseTimePerStep(totalSteps);
+
+  // Build spline through all positions
+  if (pathPositions.length >= 2) {
+    pathSpline = new THREE.CatmullRomCurve3(pathPositions, false, 'catmullrom', 0.3);
+  }
+
+  // Preview line (full path, faint)
+  if (pathPositions.length >= 2) {
+    const previewGeo = new THREE.BufferGeometry().setFromPoints(pathPositions);
+    const previewMat = new THREE.LineBasicMaterial({
+      color: TRAIL_COLOR_FAINT, transparent: true, opacity: 0.2,
+    });
+    previewLine = new THREE.Line(previewGeo, previewMat);
+    nlGroup.add(previewLine);
+
+    // Trail line (bright, grows via drawRange)
+    const trailGeo = new THREE.BufferGeometry().setFromPoints(pathPositions);
+    const trailMat = new THREE.LineBasicMaterial({
+      color: TRAIL_COLOR_BRIGHT, transparent: true, opacity: 0.7,
+    });
+    trailLine = new THREE.Line(trailGeo, trailMat);
+    trailLine.geometry.setDrawRange(0, 1);
+    nlGroup.add(trailLine);
+  }
+
+  // Create step orbs (all start as future/faint)
+  stepOrbs = [];
+  for (let i = 0; i < pathPositions.length; i++) {
+    const orb = createStepOrb(i, seq[i], pathPositions[i]);
+    stepOrbs.push(orb);
+  }
+}
+
+function createStepOrb(stepIdx, value, pos) {
+  const geo = new THREE.SphereGeometry(ORB_RADIUS, 12, 8);
+  const mat = new THREE.MeshStandardMaterial({
+    color: ORB_COLOR_FUTURE, emissive: ORB_COLOR_FUTURE,
+    emissiveIntensity: 0.1, metalness: 0.2, roughness: 0.6,
+    transparent: true, opacity: 0.4,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(pos);
+  nlGroup.add(mesh);
+
+  // Label (initially hidden, shown when active)
+  const label = makeLabel(value);
+  label.position.set(0, ORB_RADIUS + 0.12, 0);
+  label.visible = false;
+  mesh.add(label);
+
+  return { mesh, label, stepIdx, value, activated: false };
+}
+
+function makeLabel(value) {
+  const text = fmtValue(value);
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.fillStyle = '#e0e6f0';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const fontSize = Math.max(18, Math.min(48, 48 - text.length * 3));
+  ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
+  ctx.fillText(text, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(LABEL_SCALE, LABEL_SCALE, 1);
+  sprite.renderOrder = 1;
+  return sprite;
+}
+
+function disposePath() {
+  if (previewLine) {
+    nlGroup.remove(previewLine);
+    previewLine.geometry.dispose();
+    previewLine.material.dispose();
+    previewLine = null;
+  }
+  if (trailLine) {
+    nlGroup.remove(trailLine);
+    trailLine.geometry.dispose();
+    trailLine.material.dispose();
+    trailLine = null;
+  }
+  for (const orb of stepOrbs) {
+    nlGroup.remove(orb.mesh);
+    if (orb.label) {
+      orb.mesh.remove(orb.label);
+      orb.label.material.map?.dispose();
+      orb.label.material.dispose();
+    }
+    orb.mesh.geometry.dispose();
+    orb.mesh.material.dispose();
+  }
+  stepOrbs = [];
+}
+
+// ── Sequence launch ─────────────────────────────────────
 export function startSequence(n) {
-  // For BigInt inputs, use async worker so the main thread doesn't freeze
   if (isBig(n)) {
     computeSequenceAsync(n).then(({ values }) => launchSequence(n, values));
     return;
   }
-
   const values = collatzValues(n);
   launchSequence(n, values);
 }
 
 function launchSequence(n, values) {
-  // Clean up previous density band if any
   cleanupDensityBand();
   densityMode = false;
 
-  // Build full sequence with extra 4→2→1 cycles
   sequence = [...values];
   for (let c = 0; c < EXTRA_CYCLES; c++) {
     sequence.push(4, 2, 1);
   }
 
-  // Reset user speed
   userSpeed = 1;
 
-  // Find max value to size the line
-  let newMax = maxOnLine;
-  let curMaxLog = bigLog10(typeof maxOnLine === 'number' && maxOnLine > 0 ? maxOnLine : 1);
-  for (const v of sequence) {
-    const lg = bigLog10(v);
-    if (lg > curMaxLog) {
-      curMaxLog = lg;
-      newMax = v;
-    }
-  }
-  if (bigLog10(typeof newMax === 'number' ? Math.max(newMax, 1) : newMax) >
-      bigLog10(typeof maxOnLine === 'number' ? Math.max(maxOnLine, 1) : maxOnLine)) {
-    maxOnLine = newMax;
-    rebuildLine();
-  }
-
-  // Long sequences → density band mode
+  // Density mode for extremely long sequences
   if (values.length > DENSITY_THRESHOLD) {
     densityMode = true;
-    renderDensityBand(values);
-    // Auto-scale speed so the whole journey takes ~10 seconds
-    const totalSteps = sequence.length - 1;
-    userSpeed = Math.max(1, totalSteps / (10 / TRAVEL_MIN));
+    buildDensityBand(values);
+    userSpeed = Math.max(1, sequence.length / 100);
   }
 
-  // First orb must exist synchronously so the launch arc has a target
-  ensureOrb(sequence[0]);
-  if (!densityMode && sequence.length > 1) {
-    scheduleBatch(sequence.slice(1), (v) => ensureOrb(v), { priority: 6 });
-  }
+  buildPath(sequence);
 
-  // Reset playback + hit counter
-  stepIndex = 0;
+  // Reset playback
+  currentStepFloat = -1;  // start before step 0 (at shooter)
   hitCount = 0;
   mathDisplay = null;
+  lastReportedStep = -1;
+  cameraMode = 'overview';
+  tacticalWeight = 0;
 
-  // Ball starts inside the pinball shooter, then launches to the first number
-  const firstPos = orbPosition(sequence[0]);
+  // Ball starts at the shooter
   operatorBall.position.set(SHOOTER_X, SHOOTER_Y, 0);
   operatorBall.visible = true;
-
-  setupArc(new THREE.Vector3(SHOOTER_X, SHOOTER_Y, 0), firstPos);
-  travelProgress = 0;
   playState = 'traveling';
 }
 
-/**
- * Skip the ball animation to the end (for long density-mode sequences).
- */
 export function skipToEnd() {
-  if (!densityMode || playState === 'complete' || playState === 'idle') return;
-  stepIndex = sequence.length - 1;
-  const lastVal = sequence[stepIndex];
-  const lastPos = orbPosition(lastVal);
-  operatorBall.position.copy(lastPos);
-  markVisited(lastVal);
+  if (playState === 'idle' || playState === 'complete') return;
+  currentStepFloat = totalSteps - 1;
+  if (pathPositions.length > 0) {
+    operatorBall.position.copy(pathPositions[totalSteps - 1]);
+  }
+  hitCount = totalSteps;
   playState = 'complete';
-  mathDisplay = {
-    value: lastVal, isEven: false,
-    label: 'DONE', rule: '', operation: '', result: '',
-  };
+  mathDisplay = { value: 1, isEven: false, label: 'DONE', rule: '', operation: '', result: '' };
+  if (trailLine) trailLine.geometry.setDrawRange(0, totalSteps);
+  updateOrbTiers(totalSteps - 1);
 }
 
-// ── Density band rendering ──────────────────────────────
-function renderDensityBand(values) {
-  // Bin all visited values along the number line's X axis.
-  // Each bin covers a range of X positions.
-  const endX = orbPosition(maxOnLine).x;
+// ── Update (called each frame) ──────────────────────────
+export function updateNumberLine(dt) {
+  if (!active || playState === 'idle' || playState === 'complete') return null;
+
+  const effectiveDt = dt * userSpeed;
+
+  // Advance along the path
+  if (currentStepFloat < 0) {
+    // Launch phase: move from shooter to first step position
+    currentStepFloat += effectiveDt / 0.4;  // 0.4s launch
+    if (currentStepFloat >= 0) {
+      currentStepFloat = 0;
+      cameraMode = 'chase';
+    }
+    // Interpolate shooter → first position
+    const t = Math.max(0, (currentStepFloat + 1));  // 0..1
+    const smooth = t * t * (3 - 2 * t);
+    if (pathPositions.length > 0) {
+      const start = new THREE.Vector3(SHOOTER_X, SHOOTER_Y, 0);
+      operatorBall.position.lerpVectors(start, pathPositions[0], smooth);
+    }
+  } else {
+    // Main traversal: advance by importance-weighted time
+    const stepIdx = Math.floor(currentStepFloat);
+    const imp = (stepIdx >= 0 && stepIdx < importance.length) ? importance[stepIdx] : 1.0;
+    const stepTime = baseTimePerStep * imp;
+    currentStepFloat += effectiveDt / stepTime;
+
+    if (currentStepFloat >= totalSteps - 1) {
+      currentStepFloat = totalSteps - 1;
+      playState = 'complete';
+    }
+
+    // Position ball on the spline
+    if (pathSpline && totalSteps > 1) {
+      const t = Math.min(1, Math.max(0, currentStepFloat / (totalSteps - 1)));
+      const pos = pathSpline.getPoint(t);
+      operatorBall.position.copy(pos);
+    }
+  }
+
+  // Per-step events
+  const currentStep = Math.floor(Math.max(0, currentStepFloat));
+  if (currentStep !== lastReportedStep && currentStep < totalSteps) {
+    lastReportedStep = currentStep;
+    hitCount = currentStep + 1;
+
+    // Update math display
+    const val = sequence[currentStep];
+    if (currentStep < sequence.length - 1) {
+      const next = sequence[currentStep + 1];
+      const even = isEven(val);
+      mathDisplay = {
+        value: val, isEven: even,
+        label: even ? 'EVEN' : 'ODD',
+        rule: even ? 'n ÷ 2' : '3n + 1',
+        operation: even ? `${fmtValue(val)} ÷ 2` : `${fmtValue(val)} × 3 + 1`,
+        result: fmtValue(next),
+      };
+    } else {
+      mathDisplay = { value: val, isEven: false, label: 'DONE', rule: '', operation: '', result: '' };
+    }
+
+    // Activate orb
+    if (stepOrbs[currentStep] && !stepOrbs[currentStep].activated) {
+      activateOrb(stepOrbs[currentStep]);
+    }
+
+    // Trail grows
+    if (trailLine) {
+      trailLine.geometry.setDrawRange(0, currentStep + 1);
+    }
+
+    // Camera: tactical bump on milestones
+    if (importance[currentStep] >= MILESTONE_WEIGHT) {
+      tacticalWeight = Math.min(1, tacticalWeight + 0.5);
+      tacticalDecay = 0.5;
+    }
+  }
+
+  // Decay tactical weight
+  if (tacticalDecay > 0) {
+    tacticalDecay -= dt;
+  } else if (tacticalWeight > 0) {
+    tacticalWeight = Math.max(0, tacticalWeight - dt * 2);
+  }
+
+  // Update orb tiers
+  updateOrbTiers(currentStep);
+
+  return getCameraTarget();
+}
+
+// ── Orb tier management ─────────────────────────────────
+function activateOrb(orb) {
+  orb.activated = true;
+  orb.mesh.material.color.copy(ORB_COLOR_VISITED);
+  orb.mesh.material.emissive.copy(ORB_COLOR_VISITED);
+  orb.mesh.material.emissiveIntensity = 0.3;
+  orb.mesh.material.opacity = 1.0;
+}
+
+function updateOrbTiers(currentStep) {
+  for (const orb of stepOrbs) {
+    const dist = Math.abs(orb.stepIdx - currentStep);
+
+    if (dist <= ACTIVE_RANGE) {
+      // Active tier: full size, label visible
+      const scale = orb.stepIdx === currentStep ? ORB_RADIUS_ACTIVE / ORB_RADIUS : 1.0;
+      orb.mesh.scale.setScalar(scale);
+      orb.label.visible = true;
+      orb.mesh.material.opacity = 1.0;
+    } else if (dist <= VISIBLE_RANGE) {
+      // Context tier: smaller, no label
+      orb.mesh.scale.setScalar(0.6);
+      orb.label.visible = false;
+      orb.mesh.material.opacity = orb.activated ? 0.5 : 0.2;
+    } else {
+      // Distant: tiny or hidden
+      orb.mesh.scale.setScalar(0.3);
+      orb.label.visible = false;
+      orb.mesh.material.opacity = orb.activated ? 0.15 : 0.05;
+    }
+  }
+}
+
+// ── Camera system ───────────────────────────────────────
+function getCameraTarget() {
+  const ballPos = operatorBall.position.clone();
+
+  // Chase camera: behind ball, looking ahead on path
+  const chasePos = ballPos.clone().add(CHASE_OFFSET);
+  let chaseLookAt = ballPos.clone();
+  if (pathSpline && totalSteps > 1 && currentStepFloat >= 0) {
+    const lookAheadStep = Math.min(currentStepFloat + CHASE_LOOK_AHEAD_STEPS, totalSteps - 1);
+    const lookT = lookAheadStep / (totalSteps - 1);
+    chaseLookAt = pathSpline.getPoint(Math.min(1, lookT));
+  }
+
+  // Tactical camera: overhead, looking at ball
+  const tactPos = ballPos.clone().add(TACTICAL_OFFSET);
+  const tactLookAt = ballPos.clone();
+
+  // Blend chase ↔ tactical
+  const pos = chasePos.clone().lerp(tactPos, tacticalWeight);
+  const lookAt = chaseLookAt.clone().lerp(tactLookAt, tacticalWeight);
+
+  // Override: overview at launch (before step 0) and at finish
+  if (currentStepFloat < 0) {
+    // Launch overview: show shooter + first few steps
+    const overviewTarget = pathPositions.length > 3 ? pathPositions[3] : new THREE.Vector3(2, 0, 0);
+    return {
+      position: new THREE.Vector3(SHOOTER_X, 2.0, 4.0),
+      lookAt: overviewTarget,
+    };
+  }
+
+  if (playState === 'complete' && pathPositions.length > 0) {
+    // Finish overview: pull back to show the full path
+    const first = pathPositions[0];
+    const last = pathPositions[pathPositions.length - 1];
+    const center = first.clone().add(last).multiplyScalar(0.5);
+    const span = last.x - first.x;
+    return {
+      position: new THREE.Vector3(center.x, center.y + Math.max(3, span * 0.3), Math.max(5, span * 0.5)),
+      lookAt: center,
+    };
+  }
+
+  return { position: pos, lookAt };
+}
+
+// ── Density band (for huge sequences) ───────────────────
+function buildDensityBand(values) {
+  const endX = (values.length - 1) * STEP_SPACING;
   if (endX <= 0) return;
 
   const densityArray = new Float32Array(DENSITY_BINS);
   let maxDensity = 0;
 
-  for (const v of values) {
-    const x = orbPosition(v).x;
-    const bin = Math.min(DENSITY_BINS - 1, Math.max(0, Math.floor((x / endX) * DENSITY_BINS)));
-    densityArray[bin]++;
+  for (let i = 0; i < values.length; i++) {
+    const bin = Math.min(DENSITY_BINS - 1, Math.floor((i / values.length) * DENSITY_BINS));
+    const lg = bigLog2(values[i]);
+    densityArray[bin] = Math.max(densityArray[bin], lg);
     if (densityArray[bin] > maxDensity) maxDensity = densityArray[bin];
   }
 
   if (maxDensity === 0) return;
 
-  // Generate a 1D RGBA texture from density data
-  // Color ramp: cold blue → cyan → yellow → white
   const texData = new Uint8Array(DENSITY_BINS * 4);
   for (let i = 0; i < DENSITY_BINS; i++) {
-    const t = densityArray[i] / maxDensity;  // 0..1
+    const t = densityArray[i] / maxDensity;
     const [r, g, b] = densityColorRamp(t);
     texData[i * 4] = r;
     texData[i * 4 + 1] = g;
@@ -323,471 +611,27 @@ function renderDensityBand(values) {
   densityTexture.minFilter = THREE.LinearFilter;
   densityTexture.needsUpdate = true;
 
-  // Create a thin strip mesh along the number line
   if (densityMesh) {
     nlGroup.remove(densityMesh);
     densityMesh.geometry.dispose();
     densityMesh.material.dispose();
   }
-  const stripGeo = new THREE.PlaneGeometry(endX, 0.6);
-  const stripMat = new THREE.MeshBasicMaterial({
-    map: densityTexture,
-    transparent: true,
-    depthTest: false,
-  });
+  const stripGeo = new THREE.PlaneGeometry(endX, 1.0);
+  const stripMat = new THREE.MeshBasicMaterial({ map: densityTexture, transparent: true, depthTest: false });
   densityMesh = new THREE.Mesh(stripGeo, stripMat);
-  densityMesh.position.set(endX / 2, LINE_Y + 0.5, -0.1);
+  densityMesh.position.set(endX / 2, 1.0, -0.1);
   nlGroup.add(densityMesh);
 }
 
 function densityColorRamp(t) {
-  // 0 → dark blue, 0.33 → cyan, 0.66 → yellow, 1.0 → white
   if (t <= 0) return [10, 20, 60];
-  if (t < 0.33) {
-    const f = t / 0.33;
-    return [Math.round(10 + 0 * f), Math.round(20 + 200 * f), Math.round(60 + 195 * f)];
-  }
-  if (t < 0.66) {
-    const f = (t - 0.33) / 0.33;
-    return [Math.round(10 + 245 * f), Math.round(220 + 35 * f), Math.round(255 - 200 * f)];
-  }
+  if (t < 0.33) { const f = t / 0.33; return [Math.round(10), Math.round(20 + 200 * f), Math.round(60 + 195 * f)]; }
+  if (t < 0.66) { const f = (t - 0.33) / 0.33; return [Math.round(10 + 245 * f), Math.round(220 + 35 * f), Math.round(255 - 200 * f)]; }
   const f = (t - 0.66) / 0.34;
   return [255, 255, Math.round(55 + 200 * f)];
 }
 
 function cleanupDensityBand() {
-  if (densityMesh) {
-    nlGroup.remove(densityMesh);
-    densityMesh.geometry.dispose();
-    densityMesh.material.dispose();
-    densityMesh = null;
-  }
-  if (densityTexture) {
-    densityTexture.dispose();
-    densityTexture = null;
-  }
-}
-
-/**
- * Fully dispose the number line state. Called on mode-switch away
- * from Number Line to keep VRAM from accumulating across modes.
- */
-export function clearNumberLine() {
-  for (const orb of orbs.values()) {
-    if (orb.mesh) {
-      nlGroup.remove(orb.mesh);
-      if (orb.label) {
-        orb.mesh.remove(orb.label);
-        orb.label.material.map?.dispose();
-        orb.label.material.dispose();
-      }
-      orb.mesh.geometry.dispose();
-      orb.mesh.material.dispose();
-    }
-  }
-  orbs.clear();
-  allVisited.clear();
-  maxOnLine = 0;
-  sequence = [];
-  stepIndex = 0;
-  playState = 'idle';
-  mathDisplay = null;
-  if (operatorBall) operatorBall.visible = false;
-  rebuildLine();
-}
-
-/**
- * Set the soft ceiling on visible orbs. Capped at MAX_ORBS.
- */
-export function setOrbVisibleMax(n) {
-  visibleMax = Math.max(1, Math.min(n | 0, MAX_ORBS));
-  evictOldestOrbs();
-}
-
-export function getOrbVisibleMax() { return visibleMax; }
-
-function evictOldestOrbs() {
-  if (orbs.size <= visibleMax) return;
-  // Build a set of keys we must keep: still-upcoming values in the
-  // current sequence (from stepIndex onwards).
-  const pinned = new Set();
-  for (let i = stepIndex; i < sequence.length; i++) {
-    pinned.add(valueKey(sequence[i]));
-  }
-  // Walk insertion order (oldest first), evict if not pinned.
-  for (const [key, orb] of orbs) {
-    if (orbs.size <= visibleMax) break;
-    if (pinned.has(key)) continue;
-    nlGroup.remove(orb.mesh);
-    if (orb.label) {
-      orb.mesh.remove(orb.label);
-      orb.label.material.map?.dispose();
-      orb.label.material.dispose();
-    }
-    orb.mesh.geometry.dispose();
-    orb.mesh.material.dispose();
-    orbs.delete(key);
-  }
-}
-
-/**
- * Update the number line each frame. Returns desired camera target info.
- */
-export function updateNumberLine(dt) {
-  if (!active || playState === 'idle' || playState === 'complete') return null;
-
-  const effectiveDt = dt * userSpeed;
-
-  if (playState === 'traveling') {
-    travelProgress += effectiveDt / travelDuration;
-
-    if (travelProgress >= 1) {
-      travelProgress = 1;
-      operatorBall.position.copy(arcEnd);
-
-      // Mark visited + count hit
-      const targetVal = sequence[stepIndex];
-      markVisited(targetVal);
-      hitCount++;
-
-      // Build math display — stays visible until next collision
-      if (stepIndex < sequence.length - 1) {
-        const val = targetVal;
-        const isEven = val % 2 === 0;
-        const next = sequence[stepIndex + 1];
-        const op = isEven
-          ? `${formatValue(val)} ÷ 2`
-          : `${formatValue(val)} × 3 + 1`;
-        mathDisplay = {
-          value: val,
-          isEven,
-          label: isEven ? 'EVEN' : 'ODD',
-          rule: isEven ? 'n ÷ 2' : '3n + 1',
-          operation: op,
-          result: formatValue(next),
-        };
-      } else {
-        mathDisplay = {
-          value: targetVal, isEven: false,
-          label: 'DONE', rule: '', operation: '', result: '',
-        };
-      }
-
-      playState = 'paused';
-      pauseTimer = PAUSE_DURATION;
-      pauseElapsed = 0;
-      pauseOrbY = arcEnd.y;
-    } else {
-      // Quadratic bezier with smoothstep easing for natural acceleration
-      const raw = travelProgress;
-      const t = raw * raw * (3 - 2 * raw);  // smoothstep
-      const invT = 1 - t;
-      operatorBall.position.set(
-        invT * invT * arcStart.x + 2 * invT * t * arcControl.x + t * t * arcEnd.x,
-        invT * invT * arcStart.y + 2 * invT * t * arcControl.y + t * t * arcEnd.y,
-        invT * invT * arcStart.z + 2 * invT * t * arcControl.z + t * t * arcEnd.z,
-      );
-    }
-  }
-
-  if (playState === 'paused') {
-    pauseTimer -= effectiveDt;
-
-    // No upward bounce — ball sits at the collision point briefly,
-    // then immediately launches toward the next number.
-    // The short PAUSE_DURATION (0.12s) creates a natural "impact dwell"
-    // before the rebound.
-
-    if (pauseTimer <= 0) {
-      stepIndex++;
-
-      if (stepIndex >= sequence.length - 1) {
-        playState = 'complete';
-        return getCameraTarget();
-      }
-
-      // Rebound: launch directly from current position toward next number
-      const to = orbPosition(sequence[stepIndex + 1]);
-      setupArc(operatorBall.position.clone(), to);
-      travelProgress = 0;
-      playState = 'traveling';
-    }
-  }
-
-  return getCameraTarget();
-}
-
-/**
- * Camera: follows the ball from slightly above and behind, shifted
- * right so the shooter + number line stay visible on mobile.
- */
-function getCameraTarget() {
-  const ballPos = operatorBall.position.clone();
-  return {
-    position: new THREE.Vector3(ballPos.x + 0.5, ballPos.y + 1.5, 3.0),
-    lookAt: new THREE.Vector3(ballPos.x + 1.5, ballPos.y, 0),
-  };
-}
-
-// ── Zoom / Navigation Controls ───────────────────────────
-
-export function zoomToExtents(camera, controls) {
-  if (!maxOnLine || (typeof maxOnLine === 'number' && maxOnLine === 0)) return;
-  const endX = orbPosition(maxOnLine).x;
-  const midX = endX * 0.5;
-  const dist = endX * 0.6 + 3;
-  camera.position.set(midX, dist * 0.3, dist);
-  controls.target.set(midX, 0, 0);
-}
-
-export function zoomToNumber(n, camera, controls) {
-  const x = orbPosition(n).x;
-  camera.position.set(x, 2, 5);
-  controls.target.set(x, 0, 0);
-}
-
-export function findLowestUnvisited() {
-  // maxOnLine is a Number for iteration purposes; only matters for small N
-  const cap = typeof maxOnLine === 'number' ? maxOnLine : 100000;
-  for (let i = 2; i <= cap; i++) {
-    if (!allVisited.has(valueKey(i))) return i;
-  }
-  return null;
-}
-
-export function findHighestUnvisited() {
-  const cap = typeof maxOnLine === 'number' ? maxOnLine : 100000;
-  for (let i = cap; i >= 2; i--) {
-    if (!allVisited.has(valueKey(i))) return i;
-  }
-  return null;
-}
-
-// ── Internal helpers ─────────────────────────────────────
-
-function orbPosition(value) {
-  let x;
-  if (scaleMode === 'log') {
-    x = Math.max(0, bigLog10(value)) * LOG_SCALE_UNIT;
-  } else {
-    // Linear scale — for BigInt values that exceed Number range, fall
-    // back to log10 * large multiplier so it still lands on-screen.
-    if (isBig(value) && value > BigInt(Number.MAX_SAFE_INTEGER)) {
-      x = bigLog10(value) * LOG_SCALE_UNIT * 4;  // effectively log mode for huge
-    } else {
-      x = Number(value) * SPACING;
-    }
-  }
-  return new THREE.Vector3(x, LINE_Y, 0);
-}
-
-/**
- * Toggle between linear and log scale. Updates all orb and line positions.
- */
-export function setScaleMode(mode) {
-  if (mode !== 'linear' && mode !== 'log') return;
-  scaleMode = mode;
-
-  // Reposition all existing orbs to their new scale positions
-  for (const orb of orbs.values()) {
-    const pos = orbPosition(orb.value);
-    orb.mesh.position.copy(pos);
-  }
-
-  // Rebuild the line/ticks to match new scale
-  rebuildLine();
-}
-
-export function getScaleMode() { return scaleMode; }
-
-/**
- * Set up a bezier arc from → to.
- * Arc height: max(ARC_MIN_HEIGHT, distance * ARC_HEIGHT_FACTOR).
- * Close numbers get a tall arc relative to distance so the ball visibly rises.
- * Travel time: clamped between TRAVEL_MIN and TRAVEL_MAX.
- */
-function setupArc(from, to) {
-  arcStart.copy(from);
-  arcEnd.copy(to);
-  const dist = from.distanceTo(to);
-
-  // Arc height: minimum ensures close numbers still arc up
-  const height = Math.max(ARC_MIN_HEIGHT, dist * ARC_HEIGHT_FACTOR);
-  const mid = from.clone().add(to).multiplyScalar(0.5);
-  arcControl.set(mid.x, mid.y + height, mid.z);
-
-  // Travel time: proportional to distance, clamped 2s–4s
-  // Short hops take 2s, long travels take up to 4s
-  const maxLineExtent = orbPosition(maxOnLine).x || 1;
-  const rawTime = 2.0 + (dist / maxLineExtent) * 2.0;
-  travelDuration = Math.max(TRAVEL_MIN, Math.min(TRAVEL_MAX, rawTime));
-}
-
-function markVisited(value) {
-  const key = valueKey(value);
-  allVisited.add(key);
-  const orb = orbs.get(key);
-  if (orb && !orb.visited) {
-    orb.visited = true;
-    orb.mesh.material.color.copy(ORB_COLOR_VISITED);
-    orb.mesh.material.emissive.copy(ORB_COLOR_VISITED);
-    orb.mesh.material.emissiveIntensity = 0.2;
-  }
-}
-
-function ensureOrb(value) {
-  const key = valueKey(value);
-  if (orbs.has(key)) return;
-
-  const pos = orbPosition(value);
-  const geo = new THREE.SphereGeometry(ORB_RADIUS, 16, 12);
-  const visited = allVisited.has(key);
-  const col = visited ? ORB_COLOR_VISITED.clone() : ORB_COLOR_DEFAULT.clone();
-  const mat = new THREE.MeshStandardMaterial({
-    color: col,
-    emissive: col.clone(),
-    emissiveIntensity: visited ? 0.2 : 0.15,
-    metalness: 0.2,
-    roughness: 0.6,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.copy(pos);
-  mesh.userData.collatzValue = value;
-  nlGroup.add(mesh);
-
-  const label = makeLabel(value);
-  label.position.set(0, ORB_RADIUS + 0.15, 0);
-  mesh.add(label);
-
-  orbs.set(key, { mesh, label, visited, value });
-
-  // Keep orb count bounded via LRU.
-  if (orbs.size > visibleMax) evictOldestOrbs();
-}
-
-function makeLabel(value) {
-  const text = formatValue(value);
-  const canvas = document.createElement('canvas');
-  const size = 128;
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, size, size);
-  ctx.fillStyle = '#e0e6f0';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const fontSize = Math.max(18, Math.min(48, 48 - text.length * 3));
-  ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
-  ctx.fillText(text, size / 2, size / 2);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(LABEL_SCALE, LABEL_SCALE, 1);
-  sprite.renderOrder = 1;
-  return sprite;
-}
-
-function rebuildLine() {
-  if (lineObj) {
-    nlGroup.remove(lineObj);
-    lineObj.geometry.dispose();
-    lineObj.material.dispose();
-  }
-  if (tickMarks) {
-    nlGroup.remove(tickMarks);
-    tickMarks.geometry.dispose();
-    tickMarks.material.dispose();
-  }
-  for (const sprite of scaleLabels) {
-    nlGroup.remove(sprite);
-    sprite.material.map?.dispose();
-    sprite.material.dispose();
-  }
-  scaleLabels = [];
-
-  // Main axis line: length depends on scale mode
-  const lineEndX = orbPosition(maxOnLine).x + (scaleMode === 'log' ? 1.5 : SPACING);
-  const boxGeo = new THREE.BoxGeometry(lineEndX, 0.06, 0.06);
-  const boxMat = new THREE.MeshBasicMaterial({ color: 0x5577aa, transparent: true, opacity: 0.8 });
-  lineObj = new THREE.Mesh(boxGeo, boxMat);
-  lineObj.position.set(lineEndX / 2, LINE_Y, 0);
-  nlGroup.add(lineObj);
-
-  // Tick marks and scale labels
-  const tickPoints = [];
-
-  // Use log decade as the iteration limit so this works for BigInt too
-  const maxLog10 = bigLog10(typeof maxOnLine === 'number' && maxOnLine > 0 ? maxOnLine : maxOnLine);
-  const numericMax = isBig(maxOnLine) ? Number.MAX_SAFE_INTEGER : maxOnLine;
-
-  if (scaleMode === 'log' || isBig(maxOnLine)) {
-    // Log scale: ticks at 1, 10, 100, 1000, ..., up to ⌈log10(max)⌉
-    const tickSize = 0.35;
-    const maxExp = Math.ceil(maxLog10);
-    for (let exp = 0; exp <= maxExp; exp++) {
-      const val = exp <= 15 ? Math.pow(10, exp) : (10n ** BigInt(exp));
-      const x = orbPosition(val).x;
-      tickPoints.push(new THREE.Vector3(x, LINE_Y - tickSize, 0));
-      tickPoints.push(new THREE.Vector3(x, LINE_Y + tickSize, 0));
-      const labelSprite = makeScaleLabel(val, tickSize);
-      labelSprite.position.set(x, LINE_Y - tickSize * 2.5, 0);
-      nlGroup.add(labelSprite);
-      scaleLabels.push(labelSprite);
-    }
-  } else {
-    // Linear scale: ticks at interval
-    const interval = tickInterval(numericMax);
-    const tickSize = Math.max(0.2, interval * SPACING * 0.1);
-    for (let i = 0; i <= numericMax; i += interval) {
-      const x = i * SPACING;
-      tickPoints.push(new THREE.Vector3(x, LINE_Y - tickSize, 0));
-      tickPoints.push(new THREE.Vector3(x, LINE_Y + tickSize, 0));
-
-      if (i > 0) {
-        const labelSprite = makeScaleLabel(i, tickSize);
-        labelSprite.position.set(x, LINE_Y - tickSize * 2.5, 0);
-        nlGroup.add(labelSprite);
-        scaleLabels.push(labelSprite);
-      }
-    }
-  }
-  if (tickPoints.length > 0) {
-    const tickGeo = new THREE.BufferGeometry().setFromPoints(tickPoints);
-    const tickMat = new THREE.LineBasicMaterial({ color: 0x5577aa, transparent: true, opacity: 0.7 });
-    tickMarks = new THREE.LineSegments(tickGeo, tickMat);
-    nlGroup.add(tickMarks);
-  }
-}
-
-// Scale label: scales with tick interval so it's readable at any zoom
-function makeScaleLabel(value, tickSize) {
-  const text = formatValue(value);
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#889abb';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = 'bold 36px -apple-system, sans-serif';
-  ctx.fillText(text, 128, 32);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
-  const sprite = new THREE.Sprite(mat);
-  // Scale grows with log of tick size so labels stay readable without
-  // filling the screen at large numbers.
-  const labelScale = Math.max(1.0, Math.min(6.0, 1.0 + Math.log2(Math.max(1, tickSize)) * 0.8));
-  sprite.scale.set(labelScale * 2, labelScale * 0.5, 1);
-  sprite.renderOrder = 2;
-  return sprite;
-}
-
-function tickInterval(max) {
-  if (max <= 50) return 5;
-  if (max <= 200) return 10;
-  if (max <= 1000) return 50;
-  if (max <= 10000) return 500;
-  return 5000;
+  if (densityMesh) { nlGroup.remove(densityMesh); densityMesh.geometry.dispose(); densityMesh.material.dispose(); densityMesh = null; }
+  if (densityTexture) { densityTexture.dispose(); densityTexture = null; }
 }

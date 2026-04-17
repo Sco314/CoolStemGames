@@ -21,9 +21,8 @@ import {
 import { INPUT_MAX, RECENT_MAX } from './constants.js';
 import {
   showNumberLine, hideNumberLine, isNumberLineActive, startSequence,
-  getMathDisplay, getPlayState, zoomToExtents, zoomToNumber,
-  findLowestUnvisited, findHighestUnvisited, formatValue,
-  setSpeed, getSpeed, setScaleMode, getScaleMode,
+  getMathDisplay, getPlayState, formatValue,
+  setSpeed, getSpeed,
   clearNumberLine, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
   isDensityMode, skipToEnd, getHitCount,
 } from './numberline.js';
@@ -482,43 +481,7 @@ export function initUI(onSubmit) {
     });
   }
 
-  // ── Number line controls ─────────────────────────────────
-  const nlGotoInput = document.getElementById('nl-goto-input');
-  let gotoVisible = false;
-
-  document.getElementById('nl-extents').addEventListener('click', () => {
-    zoomToExtents(getCamera(), getControls());
-  });
-
-  document.getElementById('nl-goto').addEventListener('click', () => {
-    gotoVisible = !gotoVisible;
-    nlGotoInput.classList.toggle('hidden', !gotoVisible);
-    if (gotoVisible) nlGotoInput.focus();
-  });
-
-  nlGotoInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      const n = parseInt(nlGotoInput.value.trim(), 10);
-      if (n > 0) {
-        zoomToNumber(n, getCamera(), getControls());
-        nlGotoInput.value = '';
-        nlGotoInput.classList.add('hidden');
-        gotoVisible = false;
-      }
-    }
-  });
-
-  document.getElementById('nl-low').addEventListener('click', () => {
-    const low = findLowestUnvisited();
-    if (low) zoomToNumber(low, getCamera(), getControls());
-  });
-
-  document.getElementById('nl-high').addEventListener('click', () => {
-    const high = findHighestUnvisited();
-    if (high) zoomToNumber(high, getCamera(), getControls());
-  });
-
-  // Fast-forward button: cycles through 1x → 2x → 4x → 8x → 1x
+  // ── Speed button (kept for game mode) ─────────────────
   const ffBtn = document.getElementById('nl-ff');
   const FF_SPEEDS = [1, 2, 4, 8];
   let ffIndex = 0;
@@ -527,15 +490,6 @@ export function initUI(onSubmit) {
     const spd = FF_SPEEDS[ffIndex];
     setSpeed(spd);
     ffBtn.textContent = `${spd}x`;
-  });
-
-  // Linear/Log scale toggle
-  const scaleBtn = document.getElementById('nl-scale');
-  scaleBtn.addEventListener('click', () => {
-    const next = getScaleMode() === 'linear' ? 'log' : 'linear';
-    setScaleMode(next);
-    scaleBtn.textContent = next === 'linear' ? 'Linear' : 'Log';
-    setTimeout(() => zoomToExtents(getCamera(), getControls()), 50);
   });
 
   // Skip to End (Number Line density mode only)
