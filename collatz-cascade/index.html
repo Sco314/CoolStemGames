@@ -49,7 +49,15 @@
     <main id="scene-wrap">
       <canvas id="scene"></canvas>
 
-      <!-- Math display + hit counter (number line mode) -->
+      <!-- Game score (persistent, top-left) -->
+      <div id="game-score">
+        <span id="score-value">0</span>
+        <span class="score-label">score</span>
+        <span id="streak-value" class="hidden">0</span>
+        <span id="streak-label" class="score-label hidden">streak</span>
+      </div>
+
+      <!-- Math display + hit counter (during run) -->
       <div id="math-bar" class="hidden">
         <span id="math-label"></span>
         <span id="math-rule"></span>
@@ -59,6 +67,32 @@
           <span id="hit-count">0</span>
           <span class="hit-label">hits</span>
         </span>
+      </div>
+
+      <!-- Prediction panel (shown after number entry) -->
+      <div id="predict-panel" class="hidden">
+        <div class="predict-title">How many steps to reach 1?</div>
+        <div class="predict-number" id="predict-number"></div>
+        <div class="predict-buckets" id="predict-buckets"></div>
+        <button id="btn-launch" class="btn-launch" disabled>Launch!</button>
+      </div>
+
+      <!-- Results panel (shown after run completes) -->
+      <div id="results-panel" class="hidden">
+        <div class="results-tag" id="results-tag"></div>
+        <div class="results-row">
+          <div class="results-stat">
+            <span class="results-stat-value" id="results-actual"></span>
+            <span class="results-stat-label">actual steps</span>
+          </div>
+          <div class="results-stat">
+            <span class="results-stat-value" id="results-guess"></span>
+            <span class="results-stat-label">your guess</span>
+          </div>
+        </div>
+        <div class="results-verdict" id="results-verdict"></div>
+        <div class="results-score" id="results-score"></div>
+        <button id="btn-next" class="btn-next">Next Number</button>
       </div>
 
       <!-- Number line controls -->
@@ -129,8 +163,8 @@
       </div>
 
       <div id="input-area">
-        <input id="num-input" type="text" inputmode="text" placeholder="Try 27 or 27^27" autocomplete="off" />
-        <button id="btn-go">Add</button>
+        <input id="num-input" type="text" inputmode="text" placeholder="Enter a number" autocomplete="off" />
+        <button id="btn-go">Go</button>
         <span class="input-sep"></span>
         <input id="fill-input" type="text" inputmode="numeric" placeholder="Fill 1–N" autocomplete="off" />
         <button id="btn-fill">Fill</button>

@@ -480,3 +480,198 @@ body {
   }
   .nl-btn { padding: 5px 8px; font-size: 10px; }
 }
+
+/* ═══════════════════════════════════════════════════════════ */
+/* ── GAME UI ─────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════ */
+
+/* ── Persistent score (top-left, always visible in game) ── */
+#game-score {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(11,16,32,0.9);
+  backdrop-filter: blur(12px);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 6px 14px;
+  z-index: 10;
+}
+#score-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffd866;
+  line-height: 1;
+}
+#streak-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #4fb06f;
+  line-height: 1;
+}
+.score-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #667799;
+}
+
+/* ── Prediction panel (center overlay) ────────────────── */
+#predict-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(11,16,32,0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  padding: 24px 32px;
+  z-index: 30;
+  text-align: center;
+  min-width: 280px;
+  max-width: 420px;
+}
+#predict-panel.hidden { display: none; }
+.predict-title {
+  font-size: 14px;
+  color: #889abb;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 8px;
+}
+.predict-number {
+  font-size: 36px;
+  font-weight: 700;
+  color: #e0e6f0;
+  margin-bottom: 16px;
+}
+.predict-buckets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.bucket-btn {
+  padding: 8px 14px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  color: #e0e6f0;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.bucket-btn:hover {
+  border-color: rgba(255,216,102,0.5);
+  background: rgba(255,216,102,0.1);
+}
+.bucket-btn.selected {
+  border-color: #ffd866;
+  background: rgba(255,216,102,0.2);
+  color: #ffd866;
+}
+.btn-launch {
+  padding: 10px 32px;
+  border: none;
+  border-radius: 8px;
+  background: #d4a44a;
+  color: #0a0f1e;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-launch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-launch:not(:disabled):hover {
+  background: #ffd866;
+  transform: scale(1.05);
+}
+
+/* ── Results panel (center overlay) ───────────────────── */
+#results-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(11,16,32,0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  padding: 28px 36px;
+  z-index: 30;
+  text-align: center;
+  min-width: 300px;
+  max-width: 440px;
+}
+#results-panel.hidden { display: none; }
+.results-tag {
+  font-size: 13px;
+  color: #889abb;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+}
+.results-row {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-bottom: 16px;
+}
+.results-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.results-stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #e0e6f0;
+  line-height: 1.1;
+}
+.results-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #667799;
+  margin-top: 4px;
+}
+.results-verdict {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.results-verdict.correct { color: #4fb06f; }
+.results-verdict.close   { color: #ffd866; }
+.results-verdict.miss    { color: #ff6b4a; }
+.results-score {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffd866;
+  margin-bottom: 16px;
+}
+.btn-next {
+  padding: 10px 32px;
+  border: none;
+  border-radius: 8px;
+  background: #4a9aff;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-next:hover {
+  background: #6ab4ff;
+  transform: scale(1.05);
+}

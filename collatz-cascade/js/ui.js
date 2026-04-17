@@ -13,6 +13,11 @@ import {
 } from './graph.js';
 import { pulseAnchor } from './animate.js';
 import { autoFrame, flyToNode, recenter, getCamera, getControls } from './camera.js';
+import {
+  getGameState, getTotalScore, getStreak, getBuckets, getSelectedBucket,
+  submitNumber, selectBucket, confirmLaunch, onRunStart, onRunComplete,
+  nextRound, getCurrentNumber,
+} from './game.js';
 import { INPUT_MAX, RECENT_MAX } from './constants.js';
 import {
   showNumberLine, hideNumberLine, isNumberLineActive, startSequence,
@@ -137,7 +142,10 @@ export function initUI(onSubmit) {
       if (isOne) { input.value = ''; return; }
       input.value = '';
       clearError();
-      startSequence(n);
+      // Route through game loop: show prediction UI instead of launching directly
+      if (submitNumber(n)) {
+        showPredictionPanel(n);
+      }
       return;
     }
     if (timeSeriesMode) {
@@ -675,6 +683,107 @@ export function initUI(onSubmit) {
     }
   }
   requestAnimationFrame(updateMathBar);
+
+  // ── Game UI wiring ────────────────────────────────────
+  const predictPanel = document.getElementById('predict-panel');
+  const predictNumber = document.getElementById('predict-number');
+  const predictBucketsEl = document.getElementById('predict-buckets');
+  const btnLaunch = document.getElementById('btn-launch');
+  const resultsPanel = document.getElementById('results-panel');
+  const btnNext = document.getElementById('btn-next');
+  const scoreValueEl = document.getElementById('score-value');
+  const streakValueEl = document.getElementById('streak-value');
+  const streakLabelEl = document.getElementById('streak-label');
+
+  function showPredictionPanel(n) {
+    predictNumber.textContent = fmtValue(n);
+    // Build bucket buttons
+    const buckets = getBuckets();
+    predictBucketsEl.innerHTML = buckets.map((b, i) =>
+      `<button class="bucket-btn" data-idx="${i}">${b.label}</button>`
+    ).join('');
+    // Wire bucket clicks
+    for (const btn of predictBucketsEl.querySelectorAll('.bucket-btn')) {
+      btn.addEventListener('click', () => {
+        for (const b of predictBucketsEl.querySelectorAll('.bucket-btn')) b.classList.remove('selected');
+        btn.classList.add('selected');
+        selectBucket(parseInt(btn.dataset.idx, 10));
+        btnLaunch.disabled = false;
+      });
+    }
+    btnLaunch.disabled = true;
+    predictPanel.classList.remove('hidden');
+  }
+
+  function hidePredictionPanel() {
+    predictPanel.classList.add('hidden');
+  }
+
+  function showResultsPanel(results) {
+    document.getElementById('results-tag').textContent = results.tag;
+    document.getElementById('results-actual').textContent = String(results.actualSteps);
+    document.getElementById('results-guess').textContent = results.guessedBucket.label;
+
+    const verdict = document.getElementById('results-verdict');
+    if (results.isCorrect) {
+      verdict.textContent = 'Correct!';
+      verdict.className = 'results-verdict correct';
+    } else if (results.bucketDistance === 1) {
+      verdict.textContent = 'Close!';
+      verdict.className = 'results-verdict close';
+    } else {
+      verdict.textContent = 'Missed';
+      verdict.className = 'results-verdict miss';
+    }
+
+    document.getElementById('results-score').textContent = `+${results.roundScore} points`;
+    resultsPanel.classList.remove('hidden');
+    updateScoreDisplay();
+  }
+
+  function hideResultsPanel() {
+    resultsPanel.classList.add('hidden');
+  }
+
+  function updateScoreDisplay() {
+    scoreValueEl.textContent = String(getTotalScore());
+    const s = getStreak();
+    if (s > 1) {
+      streakValueEl.textContent = `${s}×`;
+      streakValueEl.classList.remove('hidden');
+      streakLabelEl.classList.remove('hidden');
+    } else {
+      streakValueEl.classList.add('hidden');
+      streakLabelEl.classList.add('hidden');
+    }
+  }
+
+  // Launch button
+  btnLaunch.addEventListener('click', () => {
+    const n = confirmLaunch();
+    if (n == null) return;
+    hidePredictionPanel();
+    onRunStart();
+    startSequence(n);
+  });
+
+  // Next button (after results)
+  btnNext.addEventListener('click', () => {
+    hideResultsPanel();
+    nextRound();
+    input.focus();
+  });
+
+  // Poll for run completion — when numberline playState becomes
+  // 'complete' and game state is 'running', trigger results.
+  function checkRunCompletion() {
+    requestAnimationFrame(checkRunCompletion);
+    if (getGameState() === 'running' && getPlayState() === 'complete') {
+      const results = onRunComplete();
+      if (results) showResultsPanel(results);
+    }
+  }
+  requestAnimationFrame(checkRunCompletion);
 
   // ── Default mode: Number Line ─────────────────────────
   enterNumberLine();
