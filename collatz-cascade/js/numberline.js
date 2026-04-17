@@ -23,6 +23,7 @@ import {
   makeRunHue,
   resolveOrbRunStyle,
 } from './orbrun-color.js';
+import { createOrbRunCameraRig } from './orbRunCamera.js';
 
 // ── Path layout constants ───────────────────────────────
 const STEP_SPACING = 0.5;        // world units per step (X axis)
@@ -45,11 +46,7 @@ const MILESTONE_WEIGHT = 2.0;  // milestones take 2× normal time
 const TERMINAL_WEIGHT = 3.0;   // final 4→2→1 takes 3× normal
 
 // Camera offsets
-const CHASE_OFFSET = new THREE.Vector3(-1.5, 1.5, 3.0);
-const CHASE_LOOK_AHEAD_STEPS = 4;
 const TACTICAL_OFFSET = new THREE.Vector3(0, 2.5, 4.0);
-const OVERVIEW_HEIGHT = 8;
-const OVERVIEW_DIST = 12;
 
 // Orb tier distances (in steps from ball)
 const ACTIVE_RANGE = 5;    // full size + label + glow
@@ -104,6 +101,7 @@ let terminalFlashTimer = 0;
 let terminalFlashDone = false;
 
 // Camera blending
+const orbRunCameraRig = createOrbRunCameraRig();
 let cameraMode = 'overview'; // overview | chase | tactical
 let tacticalWeight = 0;      // 0..1, ramps up on milestones
 let tacticalDecay = 0;
@@ -416,6 +414,12 @@ function launchSequence(n, values) {
   terminalFlashTimer = 0;
   terminalFlashDone = false;
 
+  orbRunCameraRig.reset({
+    pathPositions,
+    sequence,
+    shooterPos: new THREE.Vector3(SHOOTER_X, SHOOTER_Y, 0),
+  });
+
   // Reset playback
   currentStepFloat = -1;  // start before step 0 (at shooter)
   hitCount = 0;
@@ -512,7 +516,7 @@ export function updateNumberLine(dt) {
       playState = 'traveling';
       cameraMode = 'overview';
     }
-    return getCameraTarget();
+    return getCameraTarget(dt);
   }
 
   // ── TRAVELING: ball moves along the path ───────────────
@@ -616,7 +620,7 @@ export function updateNumberLine(dt) {
   // Update orb tiers
   updateOrbTiers(currentStep, dt);
 
-  return getCameraTarget();
+  return getCameraTarget(dt);
 }
 
 // ── Orb tier management ─────────────────────────────────
@@ -684,49 +688,28 @@ function updateOrbTiers(currentStep, dt = 0) {
 }
 
 // ── Camera system ───────────────────────────────────────
-function getCameraTarget() {
+function getCameraTarget(dt = 1 / 60) {
   const ballPos = operatorBall.position.clone();
 
-  // Chase camera: behind ball, looking ahead on path
-  const chasePos = ballPos.clone().add(CHASE_OFFSET);
-  let chaseLookAt = ballPos.clone();
-  if (pathSpline && totalSteps > 1 && currentStepFloat >= 0) {
-    const lookAheadStep = Math.min(currentStepFloat + CHASE_LOOK_AHEAD_STEPS, totalSteps - 1);
-    const lookT = lookAheadStep / (totalSteps - 1);
-    chaseLookAt = pathSpline.getPoint(Math.min(1, lookT));
+  // Keep a mild tactical influence for milestone beats, but the orb-run
+  // helper owns the core framing (intro/follow/composition/terminal hold).
+  const tactical = Math.max(0, Math.min(1, tacticalWeight));
+  const target = orbRunCameraRig.getTarget({
+    dt,
+    ballPos,
+    currentStepFloat,
+    totalSteps,
+    pathSpline,
+    playState,
+    tacticalWeight: tactical,
+  });
+
+  // Legacy tactical offset retained as a subtle lift during short bumps.
+  if (tactical > 0 && playState !== 'complete') {
+    target.position.lerp(ballPos.clone().add(TACTICAL_OFFSET), tactical * 0.15);
   }
 
-  // Tactical camera: overhead, looking at ball
-  const tactPos = ballPos.clone().add(TACTICAL_OFFSET);
-  const tactLookAt = ballPos.clone();
-
-  // Blend chase ↔ tactical
-  const pos = chasePos.clone().lerp(tactPos, tacticalWeight);
-  const lookAt = chaseLookAt.clone().lerp(tactLookAt, tacticalWeight);
-
-  // Override: overview at launch (before step 0) and at finish
-  if (currentStepFloat < 0) {
-    // Launch overview: show shooter + first few steps
-    const overviewTarget = pathPositions.length > 3 ? pathPositions[3] : new THREE.Vector3(2, 0, 0);
-    return {
-      position: new THREE.Vector3(SHOOTER_X, 2.0, 4.0),
-      lookAt: overviewTarget,
-    };
-  }
-
-  if (playState === 'complete' && pathPositions.length > 0) {
-    // Finish overview: pull back to show the full path
-    const first = pathPositions[0];
-    const last = pathPositions[pathPositions.length - 1];
-    const center = first.clone().add(last).multiplyScalar(0.5);
-    const span = last.x - first.x;
-    return {
-      position: new THREE.Vector3(center.x, center.y + Math.max(3, span * 0.3), Math.max(5, span * 0.5)),
-      lookAt: center,
-    };
-  }
-
-  return { position: pos, lookAt };
+  return target;
 }
 
 // ── Density band (for huge sequences) ───────────────────
