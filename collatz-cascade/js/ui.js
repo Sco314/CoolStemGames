@@ -275,6 +275,13 @@ export function initUI(onSubmit) {
 
   btnRecenter.addEventListener('click', () => recenter());
 
+  // Settings gear: toggle mode selector visibility
+  const btnSettings = document.getElementById('btn-settings');
+  const modeSelector = document.getElementById('mode-selector');
+  btnSettings.addEventListener('click', () => {
+    modeSelector.classList.toggle('hidden');
+  });
+
   // Mode selector
   const modeBtns = document.querySelectorAll('.mode-btn');
   const stoppingSubs = document.getElementById('stopping-subs');
@@ -425,6 +432,8 @@ export function initUI(onSubmit) {
     btn.addEventListener('click', () => {
       for (const b of modeBtns) b.classList.remove('active');
       btn.classList.add('active');
+      // Auto-hide mode selector after selection
+      modeSelector.classList.add('hidden');
 
       const mode = btn.dataset.mode;
       if (mode === 'numberline') {

@@ -22,10 +22,12 @@
     <header id="top-bar">
       <a href="/" class="back-link">&larr; CoolStemGames</a>
       <span class="app-title">Collatz Cascade</span>
+      <button id="btn-settings" class="icon-btn" title="Visualization modes">&#9881;</button>
       <button id="btn-recenter" class="icon-btn" title="Recenter camera">&#8634;</button>
     </header>
 
-    <nav id="mode-selector">
+    <!-- Mode selector: hidden by default, revealed by gear button -->
+    <nav id="mode-selector" class="hidden">
       <button class="mode-btn" data-mode="timeseries">Time Series</button>
       <button class="mode-btn" data-mode="flatchart">Flat Chart</button>
       <button class="mode-btn" data-mode="spiral">Spiral</button>
