@@ -351,12 +351,12 @@ export function initUI(onSubmit) {
     fillInput.classList.add('hidden');
     btnFill.classList.add('hidden');
     input.placeholder = 'Enter number';
-    // Camera: angled view from below-front, plunger knob visible,
-    // number line recedes up and to the right (matching screenshot 3)
+    // Camera: slightly above and in front, looking down the line
+    // at ~30° so the plunger is lower-left and orbs recede upper-right
     const cam = getCamera();
     const ctrl = getControls();
-    cam.position.set(-0.8, -0.6, 2.8);
-    ctrl.target.set(0.3, 0.3, 0);
+    cam.position.set(-0.3, 1.8, 2.5);
+    ctrl.target.set(0.4, 0, 0);
   }
 
   function enterTimeSeries() {
