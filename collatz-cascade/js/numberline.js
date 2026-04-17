@@ -13,8 +13,8 @@ import { scheduleBatch } from './scheduler.js';
 import { computeSequenceAsync } from './collatz-client.js';
 
 // ── Memory ceilings ──────────────────────────────────────
-export const MAX_ORBS = 5000;
-let visibleMax = 250;
+export const MAX_ORBS = Infinity;
+let visibleMax = Infinity;
 
 // Sequences longer than this auto-switch to density band rendering
 const DENSITY_THRESHOLD = 2000;
@@ -46,7 +46,7 @@ const EXTRA_CYCLES = 2;          // repeat 4→2→1 this many times
 const BOUNCE_HEIGHT = 0.15;      // tiny impact rebound
 
 // Pinball shooter position (just left of the number line origin)
-const SHOOTER_X = -1.5;
+const SHOOTER_X = -0.6;
 const SHOOTER_Y = LINE_Y;
 
 // ── State ────────────────────────────────────────────────
@@ -131,11 +131,11 @@ export function initNumberLine(scene) {
   // Pinball shooter: a small housing that the ball launches from
   const shooterGeo = new THREE.BoxGeometry(0.6, 0.35, 0.35);
   const shooterMat = new THREE.MeshStandardMaterial({
-    color: 0x334466,
-    emissive: 0x1a2a44,
-    emissiveIntensity: 0.3,
-    metalness: 0.6,
-    roughness: 0.3,
+    color: 0x6688aa,
+    emissive: 0x445566,
+    emissiveIntensity: 0.4,
+    metalness: 0.4,
+    roughness: 0.35,
   });
   shooterMesh = new THREE.Mesh(shooterGeo, shooterMat);
   shooterMesh.position.set(SHOOTER_X, SHOOTER_Y, 0);
@@ -160,6 +160,15 @@ export function initNumberLine(scene) {
 export function showNumberLine() {
   if (nlGroup) nlGroup.visible = true;
   active = true;
+  // Pre-load orbs 0, 1, 2 so the number line has visible reference
+  // points on first load (before the user enters a number).
+  if (orbs.size === 0) {
+    maxOnLine = 2;
+    rebuildLine();
+    ensureOrb(0);
+    ensureOrb(1);
+    ensureOrb(2);
+  }
 }
 
 export function hideNumberLine() {

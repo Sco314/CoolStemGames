@@ -245,34 +245,34 @@ body {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  gap: 14px;
   background: rgba(11,16,32,0.92);
   backdrop-filter: blur(14px);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 10px;
-  padding: 8px 16px;
+  padding: 10px 20px;
   white-space: nowrap;
   max-width: calc(100% - 16px);
   z-index: 10;
 }
 #math-bar > * { white-space: nowrap; }
 #math-label {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
 }
 #math-label.even { color: #4a9aff; }
 #math-label.odd  { color: #ff6b4a; }
-#math-rule { font-size: 11px; color: #667799; }
+#math-rule { font-size: 13px; color: #667799; }
 #math-operation {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   color: #e0e6f0;
 }
 #math-result {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
   color: #ffd866;
 }
@@ -347,27 +347,21 @@ body {
 
 /* ── Recent Panel (overlay, top-right of scene) ───────── */
 /* ── Hit counter (number line mode) ───────────────────── */
-/* ── Hit counter (number line mode, top-right below recent panel) ── */
+/* ── Hit counter (inline inside math-bar) ──────────────── */
 #hit-counter {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(11,16,32,0.9);
-  backdrop-filter: blur(12px);
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.08);
-  padding: 6px 12px;
-  z-index: 20;
-  text-align: center;
-  pointer-events: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin-left: 8px;
+  padding-left: 14px;
+  border-left: 1px solid rgba(255,255,255,0.15);
 }
 #hit-counter.hidden { display: none; }
 #hit-count {
-  font-size: 24px;
+  font-size: 32px;
   font-weight: 700;
   color: #ffd866;
-  display: block;
-  line-height: 1.1;
+  line-height: 1;
 }
 .hit-label {
   font-size: 9px;

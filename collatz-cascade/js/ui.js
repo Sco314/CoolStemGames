@@ -213,11 +213,6 @@ export function initUI(onSubmit) {
     fillInput.value = '';
     clearFillError();
 
-    if (numberLineMode) {
-      showFillError('Fill not supported in Number Line.');
-      return;
-    }
-
     btnFill.disabled = true;
     btnFill.textContent = '0%';
     legend.classList.remove('hidden');
@@ -312,12 +307,12 @@ export function initUI(onSubmit) {
     if (numberLineMode) {
       numberLineMode = false;
       hideNumberLine();
-      // Full dispose on mode-switch away — keeps VRAM from accumulating
-      // across Graph → NumberLine → Spiral cycles.
       clearNumberLine();
       nlControls.classList.add('hidden');
-      nlSliderWrap.classList.add('hidden');
       mathBar.classList.add('hidden');
+      // Restore fill controls hidden by enterNumberLine
+      fillInput.classList.remove('hidden');
+      btnFill.classList.remove('hidden');
     }
     if (timeSeriesMode) {
       timeSeriesMode = false;
@@ -352,13 +347,15 @@ export function initUI(onSubmit) {
     showNumberLine();
     if (graphGroup) graphGroup.visible = false;
     nlControls.classList.remove('hidden');
-    nlSliderWrap.classList.remove('hidden');
+    // Hide fill + orbs slider — not used in gamified number line
+    fillInput.classList.add('hidden');
+    btnFill.classList.add('hidden');
     input.placeholder = 'Enter number';
-    // Frame the camera on the shooter + first few positions
+    // Camera: plunger faces the user, number line extends right
     const cam = getCamera();
     const ctrl = getControls();
-    cam.position.set(0.5, 1.5, 3.0);
-    ctrl.target.set(1.5, 0, 0);
+    cam.position.set(-0.5, 1.0, 3.5);
+    ctrl.target.set(0.5, 0, 0);
   }
 
   function enterTimeSeries() {
