@@ -21,7 +21,7 @@ import {
 } from './game.js';
 import { INPUT_MAX, RECENT_MAX } from './constants.js';
 import {
-  showNumberLine, hideNumberLine, isNumberLineActive, startSequence,
+  showNumberLine, hideNumberLine, startSequence,
   getMathDisplay, getPlayState, formatValue,
   setSpeed, getSpeed,
   clearNumberLine, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
@@ -337,52 +337,58 @@ export function initUI(onSubmit) {
   const mathBar = document.getElementById('math-bar');
   const graphGroup = getGroup();
 
+  function exitOrbRun() {
+    if (!numberLineMode) return;
+    numberLineMode = false;
+    hideNumberLine();
+    clearNumberLine();
+    nlControls.classList.add('hidden');
+    mathBar.classList.add('hidden');
+    // Restore fill controls hidden by enterOrbRun
+    fillInput.classList.remove('hidden');
+    btnFill.classList.remove('hidden');
+  }
+
   // Exit all special modes, return to graph
   function exitAllSpecialModes() {
-    if (numberLineMode) {
-      numberLineMode = false;
-      hideNumberLine();
-      clearNumberLine();
-      nlControls.classList.add('hidden');
-      mathBar.classList.add('hidden');
-      // Restore fill controls hidden by enterNumberLine
-      fillInput.classList.remove('hidden');
-      btnFill.classList.remove('hidden');
-    }
+    // Stop any background fill work when changing modes.
+    cancelAll();
+    abortFill();
+    btnFill.disabled = false;
+    btnFill.textContent = 'Fill';
+
+    exitOrbRun();
     if (timeSeriesMode) {
       timeSeriesMode = false;
       hideTimeSeries();
-      chartControls.classList.add('hidden');
-      tsSliderWrap.classList.add('hidden');
-      chartFlipBtn.classList.add('hidden');
     }
     if (spiralMode) {
       spiralMode = false;
       hideSpiral();
-      chartControls.classList.add('hidden');
-      spiralSliderWrap.classList.add('hidden');
     }
     if (flatChartMode) {
       flatChartMode = false;
       hideFlatChart();
-      abortFill();
-      chartControls.classList.add('hidden');
-      chartFlipBtn.classList.add('hidden');
-      heatmapToggleBtn.classList.add('hidden');
-      refitBtn.classList.add('hidden');
     }
+    chartControls.classList.add('hidden');
+    tsSliderWrap.classList.add('hidden');
+    spiralSliderWrap.classList.add('hidden');
     graphSliderWrap.classList.add('hidden');
+    nlSliderWrap.classList.add('hidden');
+    chartFlipBtn.classList.add('hidden');
+    heatmapToggleBtn.classList.add('hidden');
+    refitBtn.classList.add('hidden');
     if (graphGroup) graphGroup.visible = true;
     input.placeholder = 'Try 27';
   }
 
-  function enterNumberLine() {
+  function enterOrbRun() {
     exitAllSpecialModes();
     numberLineMode = true;
     showNumberLine();
     if (graphGroup) graphGroup.visible = false;
     nlControls.classList.remove('hidden');
-    // Hide fill + orbs slider — not used in gamified number line
+    // Hide fill + orbs slider — not used in Orb Run
     fillInput.classList.add('hidden');
     btnFill.classList.add('hidden');
     input.placeholder = 'Enter number';
@@ -464,9 +470,9 @@ export function initUI(onSubmit) {
       modeSelector.classList.add('hidden');
 
       const mode = btn.dataset.mode;
-      if (mode === 'numberline') {
+      if (mode === 'orbrun' || mode === 'numberline') {
         stoppingSubs.classList.add('hidden');
-        enterNumberLine();
+        enterOrbRun();
       } else if (mode === 'timeseries') {
         stoppingSubs.classList.add('hidden');
         enterTimeSeries();
@@ -936,7 +942,7 @@ export function initUI(onSubmit) {
     if (!modeSelector.classList.contains('hidden')) { modeSelector.classList.add('hidden'); return; }
   });
 
-  // Poll for run completion — when numberline playState becomes
+  // Poll for run completion — when Orb Run playState becomes
   // 'complete' and game state is 'running', trigger results.
   function checkRunCompletion() {
     requestAnimationFrame(checkRunCompletion);
@@ -947,8 +953,8 @@ export function initUI(onSubmit) {
   }
   requestAnimationFrame(checkRunCompletion);
 
-  // ── Default mode: Number Line ─────────────────────────
-  enterNumberLine();
+  // ── Default mode: Orb Run ─────────────────────────────
+  enterOrbRun();
 }
 
 let tooltipScreenPos = { x: 0, y: 0 };

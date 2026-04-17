@@ -117,6 +117,7 @@ let densityMesh = null;
 
 // ── Exports ─────────────────────────────────────────────
 export function isNumberLineActive() { return active; }
+export function isOrbRunActive() { return active; }
 export function getMathDisplay() { return mathDisplay; }
 export function getPlayState() { return playState; }
 export function setSpeed(mult) { userSpeed = mult; }
@@ -125,6 +126,7 @@ export function isDensityMode() { return densityMode; }
 export function getHitCount() { return hitCount; }
 export function getMilestoneCallout() { return milestoneCallout; }
 export function formatValue(n) { return fmtValue(n); }
+export function updateOrbRun(dt) { return updateNumberLine(dt); }
 // Legacy exports (no-ops, kept for import compatibility)
 export const MAX_ORBS = Infinity;
 export function setOrbVisibleMax() {}

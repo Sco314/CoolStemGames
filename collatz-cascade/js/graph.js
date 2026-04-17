@@ -43,7 +43,7 @@ const recentNodes = [];  // [value, value, ...] — most recent at end
 let currentMode = 'particles';
 const MODE_TRANSITION_SPEED = 0.04;  // lerp factor per frame toward targets
 
-export const MODES = ['particles', 'value', 'parity', 'stopping', 'stopping-value', 'stopping-parity', 'stopping-tree', 'numberline'];
+export const MODES = ['particles', 'value', 'parity', 'stopping', 'stopping-value', 'stopping-parity', 'stopping-tree', 'orbrun'];
 
 export function getMode() { return currentMode; }
 

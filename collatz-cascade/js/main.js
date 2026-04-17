@@ -7,7 +7,7 @@ import { initGraph, layoutStep, updateAnchorPulse, isSettled, getGroup } from '.
 import { updateAnimations, hasActiveAnimations, addNumber } from './animate.js';
 import { initCamera, updateCamera, getCamera, getControls, trackAutoFrame } from './camera.js';
 import { initUI, updateTooltip } from './ui.js';
-import { initNumberLine, updateNumberLine, isNumberLineActive } from './numberline.js';
+import { initNumberLine, updateOrbRun, isOrbRunActive } from './numberline.js';
 import { initTimeSeries, updateTimeSeries, isTimeSeriesActive } from './timeseries.js';
 import { initSpiral, updateSpiral, isSpiralActive } from './spiral.js';
 import { initFlatChart, updateFlatChart, isFlatChartActive } from './flatchart.js';
@@ -75,9 +75,9 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const now = performance.now();
 
-  if (isNumberLineActive()) {
+  if (isOrbRunActive()) {
     // Number line mode: update playback and follow camera
-    const camTarget = updateNumberLine(dt);
+    const camTarget = updateOrbRun(dt);
     if (camTarget) {
       camera.position.lerp(camTarget.position, 0.12);
       controls.target.lerp(camTarget.lookAt, 0.12);
