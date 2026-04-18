@@ -353,7 +353,10 @@ function configureHop(nextStep) {
   const start = getStepPosition(hopFromStep);
   const end = getStepPosition(hopToStep);
   const dist = start.distanceTo(end);
-  hopApproachDuration = clamp(APPROACH_BASE + dist * APPROACH_K, APPROACH_MIN, APPROACH_MAX);
+  const rawApproach = APPROACH_BASE + dist * APPROACH_K;
+  const imp = importance[hopToStep] ?? 1;
+  const pacingScale = clamp(baseTimePerStep / 0.4, 0.35, 1.75);
+  hopApproachDuration = clamp(rawApproach * imp * pacingScale, APPROACH_MIN, APPROACH_MAX * imp * pacingScale);
   hopImpactDuration = midpoint(IMPACT_MIN, IMPACT_MAX);
   const growthBias = importance[hopToStep] >= MILESTONE_WEIGHT ? 1 : 0;
   hopGrowthDuration = GROWTH_MIN + (GROWTH_MAX - GROWTH_MIN) * growthBias;
@@ -550,7 +553,14 @@ export function updateNumberLine(dt) {
     return null;
   }
 
-  stateElapsed += clampedDt;
+  const speedScaledState =
+    playState === 'hop_approach' ||
+    playState === 'hop_impact' ||
+    playState === 'hop_grow' ||
+    playState === 'hop_launch' ||
+    playState === 'terminal_mark';
+  const phaseDt = speedScaledState ? clampedDt * userSpeed : clampedDt;
+  stateElapsed += phaseDt;
 
   // Milestone callout timer
   if (milestoneCallout) {
