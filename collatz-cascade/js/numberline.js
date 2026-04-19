@@ -3,6 +3,13 @@
  *
  * Design doc: Orb-run controller state machine
  * ------------------------------------------------------------
+ * NOTE (Option B, per PR #40 / PR #41): the phase owner going forward
+ * is orbrun-controller.js. This inline state machine is a transitional
+ * form kept only while #41's controller lands; once both PRs are merged
+ * numberline.js should consume orbRunController.update(dt) and act as a
+ * renderer/adapter instead of hosting phase transitions inline. Do not
+ * add new phase logic here — add it to orbrun-controller.js.
+ *
  * States:
  * - idle: no active run.
  * - building: sequence/path prep.
