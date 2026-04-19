@@ -78,9 +78,10 @@ const ACTIVE_RANGE = 5;    // full size + label + glow
 const VISIBLE_RANGE = 25;  // visible but small, no label
 
 // Colors
+// ORB_COLOR_FUTURE is the fallback hue used when no per-run hue is set.
+// Per-orb appearance is otherwise driven entirely by resolveOrbRunStyle()
+// via getOrbStyle() — see the "Orb semantic/style contract" section.
 const ORB_COLOR_FUTURE = new THREE.Color(0.3, 0.35, 0.5);
-const ORB_COLOR_VISITED = new THREE.Color(0.2, 0.45, 0.9);
-const ORB_COLOR_ACTIVE = new THREE.Color(1.0, 0.85, 0.3);
 const TRAIL_COLOR_BRIGHT = 0x4a9aff;
 const TRAIL_COLOR_FAINT = 0x223355;
 
@@ -291,13 +292,16 @@ export function initNumberLine(scene) {
 
   const q = getEffectiveQuality();
   orbGeo = new THREE.SphereGeometry(ORB_RADIUS, q.orbSegments, q.orbRings);
+  // Instanced LOD uses per-instance color (setColorAt) as the single semantic
+  // channel — keep the base material white-on-white so instanceColor fully
+  // drives the rendered hue/intensity. See getOrbInstanceColor().
   orbMatFuture = new THREE.MeshStandardMaterial({
-    color: ORB_COLOR_FUTURE, emissive: ORB_COLOR_FUTURE, emissiveIntensity: 0.08,
-    metalness: 0.2, roughness: 0.6, transparent: true, opacity: 0.2,
+    color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.15,
+    metalness: 0.2, roughness: 0.6, transparent: true, opacity: 0.35,
   });
   orbMatVisited = new THREE.MeshStandardMaterial({
-    color: ORB_COLOR_VISITED, emissive: ORB_COLOR_VISITED, emissiveIntensity: 0.2,
-    metalness: 0.2, roughness: 0.6, transparent: true, opacity: 0.45,
+    color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.25,
+    metalness: 0.2, roughness: 0.6, transparent: true, opacity: 0.6,
   });
 }
 
@@ -514,6 +518,10 @@ async function buildPath(seq) {
   const futureCap = Math.min(pathPositions.length, MAX_ORBS);
   futureInstanced = new THREE.InstancedMesh(orbGeo, orbMatFuture, futureCap);
   visitedInstanced = new THREE.InstancedMesh(orbGeo, orbMatVisited, futureCap);
+  // Allocate the instanceColor attribute up-front so per-instance coloring
+  // (driven by getOrbInstanceColor) is available from frame 0.
+  futureInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(futureCap * 3), 3);
+  visitedInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(futureCap * 3), 3);
   futureInstanced.count = 0;
   visitedInstanced.count = 0;
   nlGroup.add(futureInstanced);
@@ -863,12 +871,8 @@ export function updateNumberLine(dt) {
 function activateOrb(orb) {
   orb.activated = true;
   orb.activationMix = 0;
-  if (orb.mesh) {
-    orb.mesh.material.color.copy(ORB_COLOR_FUTURE);
-    orb.mesh.material.emissive.copy(ORB_COLOR_FUTURE);
-    orb.mesh.material.emissiveIntensity = 0.25;
-    orb.mesh.material.opacity = 1.0;
-  }
+  // Appearance is applied uniformly each frame by updateOrbTiers via the
+  // shared semantic contract (getOrbStyle). No per-representation write here.
 }
 
 function markTerminalLoopOnce() {
@@ -878,6 +882,52 @@ function markTerminalLoopOnce() {
     terminalFlashDone = true;
     terminalFlashTimer = 0.55;
   }
+}
+
+// ── Orb semantic/style contract ─────────────────────────
+// Single source of truth for per-orb appearance, renderer-agnostic.
+// Both the active-range mesh path and the instanced (dormant) path consume
+// the same style so an orb's run hue, repeat/terminal-loop identity, and
+// terminal flash emphasis stay consistent as the orb crosses LOD tiers.
+//   - resolveOrbRunStyle(...) owns hue + activation mapping.
+//   - terminalFlashTimer is the one broadcast channel for 4→2→1 emphasis;
+//     tier adapters decide intensity but never skip it.
+function isTerminalLoopValue(v) {
+  return v === 4 || v === 4n || v === 2 || v === 2n || v === 1 || v === 1n;
+}
+
+function computeTerminalFlashBoost() {
+  if (terminalFlashTimer <= 0) return 0;
+  return Math.sin(((0.55 - terminalFlashTimer) / 0.55) * Math.PI) * 0.7;
+}
+
+function getOrbStyle(orb, currentStep) {
+  const style = resolveOrbRunStyle({
+    stepIdx: orb.stepIdx,
+    activated: orb.activated,
+    isCurrentStep: orb.stepIdx === currentStep,
+    runColor: orbRunHue || ORB_COLOR_FUTURE,
+    registry: orbRunRegistry || { repeatSteps: new Set(), terminalLoopSteps: new Set() },
+    terminalLoopMarked,
+    activationMix: orb.activationMix || 0,
+  });
+  const flashBoost = isTerminalLoopValue(orb.value) ? computeTerminalFlashBoost() : 0;
+  return { ...style, flashBoost };
+}
+
+// Pre-allocated scratch so the instanced path does not churn THREE.Color.
+const _instanceColorScratch = new THREE.Color();
+
+// Bake semantic color + emissive intensity + flash boost into a single RGB
+// color for the instanced LOD path. Instanced MeshStandardMaterial cannot
+// express per-instance emissive without a custom shader, so we fold the
+// style's emissiveIntensity and flashBoost into brightness on the diffuse
+// channel. Visual parity with the mesh path is approximate but coherent.
+function getOrbInstanceColor(style, out) {
+  const target = out || _instanceColorScratch;
+  const brightness = 1 + (style.emissiveIntensity || 0) * 0.4 + (style.flashBoost || 0) * 0.6;
+  target.copy(style.color).multiplyScalar(Math.min(2.5, brightness));
+  return target;
 }
 
 function ensureActiveMesh(orb) {
@@ -922,6 +972,7 @@ function updateOrbTiers(currentStep, dt = 0) {
   const maxActiveMeshes = Math.max(6, Math.min(orbVisibleMax, q.maxVisibleOrbs));
   const maxLabels = q.maxLabels;
   const scratch = new THREE.Object3D();
+  const instColor = new THREE.Color();
   let activeCount = 0;
   let labelCount = 0;
   let futureCount = 0;
@@ -933,6 +984,10 @@ function updateOrbTiers(currentStep, dt = 0) {
     if (orb.activated) {
       orb.activationMix = Math.min(1, (orb.activationMix || 0) + dt * 2.4);
     }
+
+    // Single semantic style, consumed by both LOD paths below.
+    const style = getOrbStyle(orb, currentStep);
+
     const wantActive = dist <= ACTIVE_RANGE && activeCount < maxActiveMeshes;
     if (wantActive) {
       ensureActiveMesh(orb);
@@ -941,44 +996,33 @@ function updateOrbTiers(currentStep, dt = 0) {
       orb.mesh.position.copy(orb.pos);
       orb.label.visible = labelCount < maxLabels;
       if (orb.label.visible) labelCount++;
-      orb.mesh.material.opacity = 1.0;
 
-      const style = resolveOrbRunStyle({
-        stepIdx: orb.stepIdx,
-        activated: orb.activated,
-        isCurrentStep: orb.stepIdx === currentStep,
-        runColor: orbRunHue || ORB_COLOR_FUTURE,
-        registry: orbRunRegistry || { repeatSteps: new Set(), terminalLoopSteps: new Set() },
-        terminalLoopMarked,
-        activationMix: orb.activationMix || 0,
-      });
-      let emissiveBoost = 0;
-      if (terminalFlashTimer > 0 && (orb.value === 4 || orb.value === 4n || orb.value === 2 || orb.value === 2n || orb.value === 1 || orb.value === 1n)) {
-        emissiveBoost = Math.sin(((0.55 - terminalFlashTimer) / 0.55) * Math.PI) * 0.7;
-      }
+      // Mesh LOD adapter: full material control (color, emissive, flashBoost).
       orb.mesh.material.color.copy(style.color);
       orb.mesh.material.emissive.copy(style.emissive);
-      orb.mesh.material.emissiveIntensity = style.emissiveIntensity + emissiveBoost;
+      orb.mesh.material.emissiveIntensity = style.emissiveIntensity + style.flashBoost;
+      orb.mesh.material.opacity = style.opacity ?? 1.0;
       activeCount++;
-    } else if (dist <= VISIBLE_RANGE) {
-      releaseActiveMesh(orb);
-      scratch.position.copy(orb.pos);
-      scratch.scale.setScalar(0.6);
-      scratch.updateMatrix();
-      if (orb.activated) {
-        visitedInstanced.setMatrixAt(visitedCount++, scratch.matrix);
-      } else {
-        futureInstanced.setMatrixAt(futureCount++, scratch.matrix);
-      }
     } else {
       releaseActiveMesh(orb);
+      const tierScale = dist <= VISIBLE_RANGE ? 0.6 : 0.3;
       scratch.position.copy(orb.pos);
-      scratch.scale.setScalar(0.3);
+      scratch.scale.setScalar(tierScale);
       scratch.updateMatrix();
+
+      // Instanced LOD adapter: per-instance color encodes run hue, loop
+      // identity, activation, and terminal flash. Same semantic source as
+      // the mesh path — brightness is folded in since the standard material
+      // can't express per-instance emissive.
+      getOrbInstanceColor(style, instColor);
       if (orb.activated) {
-        visitedInstanced.setMatrixAt(visitedCount++, scratch.matrix);
+        visitedInstanced.setMatrixAt(visitedCount, scratch.matrix);
+        visitedInstanced.setColorAt(visitedCount, instColor);
+        visitedCount++;
       } else {
-        futureInstanced.setMatrixAt(futureCount++, scratch.matrix);
+        futureInstanced.setMatrixAt(futureCount, scratch.matrix);
+        futureInstanced.setColorAt(futureCount, instColor);
+        futureCount++;
       }
     }
   }
@@ -986,6 +1030,8 @@ function updateOrbTiers(currentStep, dt = 0) {
   visitedInstanced.count = visitedCount;
   futureInstanced.instanceMatrix.needsUpdate = true;
   visitedInstanced.instanceMatrix.needsUpdate = true;
+  if (futureInstanced.instanceColor) futureInstanced.instanceColor.needsUpdate = true;
+  if (visitedInstanced.instanceColor) visitedInstanced.instanceColor.needsUpdate = true;
 }
 
 // ── Camera system ───────────────────────────────────────
