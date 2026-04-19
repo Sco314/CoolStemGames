@@ -79,8 +79,10 @@ function animate() {
     // Number line mode: update playback and follow camera
     const camTarget = updateOrbRun(dt);
     if (camTarget) {
-      camera.position.lerp(camTarget.position, 0.12);
-      controls.target.lerp(camTarget.lookAt, 0.12);
+      const posAlpha = 1 - Math.exp(-8 * dt);
+      const lookAlpha = 1 - Math.exp(-10 * dt);
+      camera.position.lerp(camTarget.position, posAlpha);
+      controls.target.lerp(camTarget.lookAt, lookAlpha);
     }
     controls.update();
   } else if (isTimeSeriesActive()) {
