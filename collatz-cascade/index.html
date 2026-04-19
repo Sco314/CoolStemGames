@@ -37,6 +37,10 @@
       <button class="mode-btn" data-mode="value">Value</button>
       <button class="mode-btn" data-mode="parity">Parity</button>
       <button class="mode-btn" data-mode="stopping">Stopping</button>
+      <div id="perf-toggles">
+        <button id="toggle-particle-load" class="mode-btn mode-toggle-btn">Particle load: auto</button>
+        <button id="toggle-postfx" class="mode-btn mode-toggle-btn">Post FX: on</button>
+      </div>
     </nav>
 
     <div id="stopping-subs" class="sub-modes hidden">
@@ -134,7 +138,27 @@
       <!-- Number line controls (game mode) -->
       <div id="nl-controls" class="hidden">
         <button id="nl-ff" class="nl-btn nl-ff">1x</button>
-        <button id="nl-skip" class="nl-btn hidden">Skip to End</button>
+        <button id="nl-pause" class="nl-btn">Pause</button>
+        <button id="nl-skip" class="nl-btn hidden">Skip to Terminal</button>
+        <div id="nl-stats" class="hidden">
+          <div class="nl-stat-row">
+            <span class="nl-stat-label">Value</span>
+            <span id="nl-stat-value" class="nl-stat-value">—</span>
+          </div>
+          <div class="nl-stat-row">
+            <span class="nl-stat-label">Step</span>
+            <span id="nl-stat-step" class="nl-stat-value">0/0</span>
+          </div>
+          <div class="nl-stat-row">
+            <span class="nl-stat-label">Peak</span>
+            <span id="nl-stat-peak" class="nl-stat-value">—</span>
+          </div>
+          <div class="nl-stat-row">
+            <span class="nl-stat-label">ETA</span>
+            <span id="nl-stat-eta" class="nl-stat-value">—</span>
+          </div>
+          <div id="nl-badges" class="nl-badges"></div>
+        </div>
       </div>
 
       <!-- Chart controls (time series + spiral + flat chart) -->

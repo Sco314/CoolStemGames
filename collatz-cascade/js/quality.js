@@ -47,3 +47,4 @@ const QUALITY = {
 
 export function getTier() { return tier; }
 export function getQuality() { return QUALITY[tier]; }
+export function isMobileTier() { return tier === 'mobile'; }

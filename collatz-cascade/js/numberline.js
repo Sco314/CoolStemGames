@@ -110,6 +110,12 @@ let userSpeed = 1;
 let hitCount = 0;
 let mathDisplay = null;
 let lastReportedStep = -1;   // for triggering per-step events
+let isPaused = false;
+let skipUsed = false;
+let peakValue = 1;
+let peakLog2 = 0;
+let currentImpactStreak = 0;
+let maxImpactStreak = 0;
 
 // Trail meshes
 let previewLine = null;      // full path, faint
@@ -173,11 +179,50 @@ export function getMathDisplay() { return mathDisplay; }
 export function getPlayState() { return playState; }
 export function setSpeed(mult) { userSpeed = mult; }
 export function getSpeed() { return userSpeed; }
+export function setPaused(paused) { isPaused = !!paused; }
+export function isPausedPlayback() { return isPaused; }
 export function isDensityMode() { return densityMode; }
 export function getHitCount() { return hitCount; }
 export function getMilestoneCallout() { return milestoneCallout; }
 export function formatValue(n) { return fmtValue(n); }
 export function updateOrbRun(dt) { return updateNumberLine(dt); }
+export function getRunStats() {
+  if (!sequence.length) return null;
+  const currentIdx = Math.max(0, Math.min(totalSteps - 1, Math.floor(Math.max(0, currentStepFloat))));
+  const value = sequence[currentIdx] ?? 1;
+
+  let remainingSeconds = 0;
+  if (playState === 'launching') {
+    const launchRemaining = Math.max(0, (1 - Math.min(launchPhase, 1)) * LAUNCH_DURATION);
+    const weighted = importance.reduce((sum, w) => sum + w, 0);
+    const travelRemaining = (baseTimePerStep * weighted) / Math.max(userSpeed, 0.001);
+    remainingSeconds = launchRemaining + travelRemaining;
+  } else if (playState === 'traveling') {
+    const idx = Math.floor(Math.max(0, currentStepFloat));
+    const frac = Math.max(0, Math.min(1, currentStepFloat - idx));
+    let weightedRemaining = 0;
+    for (let i = idx; i < importance.length; i++) {
+      if (i === idx) weightedRemaining += Math.max(0, (1 - frac) * (importance[i] || 1));
+      else weightedRemaining += importance[i] || 1;
+    }
+    remainingSeconds = (baseTimePerStep * weightedRemaining) / Math.max(userSpeed, 0.001);
+  }
+
+  const badges = [];
+  if (maxImpactStreak >= 3) badges.push(`Impact streak ×${maxImpactStreak}`);
+  if (playState === 'complete' && !skipUsed) badges.push('Clean run');
+
+  return {
+    currentValue: value,
+    stepIndex: currentIdx,
+    totalSteps: Math.max(0, totalSteps - 1),
+    peakValue,
+    estimatedRemainingSec: Math.max(0, remainingSeconds),
+    badges,
+    isPaused,
+    isComplete: playState === 'complete',
+  };
+}
 // Legacy exports (no-ops, kept for import compatibility)
 export const MAX_ORBS = Infinity;
 export function setOrbVisibleMax() {}
@@ -273,6 +318,12 @@ export function clearNumberLine() {
   hitCount = 0;
   mathDisplay = null;
   lastReportedStep = -1;
+  isPaused = false;
+  skipUsed = false;
+  peakValue = 1;
+  peakLog2 = 0;
+  currentImpactStreak = 0;
+  maxImpactStreak = 0;
   if (operatorBall) operatorBall.visible = false;
   resetShooterChargeVisuals();
   cleanupDensityBand();
@@ -542,6 +593,12 @@ function launchSequence(n, values) {
   hitCount = 0;
   mathDisplay = null;
   lastReportedStep = -1;
+  isPaused = false;
+  skipUsed = false;
+  peakValue = values[0] ?? 1;
+  peakLog2 = bigLog2(peakValue);
+  currentImpactStreak = 0;
+  maxImpactStreak = 0;
   cameraMode = 'overview';
   tacticalWeight = 0;
 
@@ -561,6 +618,7 @@ export function skipToEnd() {
   hitCount = totalSteps;
   beginState('complete');
   markTerminalLoopOnce();
+  skipUsed = true;
   mathDisplay = { value: 1, isEven: false, label: 'DONE', rule: '', operation: '', result: '' };
   if (trailLine) trailLine.geometry.setDrawRange(0, totalSteps);
   updateOrbTiers(totalSteps - 1);
@@ -583,6 +641,10 @@ export function updateNumberLine(dt) {
       return getCameraTarget();
     }
     return null;
+  }
+
+  if (isPaused) {
+    return getCameraTarget();
   }
 
   const speedScaledState =
@@ -671,8 +733,12 @@ export function updateNumberLine(dt) {
       }
       if (trailLine) trailLine.geometry.setDrawRange(0, hopToStep + 1);
       if (importance[hopToStep] >= MILESTONE_WEIGHT) {
+        currentImpactStreak += 1;
+        maxImpactStreak = Math.max(maxImpactStreak, currentImpactStreak);
         tacticalWeight = Math.min(1, tacticalWeight + 0.5);
         tacticalDecay = 0.5;
+      } else {
+        currentImpactStreak = 0;
       }
       if (importance[hopToStep] >= TERMINAL_WEIGHT && (val === 4 || val === 4n)) {
         milestoneCallout = { text: '4 → 2 → 1', type: 'terminal' };
@@ -684,6 +750,8 @@ export function updateNumberLine(dt) {
           if (bigLog2(sequence[j]) >= lg) { isPeak = false; break; }
         }
         if (isPeak && hopToStep > 0) {
+          peakValue = val;
+          peakLog2 = lg;
           milestoneCallout = { text: `NEW PEAK: ${fmtValue(val)}`, type: 'peak' };
           milestoneTimer = CALLOUT_DURATION;
         }
@@ -719,6 +787,12 @@ export function updateNumberLine(dt) {
       currentStepFloat = totalSteps - 1;
       beginState('complete');
       markTerminalLoopOnce();
+    }
+
+    const currLg = bigLog2(val);
+    if (currLg > peakLog2) {
+      peakValue = val;
+      peakLog2 = currLg;
     }
   }
 
