@@ -236,6 +236,9 @@ export function hideNumberLine() {
   active = false;
   playState = 'idle';
   operatorBall.visible = false;
+  resetShooterChargeVisuals();
+  milestoneCallout = null;
+  milestoneTimer = 0;
   mathDisplay = null;
 }
 
@@ -257,10 +260,16 @@ export function clearNumberLine() {
   hopFromStep = -1;
   hopToStep = 0;
   growthStepIdx = -1;
+  launchPhase = 0;
+  tacticalDecay = 0;
+  tacticalWeight = 0;
+  milestoneCallout = null;
+  milestoneTimer = 0;
   hitCount = 0;
   mathDisplay = null;
   lastReportedStep = -1;
   if (operatorBall) operatorBall.visible = false;
+  resetShooterChargeVisuals();
   cleanupDensityBand();
 }
 
@@ -339,6 +348,18 @@ function easeOutBack01(t) {
 function beginState(nextState) {
   playState = nextState;
   stateElapsed = 0;
+}
+
+function resetShooterChargeVisuals() {
+  if (shooterMesh && shooterMesh.children.length >= 2) {
+    shooterMesh.children[0].position.x = -0.35;
+    shooterMesh.children[1].position.x = -0.6;
+  }
+  if (shooterMesh) shooterMesh.material.emissiveIntensity = 0.4;
+  if (operatorBall?.material?.emissive) {
+    operatorBall.material.emissive.setHex(0x000000);
+    operatorBall.material.emissiveIntensity = 0;
+  }
 }
 
 function getStepPosition(stepIdx) {
@@ -598,13 +619,7 @@ export function updateNumberLine(dt) {
     operatorBall.material.emissiveIntensity = charge * 0.8;
 
     if (launchPhase >= 1) {
-      if (shooterMesh && shooterMesh.children.length >= 2) {
-        shooterMesh.children[0].position.x = -0.35;
-        shooterMesh.children[1].position.x = -0.6;
-      }
-      if (shooterMesh) shooterMesh.material.emissiveIntensity = 0.4;
-      operatorBall.material.emissive.setHex(0x000000);
-      operatorBall.material.emissiveIntensity = 0;
+      resetShooterChargeVisuals();
       cameraMode = 'chase';
       configureHop(0);
       beginState('hop_approach');
