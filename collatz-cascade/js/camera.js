@@ -10,6 +10,7 @@ import {
   CAMERA_FLY_DURATION,
 } from './constants.js';
 import { getBounds } from './graph.js';
+import { getEffectiveQuality } from './quality.js';
 
 let camera, controls, renderer;
 let postFxEnabled = true;
@@ -34,14 +35,14 @@ export function initCamera(canvas) {
   camera.position.set(0, 2, CAMERA_INITIAL_DISTANCE);
   camera.lookAt(0, 0, 0);
 
+  const quality = getEffectiveQuality();
   renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: true,
+    antialias: !quality.disableExpensiveEffects,
     alpha: false,
     powerPreference: 'high-performance',
   });
-  // Cap at 1.5x on mobile to reduce memory pressure (was 2x)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.maxPixelRatio));
   renderer.setSize(w, h, false);
   renderer.setClearColor(0x0a0f1e, 1);
 

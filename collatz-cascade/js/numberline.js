@@ -47,6 +47,8 @@ import {
   resolveOrbRunStyle,
 } from './orbrun-color.js';
 import { createOrbRunCameraRig } from './orbRunCamera.js';
+import { scheduleBatch } from './scheduler.js';
+import { getEffectiveQuality } from './quality.js';
 
 // ── Path layout constants ───────────────────────────────
 const STEP_SPACING = 0.5;        // world units per step (X axis)
@@ -76,6 +78,9 @@ const ACTIVE_RANGE = 5;    // full size + label + glow
 const VISIBLE_RANGE = 25;  // visible but small, no label
 
 // Colors
+// ORB_COLOR_FUTURE is the fallback hue used when no per-run hue is set.
+// Per-orb appearance is otherwise driven entirely by resolveOrbRunStyle()
+// via getOrbStyle() — see the "Orb semantic/style contract" section.
 const ORB_COLOR_FUTURE = new THREE.Color(0.3, 0.35, 0.5);
 const TRAIL_COLOR_BRIGHT = 0x4a9aff;
 const TRAIL_COLOR_FAINT = 0x223355;
@@ -120,14 +125,21 @@ let maxImpactStreak = 0;
 // Trail meshes
 let previewLine = null;      // full path, faint
 let trailLine = null;        // traversed portion, bright
+let renderPathPositions = []; // decimated points used for line rendering
+let trailPointCount = 0;
 
 // Step orbs
-let stepOrbs = [];           // { mesh, label, stepIdx }
+let stepOrbs = [];           // { stepIdx, value, pos, mesh, label, activated }
 let orbRunRegistry = null;
 let orbRunHue = null;
 let terminalLoopMarked = false;
 let terminalFlashTimer = 0;
 let terminalFlashDone = false;
+let futureInstanced = null;
+let visitedInstanced = null;
+let orbGeo = null;
+let orbMatFuture = null;
+let orbMatVisited = null;
 
 // Camera blending
 const orbRunCameraRig = createOrbRunCameraRig();
@@ -224,9 +236,12 @@ export function getRunStats() {
   };
 }
 // Legacy exports (no-ops, kept for import compatibility)
-export const MAX_ORBS = Infinity;
-export function setOrbVisibleMax() {}
-export function getOrbVisibleMax() { return Infinity; }
+export const MAX_ORBS = 5000;
+let orbVisibleMax = getEffectiveQuality().maxVisibleOrbs;
+export function setOrbVisibleMax(n) {
+  orbVisibleMax = Math.max(8, Math.min(MAX_ORBS, n | 0));
+}
+export function getOrbVisibleMax() { return orbVisibleMax; }
 
 // ── Init ────────────────────────────────────────────────
 export function initNumberLine(scene) {
@@ -274,6 +289,20 @@ export function initNumberLine(scene) {
   const knob = new THREE.Mesh(knobGeo, knobMat);
   knob.position.set(-0.6, 0, 0);
   shooterMesh.add(knob);
+
+  const q = getEffectiveQuality();
+  orbGeo = new THREE.SphereGeometry(ORB_RADIUS, q.orbSegments, q.orbRings);
+  // Instanced LOD uses per-instance color (setColorAt) as the single semantic
+  // channel — keep the base material white-on-white so instanceColor fully
+  // drives the rendered hue/intensity. See getOrbInstanceColor().
+  orbMatFuture = new THREE.MeshStandardMaterial({
+    color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.15,
+    metalness: 0.2, roughness: 0.6, transparent: true, opacity: 0.35,
+  });
+  orbMatVisited = new THREE.MeshStandardMaterial({
+    color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.25,
+    metalness: 0.2, roughness: 0.6, transparent: true, opacity: 0.6,
+  });
 }
 
 export function showNumberLine() {
@@ -304,6 +333,8 @@ export function clearNumberLine() {
   terminalLoopMarked = false;
   terminalFlashTimer = 0;
   terminalFlashDone = false;
+  renderPathPositions = [];
+  trailPointCount = 0;
   currentStepFloat = 0;
   playState = 'idle';
   stateElapsed = 0;
@@ -440,64 +471,74 @@ function configureHop(nextStep) {
   hopLaunchDuration = midpoint(LAUNCH_HANDOFF_MIN, LAUNCH_HANDOFF_MAX);
 }
 
-function buildPath(seq) {
+async function buildPath(seq) {
   disposePath();
 
   totalSteps = seq.length;
   pathPositions = seq.map((v, i) => pathPosition(i, v));
   importance = computeImportance(seq);
   baseTimePerStep = getBaseTimePerStep(totalSteps);
+  const q = getEffectiveQuality();
+  setOrbVisibleMax(Math.min(orbVisibleMax, q.maxVisibleOrbs));
 
   // Build spline through all positions
   if (pathPositions.length >= 2) {
     pathSpline = new THREE.CatmullRomCurve3(pathPositions, false, 'catmullrom', 0.3);
   }
 
+  const maxTrailSegments = Math.max(8, q.maxTrailSegments);
+  const stride = Math.max(1, Math.ceil(pathPositions.length / maxTrailSegments));
+  renderPathPositions = [];
+  for (let i = 0; i < pathPositions.length; i += stride) renderPathPositions.push(pathPositions[i]);
+  if (pathPositions.length > 1 && renderPathPositions[renderPathPositions.length - 1] !== pathPositions[pathPositions.length - 1]) {
+    renderPathPositions.push(pathPositions[pathPositions.length - 1]);
+  }
+  trailPointCount = renderPathPositions.length;
+
   // Preview line (full path, faint)
-  if (pathPositions.length >= 2) {
-    const previewGeo = new THREE.BufferGeometry().setFromPoints(pathPositions);
+  if (renderPathPositions.length >= 2) {
+    const previewGeo = new THREE.BufferGeometry().setFromPoints(renderPathPositions);
     const previewMat = new THREE.LineBasicMaterial({
-      color: TRAIL_COLOR_FAINT, transparent: true, opacity: 0.2,
+      color: TRAIL_COLOR_FAINT, transparent: true, opacity: q.trailOpacity * 0.4,
     });
     previewLine = new THREE.Line(previewGeo, previewMat);
     nlGroup.add(previewLine);
 
     // Trail line (bright, grows via drawRange)
-    const trailGeo = new THREE.BufferGeometry().setFromPoints(pathPositions);
+    const trailGeo = new THREE.BufferGeometry().setFromPoints(renderPathPositions);
     const trailMat = new THREE.LineBasicMaterial({
-      color: TRAIL_COLOR_BRIGHT, transparent: true, opacity: 0.7,
+      color: TRAIL_COLOR_BRIGHT, transparent: true, opacity: q.trailOpacity,
     });
     trailLine = new THREE.Line(trailGeo, trailMat);
     trailLine.geometry.setDrawRange(0, 1);
     nlGroup.add(trailLine);
   }
 
-  // Create step orbs (all start as future/faint)
-  stepOrbs = [];
-  for (let i = 0; i < pathPositions.length; i++) {
-    const orb = createStepOrb(i, seq[i], pathPositions[i]);
-    stepOrbs.push(orb);
-  }
-}
+  stepOrbs = new Array(pathPositions.length);
+  const futureCap = Math.min(pathPositions.length, MAX_ORBS);
+  futureInstanced = new THREE.InstancedMesh(orbGeo, orbMatFuture, futureCap);
+  visitedInstanced = new THREE.InstancedMesh(orbGeo, orbMatVisited, futureCap);
+  // Allocate the instanceColor attribute up-front so per-instance coloring
+  // (driven by getOrbInstanceColor) is available from frame 0.
+  futureInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(futureCap * 3), 3);
+  visitedInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(futureCap * 3), 3);
+  futureInstanced.count = 0;
+  visitedInstanced.count = 0;
+  nlGroup.add(futureInstanced);
+  nlGroup.add(visitedInstanced);
 
-function createStepOrb(stepIdx, value, pos) {
-  const geo = new THREE.SphereGeometry(ORB_RADIUS, 12, 8);
-  const mat = new THREE.MeshStandardMaterial({
-    color: ORB_COLOR_FUTURE, emissive: ORB_COLOR_FUTURE,
-    emissiveIntensity: 0.1, metalness: 0.2, roughness: 0.6,
-    transparent: true, opacity: 0.4,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.copy(pos);
-  nlGroup.add(mesh);
-
-  // Label (initially hidden, shown when active)
-  const label = makeLabel(value);
-  label.position.set(0, ORB_RADIUS + 0.12, 0);
-  label.visible = false;
-  mesh.add(label);
-
-  return { mesh, label, stepIdx, value, activated: false, activationMix: 0 };
+  const scratch = new THREE.Object3D();
+  const buildCount = Math.min(pathPositions.length, MAX_ORBS);
+  await scheduleBatch(Array.from({ length: buildCount }, (_, i) => i), (i) => {
+    const pos = pathPositions[i];
+    stepOrbs[i] = { stepIdx: i, value: seq[i], pos, mesh: null, label: null, activated: false };
+    scratch.position.copy(pos);
+    scratch.scale.setScalar(0.4);
+    scratch.updateMatrix();
+    futureInstanced.setMatrixAt(i, scratch.matrix);
+    futureInstanced.count = i + 1;
+  }, { priority: 3 });
+  futureInstanced.instanceMatrix.needsUpdate = true;
 }
 
 function makeLabel(value) {
@@ -534,7 +575,18 @@ function disposePath() {
     trailLine.material.dispose();
     trailLine = null;
   }
+  if (futureInstanced) {
+    nlGroup.remove(futureInstanced);
+    futureInstanced.dispose();
+    futureInstanced = null;
+  }
+  if (visitedInstanced) {
+    nlGroup.remove(visitedInstanced);
+    visitedInstanced.dispose();
+    visitedInstanced = null;
+  }
   for (const orb of stepOrbs) {
+    if (!orb || !orb.mesh) continue;
     nlGroup.remove(orb.mesh);
     if (orb.label) {
       orb.mesh.remove(orb.label);
@@ -557,7 +609,7 @@ export function startSequence(n) {
   launchSequence(n, values);
 }
 
-function launchSequence(n, values) {
+async function launchSequence(n, values) {
   cleanupDensityBand();
   densityMode = false;
 
@@ -575,7 +627,8 @@ function launchSequence(n, values) {
     userSpeed = Math.max(1, sequence.length / 100);
   }
 
-  buildPath(sequence);
+  playState = 'building';
+  await buildPath(sequence);
   orbRunRegistry = buildOrbRunRegistry(sequence);
   orbRunHue = makeRunHue(n);
   terminalLoopMarked = false;
@@ -620,7 +673,7 @@ export function skipToEnd() {
   markTerminalLoopOnce();
   skipUsed = true;
   mathDisplay = { value: 1, isEven: false, label: 'DONE', rule: '', operation: '', result: '' };
-  if (trailLine) trailLine.geometry.setDrawRange(0, totalSteps);
+  if (trailLine) trailLine.geometry.setDrawRange(0, trailPointCount);
   updateOrbTiers(totalSteps - 1);
 }
 
@@ -633,7 +686,7 @@ export function updateNumberLine(dt) {
     operatorBall.rotation.y += ORB_SPIN_SPEED * clampedDt;
   }
 
-  if (!active || playState === 'idle' || playState === 'aborted') return null;
+  if (!active || playState === 'idle' || playState === 'aborted' || playState === 'building') return null;
   if (playState === 'complete') {
     if (terminalFlashTimer > 0) {
       terminalFlashTimer = Math.max(0, terminalFlashTimer - dt);
@@ -731,7 +784,11 @@ export function updateNumberLine(dt) {
       if (stepOrbs[hopToStep] && !stepOrbs[hopToStep].activated) {
         activateOrb(stepOrbs[hopToStep]);
       }
-      if (trailLine) trailLine.geometry.setDrawRange(0, hopToStep + 1);
+      if (trailLine) {
+        const ratio = totalSteps > 1 ? (hopToStep / (totalSteps - 1)) : 1;
+        const n = Math.max(1, Math.floor(ratio * trailPointCount));
+        trailLine.geometry.setDrawRange(0, Math.min(trailPointCount, n));
+      }
       if (importance[hopToStep] >= MILESTONE_WEIGHT) {
         currentImpactStreak += 1;
         maxImpactStreak = Math.max(maxImpactStreak, currentImpactStreak);
@@ -814,10 +871,8 @@ export function updateNumberLine(dt) {
 function activateOrb(orb) {
   orb.activated = true;
   orb.activationMix = 0;
-  orb.mesh.material.color.copy(ORB_COLOR_FUTURE);
-  orb.mesh.material.emissive.copy(ORB_COLOR_FUTURE);
-  orb.mesh.material.emissiveIntensity = 0.25;
-  orb.mesh.material.opacity = 1.0;
+  // Appearance is applied uniformly each frame by updateOrbTiers via the
+  // shared semantic contract (getOrbStyle). No per-representation write here.
 }
 
 function markTerminalLoopOnce() {
@@ -829,49 +884,154 @@ function markTerminalLoopOnce() {
   }
 }
 
+// ── Orb semantic/style contract ─────────────────────────
+// Single source of truth for per-orb appearance, renderer-agnostic.
+// Both the active-range mesh path and the instanced (dormant) path consume
+// the same style so an orb's run hue, repeat/terminal-loop identity, and
+// terminal flash emphasis stay consistent as the orb crosses LOD tiers.
+//   - resolveOrbRunStyle(...) owns hue + activation mapping.
+//   - terminalFlashTimer is the one broadcast channel for 4→2→1 emphasis;
+//     tier adapters decide intensity but never skip it.
+function isTerminalLoopValue(v) {
+  return v === 4 || v === 4n || v === 2 || v === 2n || v === 1 || v === 1n;
+}
+
+function computeTerminalFlashBoost() {
+  if (terminalFlashTimer <= 0) return 0;
+  return Math.sin(((0.55 - terminalFlashTimer) / 0.55) * Math.PI) * 0.7;
+}
+
+function getOrbStyle(orb, currentStep) {
+  const style = resolveOrbRunStyle({
+    stepIdx: orb.stepIdx,
+    activated: orb.activated,
+    isCurrentStep: orb.stepIdx === currentStep,
+    runColor: orbRunHue || ORB_COLOR_FUTURE,
+    registry: orbRunRegistry || { repeatSteps: new Set(), terminalLoopSteps: new Set() },
+    terminalLoopMarked,
+    activationMix: orb.activationMix || 0,
+  });
+  const flashBoost = isTerminalLoopValue(orb.value) ? computeTerminalFlashBoost() : 0;
+  return { ...style, flashBoost };
+}
+
+// Pre-allocated scratch so the instanced path does not churn THREE.Color.
+const _instanceColorScratch = new THREE.Color();
+
+// Bake semantic color + emissive intensity + flash boost into a single RGB
+// color for the instanced LOD path. Instanced MeshStandardMaterial cannot
+// express per-instance emissive without a custom shader, so we fold the
+// style's emissiveIntensity and flashBoost into brightness on the diffuse
+// channel. Visual parity with the mesh path is approximate but coherent.
+function getOrbInstanceColor(style, out) {
+  const target = out || _instanceColorScratch;
+  const brightness = 1 + (style.emissiveIntensity || 0) * 0.4 + (style.flashBoost || 0) * 0.6;
+  target.copy(style.color).multiplyScalar(Math.min(2.5, brightness));
+  return target;
+}
+
+function ensureActiveMesh(orb) {
+  if (orb.mesh) return;
+  const q = getEffectiveQuality();
+  const geo = new THREE.SphereGeometry(ORB_RADIUS, q.orbSegments, q.orbRings);
+  const mat = new THREE.MeshStandardMaterial({
+    color: ORB_COLOR_FUTURE,
+    emissive: ORB_COLOR_FUTURE,
+    emissiveIntensity: 0.1,
+    metalness: 0.2,
+    roughness: 0.6,
+    transparent: true,
+    opacity: 1.0,
+  });
+  orb.mesh = new THREE.Mesh(geo, mat);
+  orb.mesh.position.copy(orb.pos);
+  orb.label = makeLabel(orb.value);
+  orb.label.position.set(0, ORB_RADIUS + 0.12, 0);
+  orb.label.visible = false;
+  orb.mesh.add(orb.label);
+  nlGroup.add(orb.mesh);
+}
+
+function releaseActiveMesh(orb) {
+  if (!orb.mesh) return;
+  nlGroup.remove(orb.mesh);
+  if (orb.label) {
+    orb.mesh.remove(orb.label);
+    orb.label.material.map?.dispose();
+    orb.label.material.dispose();
+  }
+  orb.mesh.geometry.dispose();
+  orb.mesh.material.dispose();
+  orb.mesh = null;
+  orb.label = null;
+}
+
 function updateOrbTiers(currentStep, dt = 0) {
+  if (!futureInstanced || !visitedInstanced) return;
+  const q = getEffectiveQuality();
+  const maxActiveMeshes = Math.max(6, Math.min(orbVisibleMax, q.maxVisibleOrbs));
+  const maxLabels = q.maxLabels;
+  const scratch = new THREE.Object3D();
+  const instColor = new THREE.Color();
+  let activeCount = 0;
+  let labelCount = 0;
+  let futureCount = 0;
+  let visitedCount = 0;
+
   for (const orb of stepOrbs) {
+    if (!orb) continue;
     const dist = Math.abs(orb.stepIdx - currentStep);
     if (orb.activated) {
-      orb.activationMix = Math.min(1, orb.activationMix + dt * 2.4);
+      orb.activationMix = Math.min(1, (orb.activationMix || 0) + dt * 2.4);
     }
 
-    const style = resolveOrbRunStyle({
-      stepIdx: orb.stepIdx,
-      activated: orb.activated,
-      isCurrentStep: orb.stepIdx === currentStep,
-      runColor: orbRunHue || ORB_COLOR_FUTURE,
-      registry: orbRunRegistry || { repeatSteps: new Set(), terminalLoopSteps: new Set() },
-      terminalLoopMarked,
-      activationMix: orb.activationMix,
-    });
+    // Single semantic style, consumed by both LOD paths below.
+    const style = getOrbStyle(orb, currentStep);
 
-    let emissiveBoost = 0;
-    if (terminalFlashTimer > 0 && (orb.value === 4 || orb.value === 4n || orb.value === 2 || orb.value === 2n || orb.value === 1 || orb.value === 1n)) {
-      emissiveBoost = Math.sin(((0.55 - terminalFlashTimer) / 0.55) * Math.PI) * 0.7;
-    }
-    orb.mesh.material.color.copy(style.color);
-    orb.mesh.material.emissive.copy(style.emissive);
-    orb.mesh.material.emissiveIntensity = style.emissiveIntensity + emissiveBoost;
-
-    if (dist <= ACTIVE_RANGE) {
-      // Active tier: full size, label visible
+    const wantActive = dist <= ACTIVE_RANGE && activeCount < maxActiveMeshes;
+    if (wantActive) {
+      ensureActiveMesh(orb);
       const scale = orb.stepIdx === currentStep ? ORB_RADIUS_ACTIVE / ORB_RADIUS : 1.0;
       orb.mesh.scale.setScalar(scale);
-      orb.label.visible = true;
-      orb.mesh.material.opacity = style.opacity;
-    } else if (dist <= VISIBLE_RANGE) {
-      // Context tier: smaller, no label
-      orb.mesh.scale.setScalar(0.6);
-      orb.label.visible = false;
-      orb.mesh.material.opacity = orb.activated ? 0.55 : 0.2;
+      orb.mesh.position.copy(orb.pos);
+      orb.label.visible = labelCount < maxLabels;
+      if (orb.label.visible) labelCount++;
+
+      // Mesh LOD adapter: full material control (color, emissive, flashBoost).
+      orb.mesh.material.color.copy(style.color);
+      orb.mesh.material.emissive.copy(style.emissive);
+      orb.mesh.material.emissiveIntensity = style.emissiveIntensity + style.flashBoost;
+      orb.mesh.material.opacity = style.opacity ?? 1.0;
+      activeCount++;
     } else {
-      // Distant: tiny or hidden
-      orb.mesh.scale.setScalar(0.3);
-      orb.label.visible = false;
-      orb.mesh.material.opacity = orb.activated ? 0.2 : 0.05;
+      releaseActiveMesh(orb);
+      const tierScale = dist <= VISIBLE_RANGE ? 0.6 : 0.3;
+      scratch.position.copy(orb.pos);
+      scratch.scale.setScalar(tierScale);
+      scratch.updateMatrix();
+
+      // Instanced LOD adapter: per-instance color encodes run hue, loop
+      // identity, activation, and terminal flash. Same semantic source as
+      // the mesh path — brightness is folded in since the standard material
+      // can't express per-instance emissive.
+      getOrbInstanceColor(style, instColor);
+      if (orb.activated) {
+        visitedInstanced.setMatrixAt(visitedCount, scratch.matrix);
+        visitedInstanced.setColorAt(visitedCount, instColor);
+        visitedCount++;
+      } else {
+        futureInstanced.setMatrixAt(futureCount, scratch.matrix);
+        futureInstanced.setColorAt(futureCount, instColor);
+        futureCount++;
+      }
     }
   }
+  futureInstanced.count = futureCount;
+  visitedInstanced.count = visitedCount;
+  futureInstanced.instanceMatrix.needsUpdate = true;
+  visitedInstanced.instanceMatrix.needsUpdate = true;
+  if (futureInstanced.instanceColor) futureInstanced.instanceColor.needsUpdate = true;
+  if (visitedInstanced.instanceColor) visitedInstanced.instanceColor.needsUpdate = true;
 }
 
 // ── Camera system ───────────────────────────────────────
