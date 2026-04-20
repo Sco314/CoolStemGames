@@ -225,12 +225,19 @@ export function getRunStats() {
   const value = sequence[currentIdx] ?? 1;
 
   let remainingSeconds = 0;
-  if (playState === 'launching') {
+  const isIntroPhase = playState === 'intro' || playState === 'building';
+  const isHopPhase =
+    playState === 'hop_approach' ||
+    playState === 'hop_impact' ||
+    playState === 'hop_grow' ||
+    playState === 'hop_launch' ||
+    playState === 'terminal_mark';
+  if (isIntroPhase) {
     const launchRemaining = Math.max(0, (1 - Math.min(launchPhase, 1)) * LAUNCH_DURATION);
     const weighted = importance.reduce((sum, w) => sum + w, 0);
     const travelRemaining = (baseTimePerStep * weighted) / Math.max(userSpeed, 0.001);
     remainingSeconds = launchRemaining + travelRemaining;
-  } else if (playState === 'traveling') {
+  } else if (isHopPhase) {
     const idx = Math.floor(Math.max(0, currentStepFloat));
     const frac = Math.max(0, Math.min(1, currentStepFloat - idx));
     let weightedRemaining = 0;
@@ -698,7 +705,7 @@ async function launchSequence(n, steps) {
   lastReportedStep = -1;
   isPaused = false;
   skipUsed = false;
-  peakValue = values[0] ?? 1;
+  peakValue = sequence[0] ?? 1;
   peakLog2 = bigLog2(peakValue);
   currentImpactStreak = 0;
   maxImpactStreak = 0;
