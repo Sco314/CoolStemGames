@@ -683,7 +683,7 @@ async function launchSequence(n, values) {
   operatorBall.position.set(SHOOTER_X, SHOOTER_Y, 0);
   operatorBall.visible = true;
   launchPhase = 0;
-  beginState('building');
+  beginState('intro');
 }
 
 export function skipToEnd() {
@@ -738,11 +738,6 @@ export function updateNumberLine(dt) {
   if (milestoneCallout) {
     milestoneTimer -= clampedDt;
     if (milestoneTimer <= 0) milestoneCallout = null;
-  }
-
-  if (playState === 'building') {
-    beginState('intro');
-    return getCameraTarget();
   }
 
   // ── INTRO: plunger compresses before firing ─────────────
@@ -871,9 +866,10 @@ export function updateNumberLine(dt) {
       markTerminalLoopOnce();
     }
 
-    const currLg = bigLog2(val);
+    const termVal = sequence[hopToStep] ?? 1;
+    const currLg = bigLog2(termVal);
     if (currLg > peakLog2) {
-      peakValue = val;
+      peakValue = termVal;
       peakLog2 = currLg;
     }
   }
