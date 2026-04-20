@@ -24,6 +24,7 @@ import {
   showNumberLine, hideNumberLine, startSequence,
   getMathDisplay, getPlayState, formatValue,
   setSpeed, getSpeed, setPaused, isPausedPlayback, getRunStats,
+  setOrbRunPerformanceMode,
   clearNumberLine, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
   isDensityMode, skipToEnd, getHitCount, getMilestoneCallout,
 } from './numberline.js';
@@ -388,6 +389,12 @@ export function initUI(onSubmit) {
     exitAllSpecialModes();
     numberLineMode = true;
     showNumberLine();
+    // Orb Run should launch immediately on number entry.
+    // Default this mode to Free Explore so users are not blocked
+    // behind the Guess Steps prediction panel on first load.
+    if (getGameMode() !== 'freeExplore') {
+      setGameMode('freeExplore');
+    }
     if (graphGroup) graphGroup.visible = false;
     nlControls.classList.remove('hidden');
     // Hide fill + orbs slider — not used in Orb Run
@@ -517,13 +524,24 @@ export function initUI(onSubmit) {
 
   // ── Speed button (kept for game mode) ─────────────────
   const ffBtn = document.getElementById('nl-ff');
-  const FF_SPEEDS = [1, 2, 4];
+  const perfBtn = document.createElement('button');
+  perfBtn.className = 'nl-btn';
+  perfBtn.id = 'nl-perf';
+  perfBtn.textContent = 'Perf: Auto';
+  document.getElementById('nl-controls').appendChild(perfBtn);
+  const FF_SPEEDS = [1, 2, 4, 8];
   let ffIndex = 0;
+  let perfMode = 'auto';
   ffBtn.addEventListener('click', () => {
     ffIndex = (ffIndex + 1) % FF_SPEEDS.length;
     const spd = FF_SPEEDS[ffIndex];
     setSpeed(spd);
     ffBtn.textContent = `${spd}x`;
+  });
+  perfBtn.addEventListener('click', () => {
+    perfMode = perfMode === 'auto' ? 'eco' : 'auto';
+    setOrbRunPerformanceMode(perfMode);
+    perfBtn.textContent = perfMode === 'auto' ? 'Perf: Auto' : 'Perf: Eco';
   });
 
   const pauseBtn = document.getElementById('nl-pause');

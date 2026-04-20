@@ -46,6 +46,7 @@ import {
   makeRunHue,
   resolveOrbRunStyle,
 } from './orbrun-color.js';
+import { createOrbRunRegistry } from './orbrun-registry.js';
 import { createOrbRunCameraRig } from './orbRunCamera.js';
 import { scheduleBatch } from './scheduler.js';
 import { getEffectiveQuality } from './quality.js';
@@ -58,7 +59,7 @@ const ORB_RADIUS_ACTIVE = 0.14;
 const OPERATOR_RADIUS = 0.18;
 const ORB_SPIN_SPEED = 0.8;      // radians per second (Y-axis rotation)
 const LABEL_SCALE = 0.40;
-const EXTRA_CYCLES = 2;
+const EXTRA_CYCLES = 1;
 
 // Pacing: base time per step (seconds) by sequence length
 const PACING = [
@@ -74,8 +75,8 @@ const TERMINAL_WEIGHT = 3.0;   // final 4→2→1 takes 3× normal
 const TACTICAL_OFFSET = new THREE.Vector3(0, 2.5, 4.0);
 
 // Orb tier distances (in steps from ball)
-const ACTIVE_RANGE = 5;    // full size + label + glow
-const VISIBLE_RANGE = 25;  // visible but small, no label
+let ACTIVE_RANGE = 5;    // full size + label + glow
+let VISIBLE_RANGE = 25;  // visible but small, no label
 
 // Colors
 // ORB_COLOR_FUTURE is the fallback hue used when no per-run hue is set.
@@ -131,6 +132,7 @@ let trailPointCount = 0;
 // Step orbs
 let stepOrbs = [];           // { stepIdx, value, pos, mesh, label, activated }
 let orbRunRegistry = null;
+let orbStateRegistry = null;
 let orbRunHue = null;
 let terminalLoopMarked = false;
 let terminalFlashTimer = 0;
@@ -140,6 +142,9 @@ let visitedInstanced = null;
 let orbGeo = null;
 let orbMatFuture = null;
 let orbMatVisited = null;
+let qualityProfile = null;
+let perfMode = 'auto';
+let frameDtEma = 0.016;
 
 // Camera blending
 const orbRunCameraRig = createOrbRunCameraRig();
@@ -198,6 +203,9 @@ export function getHitCount() { return hitCount; }
 export function getMilestoneCallout() { return milestoneCallout; }
 export function formatValue(n) { return fmtValue(n); }
 export function updateOrbRun(dt) { return updateNumberLine(dt); }
+export function setOrbRunPerformanceMode(mode) {
+  perfMode = mode === 'eco' ? 'eco' : 'auto';
+}
 export function getRunStats() {
   if (!sequence.length) return null;
   const currentIdx = Math.max(0, Math.min(totalSteps - 1, Math.floor(Math.max(0, currentStepFloat))));
@@ -245,6 +253,10 @@ export function getOrbVisibleMax() { return orbVisibleMax; }
 
 // ── Init ────────────────────────────────────────────────
 export function initNumberLine(scene) {
+  qualityProfile = getEffectiveQuality();
+  ACTIVE_RANGE = 4;
+  VISIBLE_RANGE = Math.max(10, Math.floor((qualityProfile?.maxVisibleOrbs || 50) * 0.5));
+
   nlGroup = new THREE.Group();
   nlGroup.visible = false;
   scene.add(nlGroup);
@@ -329,6 +341,7 @@ export function clearNumberLine() {
   importance = [];
   stepOrbs = [];
   orbRunRegistry = null;
+  orbStateRegistry = null;
   orbRunHue = null;
   terminalLoopMarked = false;
   terminalFlashTimer = 0;
@@ -630,6 +643,17 @@ async function launchSequence(n, values) {
   playState = 'building';
   await buildPath(sequence);
   orbRunRegistry = buildOrbRunRegistry(sequence);
+  orbStateRegistry = createOrbRunRegistry({
+    maxActiveMeshes: Math.max(80, (qualityProfile?.maxVisibleOrbs || 50) * 2),
+    maxPersistentRevealed: 320,
+    maxPersistentRevealedLowEnd: 140,
+  });
+  for (let i = 0; i < sequence.length; i++) {
+    const v = sequence[i];
+    orbStateRegistry.upsertOrb(v, { position: pathPositions[i], isInCurrentRun: true, isRevealed: true });
+    if (i > 0) orbStateRegistry.addNeighbor(sequence[i - 1], v);
+  }
+  orbStateRegistry.setCurrentRun(sequence);
   orbRunHue = makeRunHue(n);
   terminalLoopMarked = false;
   terminalFlashTimer = 0;
@@ -679,6 +703,7 @@ export function skipToEnd() {
 
 // ── Update (called each frame) ──────────────────────────
 export function updateNumberLine(dt) {
+  updateRuntimePressure(dt);
   const clampedDt = clamp(dt, 0, DT_CLAMP_MAX);
 
   // Spin the start orb whenever it's visible
@@ -870,6 +895,7 @@ export function updateNumberLine(dt) {
 // ── Orb tier management ─────────────────────────────────
 function activateOrb(orb) {
   orb.activated = true;
+  orbStateRegistry?.incrementActivation(orb.value);
   orb.activationMix = 0;
   // Appearance is applied uniformly each frame by updateOrbTiers via the
   // shared semantic contract (getOrbStyle). No per-representation write here.
@@ -878,6 +904,9 @@ function activateOrb(orb) {
 function markTerminalLoopOnce() {
   if (terminalLoopMarked) return;
   terminalLoopMarked = true;
+  orbStateRegistry?.markTerminalLoop(4, true);
+  orbStateRegistry?.markTerminalLoop(2, true);
+  orbStateRegistry?.markTerminalLoop(1, true);
   if (!terminalFlashDone) {
     terminalFlashDone = true;
     terminalFlashTimer = 0.55;
@@ -969,8 +998,14 @@ function releaseActiveMesh(orb) {
 function updateOrbTiers(currentStep, dt = 0) {
   if (!futureInstanced || !visitedInstanced) return;
   const q = getEffectiveQuality();
-  const maxActiveMeshes = Math.max(6, Math.min(orbVisibleMax, q.maxVisibleOrbs));
-  const maxLabels = q.maxLabels;
+  const baseMaxVisible = Math.min(orbVisibleMax, q.maxVisibleOrbs);
+  const maxActiveMeshes = Math.max(
+    6,
+    perfMode === 'eco' ? Math.floor(baseMaxVisible * 0.5) : baseMaxVisible,
+  );
+  const maxLabels = perfMode === 'eco' ? Math.floor(q.maxLabels * 0.5) : q.maxLabels;
+  const labelStride = perfMode === 'eco' ? 3 : (frameDtEma > 0.03 ? 2 : 1);
+  const adaptiveVisibleRange = Math.max(10, Math.min(VISIBLE_RANGE, Math.floor(maxActiveMeshes * 0.55)));
   const scratch = new THREE.Object3D();
   const instColor = new THREE.Color();
   let activeCount = 0;
@@ -994,8 +1029,9 @@ function updateOrbTiers(currentStep, dt = 0) {
       const scale = orb.stepIdx === currentStep ? ORB_RADIUS_ACTIVE / ORB_RADIUS : 1.0;
       orb.mesh.scale.setScalar(scale);
       orb.mesh.position.copy(orb.pos);
-      orb.label.visible = labelCount < maxLabels;
-      if (orb.label.visible) labelCount++;
+      const wantLabel = labelCount < maxLabels && (orb.stepIdx % labelStride === 0);
+      orb.label.visible = wantLabel;
+      if (wantLabel) labelCount++;
 
       // Mesh LOD adapter: full material control (color, emissive, flashBoost).
       orb.mesh.material.color.copy(style.color);
@@ -1005,7 +1041,7 @@ function updateOrbTiers(currentStep, dt = 0) {
       activeCount++;
     } else {
       releaseActiveMesh(orb);
-      const tierScale = dist <= VISIBLE_RANGE ? 0.6 : 0.3;
+      const tierScale = dist <= adaptiveVisibleRange ? 0.6 : 0.3;
       scratch.position.copy(orb.pos);
       scratch.scale.setScalar(tierScale);
       scratch.updateMatrix();
@@ -1057,6 +1093,22 @@ function getCameraTarget(dt = 1 / 60) {
   }
 
   return target;
+}
+
+function updateRuntimePressure(dt) {
+  const clamped = Math.max(0.001, Math.min(0.08, dt));
+  frameDtEma = frameDtEma * 0.92 + clamped * 0.08;
+  if (perfMode === 'auto') {
+    if (frameDtEma > 0.036) {
+      VISIBLE_RANGE = Math.max(10, VISIBLE_RANGE - 1);
+    } else if (frameDtEma < 0.02) {
+      const target = Math.max(10, Math.floor((qualityProfile?.maxVisibleOrbs || 50) * 0.5));
+      VISIBLE_RANGE = Math.min(target, VISIBLE_RANGE + 1);
+    }
+  } else {
+    const target = Math.max(10, Math.floor((qualityProfile?.maxVisibleOrbs || 50) * 0.35));
+    VISIBLE_RANGE = target;
+  }
 }
 
 // ── Density band (for huge sequences) ───────────────────
