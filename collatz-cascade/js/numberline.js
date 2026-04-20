@@ -35,7 +35,7 @@
  */
 
 import * as THREE from 'three';
-import { collatzValues } from './collatz.js';
+import { collatzValues, stoppingTime } from './collatz.js';
 import {
   isBig, isEven, log2 as bigLog2,
   formatValue as fmtValue,
@@ -48,18 +48,30 @@ import {
 } from './orbrun-color.js';
 import { createOrbRunRegistry } from './orbrun-registry.js';
 import { createOrbRunCameraRig } from './orbRunCamera.js';
+import { mapNumberToPosition, DEFAULT_GOLDEN_ANGLE } from './orbrun-mapping.js';
+import { buildOrbRunSequence, STOP_POLICY_PLAY_TERMINAL_ONCE } from './orbrun-sequence.js';
 import { scheduleBatch } from './scheduler.js';
 import { getEffectiveQuality } from './quality.js';
 
 // ── Path layout constants ───────────────────────────────
-const STEP_SPACING = 0.5;        // world units per step (X axis)
-const MAGNITUDE_SCALE = 0.15;    // world units per log2 unit (Y axis)
+// World layout is now 3D anomalous-cone:
+//   y = log2(n+1) * heightScaleLarge   (height = magnitude)
+//   r = stoppingTime(n) * radiusScale  (radius = persistence)
+//   θ = (n * goldenAngle) mod 2π        (angle = deterministic)
+// Positions are per-NUMBER, not per-step: the same value always maps
+// to the same world coordinate (loops return to the same orb).
+const WORLD_OPTS = {
+  heightPolicy: 'production',
+  heightScaleLarge: 1.25,
+  radiusScale: 0.6,
+};
 const ORB_RADIUS = 0.10;
 const ORB_RADIUS_ACTIVE = 0.14;
 const OPERATOR_RADIUS = 0.18;
 const ORB_SPIN_SPEED = 0.8;      // radians per second (Y-axis rotation)
 const LABEL_SCALE = 0.40;
-const EXTRA_CYCLES = 1;
+// EXTRA_CYCLES is now handled by the sequence builder's STOP_POLICY_PLAY_TERMINAL_ONCE,
+// which appends 4→2→1 once after reaching 1.
 
 // Pacing: base time per step (seconds) by sequence length
 const PACING = [
@@ -102,7 +114,8 @@ let shooterMesh = null;
 let active = false;
 
 // Sequence + path
-let sequence = [];
+let sequence = [];          // raw values[] — mirror of sequenceSteps.map(s => s.value)
+let sequenceSteps = [];     // orbrun-sequence step[] with metadata (isRepeat, isLoopEntry, isTerminal, …)
 let pathPositions = [];     // THREE.Vector3[] per step
 let pathSpline = null;      // CatmullRomCurve3
 let importance = [];        // per-step weight (1.0 normal, 2.0+ milestone)
@@ -336,6 +349,7 @@ export function hideNumberLine() {
 export function clearNumberLine() {
   disposePath();
   sequence = [];
+  sequenceSteps = [];
   pathPositions = [];
   pathSpline = null;
   importance = [];
@@ -374,11 +388,26 @@ export function clearNumberLine() {
 }
 
 // ── Path computation ────────────────────────────────────
-function pathPosition(stepIdx, value) {
-  const x = stepIdx * STEP_SPACING;
-  const lg = Math.max(0, bigLog2(value));
-  const y = lg * MAGNITUDE_SCALE;
-  return new THREE.Vector3(x, y, 0);
+// worldPositionFor: deterministic 3D position for any integer value.
+// Every integer maps to a stable world coordinate — so the same value
+// always lives at the same spot, and loops return to the same orb.
+function worldPositionFor(value) {
+  // Zero sink (custom rule variants only): single orb at world origin
+  if (value === 0 || value === 0n) return new THREE.Vector3(0, 0, 0);
+
+  // Fast path for Number and small BigInts that fit in a Number
+  const nNum = typeof value === 'bigint' ? (value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : null) : value;
+  if (nNum != null && Number.isFinite(nNum) && nNum >= 1) {
+    return mapNumberToPosition(nNum, WORLD_OPTS);
+  }
+
+  // BigInt beyond SAFE_MAX: derive position without precision loss
+  const lg = bigLog2(value);
+  const y = lg * WORLD_OPTS.heightScaleLarge;
+  const tHash = Number(value % 2147483647n);
+  const theta = (tHash * DEFAULT_GOLDEN_ANGLE) % (Math.PI * 2);
+  const r = stoppingTime(value) * WORLD_OPTS.radiusScale;
+  return new THREE.Vector3(r * Math.cos(theta), y, r * Math.sin(theta));
 }
 
 function computeImportance(seq) {
@@ -488,7 +517,8 @@ async function buildPath(seq) {
   disposePath();
 
   totalSteps = seq.length;
-  pathPositions = seq.map((v, i) => pathPosition(i, v));
+  // 3D cone layout: positions are per-value (deterministic), not per-step.
+  pathPositions = seq.map(v => worldPositionFor(v));
   importance = computeImportance(seq);
   baseTimePerStep = getBaseTimePerStep(totalSteps);
   const q = getEffectiveQuality();
@@ -614,35 +644,31 @@ function disposePath() {
 
 // ── Sequence launch ─────────────────────────────────────
 export function startSequence(n) {
-  if (isBig(n)) {
-    computeSequenceAsync(n).then(({ values }) => launchSequence(n, values));
-    return;
-  }
-  const values = collatzValues(n);
-  launchSequence(n, values);
+  // buildOrbRunSequence handles BigInt via worker internally and appends
+  // the 4→2→1 tail under STOP_POLICY_PLAY_TERMINAL_ONCE.
+  buildOrbRunSequence(n, { stopPolicy: STOP_POLICY_PLAY_TERMINAL_ONCE })
+    .then(steps => { if (steps.length) launchSequence(n, steps); });
 }
 
-async function launchSequence(n, values) {
+async function launchSequence(n, steps) {
   cleanupDensityBand();
   densityMode = false;
 
-  sequence = [...values];
-  for (let c = 0; c < EXTRA_CYCLES; c++) {
-    sequence.push(4, 2, 1);
-  }
+  sequenceSteps = steps;
+  sequence = steps.map(s => s.value);
 
   userSpeed = 1;
 
   // Density mode for extremely long sequences
-  if (values.length > DENSITY_THRESHOLD) {
+  if (steps.length > DENSITY_THRESHOLD) {
     densityMode = true;
-    buildDensityBand(values);
+    buildDensityBand(sequence);
     userSpeed = Math.max(1, sequence.length / 100);
   }
 
   playState = 'building';
   await buildPath(sequence);
-  orbRunRegistry = buildOrbRunRegistry(sequence);
+  orbRunRegistry = buildOrbRunRegistry(sequenceSteps);
   orbStateRegistry = createOrbRunRegistry({
     maxActiveMeshes: Math.max(80, (qualityProfile?.maxVisibleOrbs || 50) * 2),
     maxPersistentRevealed: 320,
@@ -1108,8 +1134,13 @@ function updateRuntimePressure(dt) {
 }
 
 // ── Density band (for huge sequences) ───────────────────
+// Legacy band visualization for sequences > DENSITY_THRESHOLD steps.
+// In the 3D cone layout, the band is a horizontal strip sized from
+// the scene bounds. Keep as-is for now — it rarely triggers in normal
+// play and is out of scope for the 3D integration.
+const LEGACY_BAND_UNIT = 0.5;
 function buildDensityBand(values) {
-  const endX = (values.length - 1) * STEP_SPACING;
+  const endX = (values.length - 1) * LEGACY_BAND_UNIT;
   if (endX <= 0) return;
 
   const densityArray = new Float32Array(DENSITY_BINS);

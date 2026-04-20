@@ -11,12 +11,17 @@ import { isBig, isEven, isOne, nextCollatz, toValue, valueKey } from './valueUti
 
 export const STOP_POLICY_PLAY_TERMINAL_ONCE = 'terminalOnce';
 export const STOP_POLICY_FIRST_REPEAT = 'firstRepeat';
+// Safety cap used for hypothetical unterminated runs under custom rule
+// variants (e.g. a rule that doesn't converge). Standard positive Collatz
+// never hits this cap for realistic play ranges.
+export const STOP_POLICY_MAX_STEPS = 'maxSteps';
+const DEFAULT_MAX_STEPS = 10000;
 
 /**
  * Build orb-run steps.
  *
  * @param {number|string|bigint} input
- * @param {{ stopPolicy?: 'terminalOnce'|'firstRepeat', forceAsync?: boolean }} [opts]
+ * @param {{ stopPolicy?: 'terminalOnce'|'firstRepeat'|'maxSteps', forceAsync?: boolean, maxSteps?: number }} [opts]
  * @returns {Promise<Array<{
  *   value: number|bigint,
  *   nextValue: number|bigint|null,
@@ -26,12 +31,14 @@ export const STOP_POLICY_FIRST_REPEAT = 'firstRepeat';
  *   isLoopEntry: boolean,
  *   isTerminal: boolean,
  *   position: number,
+ *   reason?: 'terminal'|'repeat'|'maxSteps',
  * }>>}
  */
 export async function buildOrbRunSequence(input, opts = {}) {
   const {
     stopPolicy = STOP_POLICY_PLAY_TERMINAL_ONCE,
     forceAsync = false,
+    maxSteps = DEFAULT_MAX_STEPS,
   } = opts;
 
   const start = toValue(input);
@@ -78,15 +85,19 @@ export async function buildOrbRunSequence(input, opts = {}) {
     }
   }
 
-  return buildSteps(playbackValues, stopPolicy);
+  return buildSteps(playbackValues, stopPolicy, maxSteps);
 }
 
-function buildSteps(values, stopPolicy) {
+function buildSteps(values, stopPolicy, maxSteps) {
   const steps = [];
   const visited = new Set();
   let terminalMarked = false;
+  let terminalReason = null;
 
-  for (let i = 0; i < values.length; i++) {
+  const cap = Math.max(1, maxSteps || DEFAULT_MAX_STEPS);
+  const limit = Math.min(values.length, cap);
+
+  for (let i = 0; i < limit; i++) {
     const value = values[i];
     const nextValue = i < values.length - 1 ? values[i + 1] : null;
     const key = valueKey(value);
@@ -99,16 +110,23 @@ function buildSteps(values, stopPolicy) {
     let isTerminal = false;
     if (!terminalMarked) {
       if (stopPolicy === STOP_POLICY_FIRST_REPEAT) {
-        isTerminal = isRepeat;
+        if (isRepeat) { isTerminal = true; terminalReason = 'repeat'; }
       } else {
         // End on the final 1 in the explicit 4→2→1 tail.
-        isTerminal = nextValue == null;
+        if (nextValue == null) { isTerminal = true; terminalReason = 'terminal'; }
       }
-
       if (isTerminal) terminalMarked = true;
     }
 
-    steps.push({
+    // Hard cap: if we hit maxSteps without terminating, force terminal
+    // with reason='maxSteps' so the player knows the run was truncated.
+    if (!terminalMarked && i === limit - 1) {
+      isTerminal = true;
+      terminalMarked = true;
+      terminalReason = 'maxSteps';
+    }
+
+    const step = {
       value,
       nextValue,
       stepIndex: i,
@@ -119,7 +137,9 @@ function buildSteps(values, stopPolicy) {
       // Position is an abstract path coordinate; layout systems can map this
       // directly or transform it into world coordinates.
       position: i,
-    });
+    };
+    if (isTerminal && terminalReason) step.reason = terminalReason;
+    steps.push(step);
 
     if (terminalMarked) break;
   }

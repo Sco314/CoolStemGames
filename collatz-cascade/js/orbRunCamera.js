@@ -1,10 +1,15 @@
 import * as THREE from 'three';
 
-const INTRO_OFFSET = new THREE.Vector3(-1.4, 2.4, 5.2);
-const FOLLOW_HEIGHT = 1.35;
-const FOLLOW_BACK = 2.6;
-const FOLLOW_SIDE = 0.55;
-const TERMINAL_OFFSET = new THREE.Vector3(-0.9, 2.1, 5.6);
+// Baseline intro/follow/terminal offsets. For the 3D anomalous-cone
+// layout these get scaled up at reset() time based on the scene's
+// bounding sphere so the camera actually frames the whole cone.
+// _UNIT vectors are normalized — direction only, multiplied by a
+// scene-radius-based distance.
+const INTRO_OFFSET_UNIT = new THREE.Vector3(-0.18, 0.45, 1.0).normalize();
+const FOLLOW_HEIGHT_BASE = 1.35;
+const FOLLOW_BACK_BASE = 2.6;
+const FOLLOW_SIDE_BASE = 0.55;
+const TERMINAL_OFFSET_UNIT = new THREE.Vector3(-0.15, 0.38, 1.0).normalize();
 
 const FOLLOW_POS_STIFFNESS = 7.5;
 const LOOK_STIFFNESS = 6.5;
@@ -27,6 +32,12 @@ export function createOrbRunCameraRig() {
     terminalHold: false,
     followAnchor: new THREE.Vector3(),
     followLook: new THREE.Vector3(),
+    sceneCenter: new THREE.Vector3(),
+    sceneRadius: 1,           // bounding-sphere radius of the full cone
+    introPos: new THREE.Vector3(),
+    introLookAt: new THREE.Vector3(),
+    followScale: 1,
+    terminalPos: new THREE.Vector3(),
     initialized: false,
   };
 
@@ -38,6 +49,22 @@ export function createOrbRunCameraRig() {
     state.introFocus.copy(p0).lerp(p3, 0.65);
 
     state.funnelCenter.copy(computeFunnelCenter(pathPositions));
+
+    // Compute bounding sphere of the full cone so all three camera modes
+    // (intro, follow, terminal) scale with scene size. Otherwise small
+    // runs look from across the map and big ones (like 27) clip off-screen.
+    const bounds = computeBoundingSphere(pathPositions);
+    state.sceneCenter.copy(bounds.center);
+    state.sceneRadius = Math.max(1, bounds.radius);
+
+    // Intro camera: wide shot of the full cone, framed from above-and-behind.
+    const introDist = state.sceneRadius * 1.6 + 2.0;
+    state.introPos.copy(state.sceneCenter).addScaledVector(INTRO_OFFSET_UNIT, introDist);
+    state.introLookAt.copy(state.sceneCenter);
+
+    // Follow: scale the chase distance with the local cone size so the ball
+    // stays at a readable apparent size on long runs.
+    state.followScale = Math.max(1, Math.log2(state.sceneRadius + 1) * 0.8);
 
     const terminal = findTerminalSignature(sequence);
     if (terminal && pathPositions && pathPositions.length >= 3) {
@@ -51,6 +78,11 @@ export function createOrbRunCameraRig() {
       state.terminalStartStep = Infinity;
     }
 
+    // Terminal camera holds tight on the 4/2/1 cluster; distance is a small
+    // fraction of scene size so the three orbs fill the frame.
+    const terminalDist = Math.max(3, state.sceneRadius * 0.35);
+    state.terminalPos.copy(state.terminalCenter).addScaledVector(TERMINAL_OFFSET_UNIT, terminalDist);
+
     state.terminalHold = false;
     state.followAnchor.copy(p0);
     state.followLook.copy(p0);
@@ -59,19 +91,20 @@ export function createOrbRunCameraRig() {
 
   function getTarget({ dt, ballPos, currentStepFloat, totalSteps, pathSpline, playState, tacticalWeight = 0 }) {
     if (!state.initialized) {
-      return { position: ballPos.clone().add(INTRO_OFFSET), lookAt: ballPos.clone() };
+      return { position: ballPos.clone().addScaledVector(INTRO_OFFSET_UNIT, 4), lookAt: ballPos.clone() };
     }
 
     const inIntro = currentStepFloat < 0;
     const terminalBlend = getTerminalBlend(currentStepFloat, state.terminalStartStep, totalSteps, playState);
 
     if (inIntro) {
+      // Wide shot of the full cone while the ball charges — frames the
+      // whole world, bias slightly toward the ball as launch approaches.
       const launchBias = Math.max(0, Math.min(1, currentStepFloat + 1));
-      const introPos = state.shooterPos.clone().add(INTRO_OFFSET);
-      const introLook = state.introFocus.clone().lerp(state.funnelCenter, 0.25);
+      const introLook = state.introLookAt.clone().lerp(ballPos, launchBias * 0.25);
       return {
-        position: introPos,
-        lookAt: introLook.lerp(ballPos, launchBias * 0.2),
+        position: state.introPos.clone(),
+        lookAt: introLook,
       };
     }
 
@@ -79,10 +112,11 @@ export function createOrbRunCameraRig() {
     const side = tempB.set(0, 1, 0).cross(tangent).normalize();
     if (side.lengthSq() < 1e-6) side.set(0, 0, 1);
 
+    const scale = state.followScale;
     const desiredFollow = tempA.copy(ballPos)
-      .addScaledVector(tangent, -FOLLOW_BACK)
-      .addScaledVector(side, FOLLOW_SIDE);
-    desiredFollow.y += FOLLOW_HEIGHT;
+      .addScaledVector(tangent, -FOLLOW_BACK_BASE * scale)
+      .addScaledVector(side, FOLLOW_SIDE_BASE * scale);
+    desiredFollow.y += FOLLOW_HEIGHT_BASE * scale;
 
     const followAlpha = dampFactor(FOLLOW_POS_STIFFNESS, dt);
     state.followAnchor.lerp(desiredFollow, followAlpha);
@@ -93,22 +127,22 @@ export function createOrbRunCameraRig() {
     const lookAlpha = dampFactor(LOOK_STIFFNESS, dt);
     state.followLook.lerp(desiredLook, lookAlpha);
 
-    const tacticalPos = ballPos.clone().add(new THREE.Vector3(0, 2.5, 4.0));
+    const scale2 = state.followScale;
+    const tacticalPos = ballPos.clone().add(new THREE.Vector3(0, 2.5 * scale2, 4.0 * scale2));
     const tacticalLook = ballPos.clone();
 
     const pos = state.followAnchor.clone().lerp(tacticalPos, tacticalWeight * (1 - terminalBlend));
     const lookAt = state.followLook.clone().lerp(tacticalLook, tacticalWeight * 0.6 * (1 - terminalBlend));
 
     if (terminalBlend > 0) {
-      const terminalPos = state.terminalCenter.clone().add(TERMINAL_OFFSET);
-      pos.lerp(terminalPos, terminalBlend);
+      pos.lerp(state.terminalPos, terminalBlend);
       lookAt.lerp(state.terminalCenter, terminalBlend);
       if (playState === 'complete') state.terminalHold = true;
     }
 
     if (state.terminalHold) {
       return {
-        position: state.terminalCenter.clone().add(TERMINAL_OFFSET),
+        position: state.terminalPos.clone(),
         lookAt: state.terminalCenter.clone(),
       };
     }
@@ -148,6 +182,22 @@ function computeFunnelCenter(pathPositions = []) {
     count++;
   }
   return count ? center.multiplyScalar(1 / count) : center;
+}
+
+// Rough bounding sphere — good enough for camera framing. Uses the mean
+// point as the center and the max distance from that center as radius.
+function computeBoundingSphere(pathPositions = []) {
+  const center = new THREE.Vector3();
+  if (!pathPositions.length) return { center, radius: 1 };
+  for (const p of pathPositions) center.add(p);
+  center.multiplyScalar(1 / pathPositions.length);
+  let r2 = 0;
+  for (const p of pathPositions) {
+    const dx = p.x - center.x, dy = p.y - center.y, dz = p.z - center.z;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > r2) r2 = d2;
+  }
+  return { center, radius: Math.sqrt(r2) };
 }
 
 function findTerminalSignature(sequence = []) {
