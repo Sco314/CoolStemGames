@@ -23,6 +23,8 @@ import {
   makeRunHue,
   resolveOrbRunStyle,
 } from './orbrun-color.js';
+import { createOrbRunRegistry } from './orbrun-registry.js';
+import { getQuality } from './quality.js';
 
 // ── Path layout constants ───────────────────────────────
 const STEP_SPACING = 0.5;        // world units per step (X axis)
@@ -32,7 +34,7 @@ const ORB_RADIUS_ACTIVE = 0.14;
 const OPERATOR_RADIUS = 0.18;
 const ORB_SPIN_SPEED = 0.8;      // radians per second (Y-axis rotation)
 const LABEL_SCALE = 0.40;
-const EXTRA_CYCLES = 2;
+const EXTRA_CYCLES = 1;
 
 // Pacing: base time per step (seconds) by sequence length
 const PACING = [
@@ -52,8 +54,8 @@ const OVERVIEW_HEIGHT = 8;
 const OVERVIEW_DIST = 12;
 
 // Orb tier distances (in steps from ball)
-const ACTIVE_RANGE = 5;    // full size + label + glow
-const VISIBLE_RANGE = 25;  // visible but small, no label
+let ACTIVE_RANGE = 5;    // full size + label + glow
+let VISIBLE_RANGE = 25;  // visible but small, no label
 
 // Colors
 const ORB_COLOR_FUTURE = new THREE.Color(0.3, 0.35, 0.5);
@@ -98,10 +100,14 @@ let trailLine = null;        // traversed portion, bright
 // Step orbs
 let stepOrbs = [];           // { mesh, label, stepIdx }
 let orbRunRegistry = null;
+let orbStateRegistry = null;
 let orbRunHue = null;
 let terminalLoopMarked = false;
 let terminalFlashTimer = 0;
 let terminalFlashDone = false;
+let qualityProfile = null;
+let perfMode = 'auto';
+let frameDtEma = 0.016;
 
 // Camera blending
 let cameraMode = 'overview'; // overview | chase | tactical
@@ -135,6 +141,9 @@ export function getHitCount() { return hitCount; }
 export function getMilestoneCallout() { return milestoneCallout; }
 export function formatValue(n) { return fmtValue(n); }
 export function updateOrbRun(dt) { return updateNumberLine(dt); }
+export function setOrbRunPerformanceMode(mode) {
+  perfMode = mode === 'eco' ? 'eco' : 'auto';
+}
 // Legacy exports (no-ops, kept for import compatibility)
 export const MAX_ORBS = Infinity;
 export function setOrbVisibleMax() {}
@@ -142,6 +151,10 @@ export function getOrbVisibleMax() { return Infinity; }
 
 // ── Init ────────────────────────────────────────────────
 export function initNumberLine(scene) {
+  qualityProfile = getQuality();
+  ACTIVE_RANGE = 4;
+  VISIBLE_RANGE = Math.max(10, Math.floor((qualityProfile?.maxVisibleOrbs || 50) * 0.5));
+
   nlGroup = new THREE.Group();
   nlGroup.visible = false;
   scene.add(nlGroup);
@@ -209,6 +222,7 @@ export function clearNumberLine() {
   importance = [];
   stepOrbs = [];
   orbRunRegistry = null;
+  orbStateRegistry = null;
   orbRunHue = null;
   terminalLoopMarked = false;
   terminalFlashTimer = 0;
@@ -315,7 +329,9 @@ function buildPath(seq) {
 }
 
 function createStepOrb(stepIdx, value, pos) {
-  const geo = new THREE.SphereGeometry(ORB_RADIUS, 12, 8);
+  const seg = qualityProfile?.orbSegments || 12;
+  const rings = qualityProfile?.orbRings || 8;
+  const geo = new THREE.SphereGeometry(ORB_RADIUS, seg, rings);
   const mat = new THREE.MeshStandardMaterial({
     color: ORB_COLOR_FUTURE, emissive: ORB_COLOR_FUTURE,
     emissiveIntensity: 0.1, metalness: 0.2, roughness: 0.6,
@@ -411,6 +427,17 @@ function launchSequence(n, values) {
 
   buildPath(sequence);
   orbRunRegistry = buildOrbRunRegistry(sequence);
+  orbStateRegistry = createOrbRunRegistry({
+    maxActiveMeshes: Math.max(80, (qualityProfile?.maxVisibleOrbs || 50) * 2),
+    maxPersistentRevealed: 320,
+    maxPersistentRevealedLowEnd: 140,
+  });
+  for (let i = 0; i < sequence.length; i++) {
+    const v = sequence[i];
+    orbStateRegistry.upsertOrb(v, { position: pathPositions[i], isInCurrentRun: true, isRevealed: true });
+    if (i > 0) orbStateRegistry.addNeighbor(sequence[i - 1], v);
+  }
+  orbStateRegistry.setCurrentRun(sequence);
   orbRunHue = makeRunHue(n);
   terminalLoopMarked = false;
   terminalFlashTimer = 0;
@@ -447,6 +474,8 @@ export function skipToEnd() {
 
 // ── Update (called each frame) ──────────────────────────
 export function updateNumberLine(dt) {
+  updateRuntimePressure(dt);
+
   // Spin the start orb whenever it's visible
   if (operatorBall && operatorBall.visible) {
     operatorBall.rotation.y += ORB_SPIN_SPEED * dt;
@@ -622,6 +651,7 @@ export function updateNumberLine(dt) {
 // ── Orb tier management ─────────────────────────────────
 function activateOrb(orb) {
   orb.activated = true;
+  orbStateRegistry?.incrementActivation(orb.value);
   orb.activationMix = 0;
   orb.mesh.material.color.copy(ORB_COLOR_FUTURE);
   orb.mesh.material.emissive.copy(ORB_COLOR_FUTURE);
@@ -632,6 +662,9 @@ function activateOrb(orb) {
 function markTerminalLoopOnce() {
   if (terminalLoopMarked) return;
   terminalLoopMarked = true;
+  orbStateRegistry?.markTerminalLoop(4, true);
+  orbStateRegistry?.markTerminalLoop(2, true);
+  orbStateRegistry?.markTerminalLoop(1, true);
   if (!terminalFlashDone) {
     terminalFlashDone = true;
     terminalFlashTimer = 0.55;
@@ -639,6 +672,13 @@ function markTerminalLoopOnce() {
 }
 
 function updateOrbTiers(currentStep, dt = 0) {
+  const maxVisible = perfMode === 'eco'
+    ? Math.max(10, Math.floor((qualityProfile?.maxVisibleOrbs || 50) * 0.5))
+    : (qualityProfile?.maxVisibleOrbs || 50);
+  const adaptiveVisibleRange = Math.max(10, Math.min(VISIBLE_RANGE, Math.floor(maxVisible * 0.55)));
+  const labelStride = perfMode === 'eco' ? 3 : (frameDtEma > 0.03 ? 2 : 1);
+  let visibleCount = 0;
+
   for (const orb of stepOrbs) {
     const dist = Math.abs(orb.stepIdx - currentStep);
     if (orb.activated) {
@@ -663,22 +703,24 @@ function updateOrbTiers(currentStep, dt = 0) {
     orb.mesh.material.emissive.copy(style.emissive);
     orb.mesh.material.emissiveIntensity = style.emissiveIntensity + emissiveBoost;
 
-    if (dist <= ACTIVE_RANGE) {
+    if (dist <= ACTIVE_RANGE && visibleCount < maxVisible) {
       // Active tier: full size, label visible
       const scale = orb.stepIdx === currentStep ? ORB_RADIUS_ACTIVE / ORB_RADIUS : 1.0;
       orb.mesh.scale.setScalar(scale);
-      orb.label.visible = true;
+      orb.label.visible = (orb.stepIdx % labelStride === 0);
       orb.mesh.material.opacity = style.opacity;
-    } else if (dist <= VISIBLE_RANGE) {
+      visibleCount++;
+    } else if (dist <= adaptiveVisibleRange && visibleCount < maxVisible) {
       // Context tier: smaller, no label
       orb.mesh.scale.setScalar(0.6);
       orb.label.visible = false;
       orb.mesh.material.opacity = orb.activated ? 0.55 : 0.2;
+      visibleCount++;
     } else {
       // Distant: tiny or hidden
-      orb.mesh.scale.setScalar(0.3);
+      orb.mesh.scale.setScalar(0.001);
       orb.label.visible = false;
-      orb.mesh.material.opacity = orb.activated ? 0.2 : 0.05;
+      orb.mesh.material.opacity = 0.0;
     }
   }
 }
@@ -711,6 +753,7 @@ function getCameraTarget() {
     return {
       position: new THREE.Vector3(SHOOTER_X, 2.0, 4.0),
       lookAt: overviewTarget,
+      lerp: 0.08,
     };
   }
 
@@ -723,10 +766,31 @@ function getCameraTarget() {
     return {
       position: new THREE.Vector3(center.x, center.y + Math.max(3, span * 0.3), Math.max(5, span * 0.5)),
       lookAt: center,
+      lerp: 0.07,
     };
   }
 
-  return { position: pos, lookAt };
+  return {
+    position: pos,
+    lookAt,
+    lerp: perfMode === 'eco' ? 0.1 : (qualityProfile?.cameraLerp || 0.12),
+  };
+}
+
+function updateRuntimePressure(dt) {
+  const clamped = Math.max(0.001, Math.min(0.08, dt));
+  frameDtEma = frameDtEma * 0.92 + clamped * 0.08;
+  if (perfMode === 'auto') {
+    if (frameDtEma > 0.036) {
+      VISIBLE_RANGE = Math.max(10, VISIBLE_RANGE - 1);
+    } else if (frameDtEma < 0.02) {
+      const target = Math.max(10, Math.floor((qualityProfile?.maxVisibleOrbs || 50) * 0.5));
+      VISIBLE_RANGE = Math.min(target, VISIBLE_RANGE + 1);
+    }
+  } else {
+    const target = Math.max(10, Math.floor((qualityProfile?.maxVisibleOrbs || 50) * 0.35));
+    VISIBLE_RANGE = target;
+  }
 }
 
 // ── Density band (for huge sequences) ───────────────────
