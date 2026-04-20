@@ -12,7 +12,7 @@ import {
   getRaycastCandidates, getNodes,
 } from './graph.js';
 import { pulseAnchor } from './animate.js';
-import { autoFrame, flyToNode, recenter, getCamera, getControls } from './camera.js';
+import { autoFrame, flyToNode, recenter, getCamera, getControls, setPostFxEnabled, isPostFxEnabled } from './camera.js';
 import {
   getGameState, getGameMode, getTotalScore, getStreak, getBuckets,
   getSelectedBucket, getChallenge, getHighScore, getBestStreak,
@@ -23,7 +23,7 @@ import { INPUT_MAX, RECENT_MAX } from './constants.js';
 import {
   showNumberLine, hideNumberLine, startSequence,
   getMathDisplay, getPlayState, formatValue,
-  setSpeed, getSpeed,
+  setSpeed, getSpeed, setPaused, isPausedPlayback, getRunStats,
   setOrbRunPerformanceMode,
   clearNumberLine, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
   isDensityMode, skipToEnd, getHitCount, getMilestoneCallout,
@@ -45,6 +45,7 @@ import {
   setFlatChartRenderMode, getFlatChartRenderMode,
   refitFlatChart,
 } from './flatchart.js';
+import { isMobileTier } from './quality.js';
 
 // ── DOM refs ─────────────────────────────────────────────
 const input = document.getElementById('num-input');
@@ -132,6 +133,7 @@ export function getMouse() { return mouse; }
 // ── Init ─────────────────────────────────────────────────
 export function initUI(onSubmit) {
   input.focus();
+  const mobileTier = isMobileTier();
 
   function submit() {
     const raw = input.value.trim();
@@ -447,6 +449,11 @@ export function initUI(onSubmit) {
     // Called when a graph-based mode (particles/value/parity/stopping)
     // is selected. Shows the graph visibility slider.
     graphSliderWrap.classList.remove('hidden');
+    const particleLimit = particleLoadSetting === 'low' ? MOBILE_PARTICLE_CAP : userGraphVisibleMax;
+    const clamped = Math.max(1, Math.min(particleLimit, MAX_VISIBLE_NODES));
+    setGraphVisibleMax(clamped);
+    graphSlider.value = clamped;
+    graphSliderVal.textContent = String(clamped);
   }
 
   function frameTimeSeriesCamera() {
@@ -537,9 +544,54 @@ export function initUI(onSubmit) {
     perfBtn.textContent = perfMode === 'auto' ? 'Perf: Auto' : 'Perf: Eco';
   });
 
+  const pauseBtn = document.getElementById('nl-pause');
+  pauseBtn.addEventListener('click', () => {
+    const nextPaused = !isPausedPlayback();
+    setPaused(nextPaused);
+    pauseBtn.textContent = nextPaused ? 'Resume' : 'Pause';
+  });
+
   // Skip to End (Number Line density mode only)
   const skipBtn = document.getElementById('nl-skip');
   skipBtn.addEventListener('click', () => skipToEnd());
+
+  const MOBILE_PARTICLE_CAP = 180;
+  let userGraphVisibleMax = getGraphVisibleMax();
+  let particleLoadSetting = mobileTier ? 'low' : 'auto';
+  const particleToggleBtn = document.getElementById('toggle-particle-load');
+  const postFxToggleBtn = document.getElementById('toggle-postfx');
+
+  function refreshPerfToggles() {
+    if (particleToggleBtn) {
+      particleToggleBtn.textContent = `Particle load: ${particleLoadSetting}`;
+    }
+    if (postFxToggleBtn) {
+      postFxToggleBtn.textContent = `Post FX: ${isPostFxEnabled() ? 'on' : 'off'}`;
+    }
+  }
+
+  if (particleToggleBtn) {
+    particleToggleBtn.addEventListener('click', () => {
+      particleLoadSetting = particleLoadSetting === 'low' ? 'auto' : 'low';
+      const nextMax = particleLoadSetting === 'low'
+        ? Math.min(userGraphVisibleMax, MOBILE_PARTICLE_CAP)
+        : userGraphVisibleMax;
+      setGraphVisibleMax(nextMax);
+      graphSlider.value = nextMax;
+      graphSliderVal.textContent = String(nextMax);
+      refreshPerfToggles();
+    });
+  }
+
+  if (postFxToggleBtn) {
+    postFxToggleBtn.addEventListener('click', () => {
+      setPostFxEnabled(!isPostFxEnabled());
+      refreshPerfToggles();
+    });
+  }
+
+  setPostFxEnabled(!mobileTier);
+  refreshPerfToggles();
 
   // Clear for chart modes (time series + spiral + flat chart)
   document.getElementById('chart-clear').addEventListener('click', () => {
@@ -596,7 +648,12 @@ export function initUI(onSubmit) {
   makeRubberbandSlider({
     sliderEl: graphSlider, valEl: graphSliderVal,
     initialMax: 200, initialValue: 100, safetyMax: MAX_VISIBLE_NODES,
-    onChange: (n) => setGraphVisibleMax(n),
+    onChange: (n) => {
+      userGraphVisibleMax = n;
+      const effective = particleLoadSetting === 'low' ? Math.min(n, MOBILE_PARTICLE_CAP) : n;
+      setGraphVisibleMax(effective);
+      graphSliderVal.textContent = String(effective);
+    },
   });
   makeRubberbandSlider({
     sliderEl: spiralSlider, valEl: spiralSliderVal,
@@ -651,6 +708,21 @@ export function initUI(onSubmit) {
   const hitCountEl = document.getElementById('hit-count');
 
   const milestoneEl = document.getElementById('milestone-callout');
+  const runStatsEl = document.getElementById('nl-stats');
+  const statValueEl = document.getElementById('nl-stat-value');
+  const statStepEl = document.getElementById('nl-stat-step');
+  const statPeakEl = document.getElementById('nl-stat-peak');
+  const statEtaEl = document.getElementById('nl-stat-eta');
+  const badgesEl = document.getElementById('nl-badges');
+
+  function formatEta(seconds) {
+    if (!Number.isFinite(seconds) || seconds <= 0) return 'done';
+    if (seconds < 10) return `${seconds.toFixed(1)}s`;
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const m = Math.floor(seconds / 60);
+    const s = Math.round(seconds % 60);
+    return `${m}m ${s}s`;
+  }
 
   function updateMathBar() {
     requestAnimationFrame(updateMathBar);
@@ -673,6 +745,22 @@ export function initUI(onSubmit) {
     } else {
       hitCounter.classList.add('hidden');
     }
+
+    const stats = getRunStats();
+    if (numberLineMode && stats && getPlayState() !== 'idle') {
+      runStatsEl.classList.remove('hidden');
+      statValueEl.textContent = formatValue(stats.currentValue);
+      statStepEl.textContent = `${stats.stepIndex}/${stats.totalSteps}`;
+      statPeakEl.textContent = formatValue(stats.peakValue);
+      statEtaEl.textContent = stats.isPaused ? 'paused' : formatEta(stats.estimatedRemainingSec);
+      badgesEl.innerHTML = stats.badges.map((b) => `<span class="nl-badge">${b}</span>`).join('');
+    } else {
+      runStatsEl.classList.add('hidden');
+      badgesEl.innerHTML = '';
+    }
+
+    pauseBtn.textContent = isPausedPlayback() ? 'Resume' : 'Pause';
+
     if (!numberLineMode) {
       mathBar.classList.add('hidden');
       return;

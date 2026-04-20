@@ -15,9 +15,19 @@ import {
   SPRING_LENGTH,
 } from './constants.js';
 import { isClimber } from './collatz.js';
+import { getEffectiveQuality } from './quality.js';
 
 // ── Active animations ────────────────────────────────────
 const activeAnims = [];     // Array of { update(now) → bool (true = done) }
+
+function pulseBudgetAvailable() {
+  const maxPulses = getEffectiveQuality().maxEmissivePulses;
+  let pulseCount = 0;
+  for (const anim of activeAnims) {
+    if (anim.kind === 'pulse') pulseCount++;
+  }
+  return pulseCount < maxPulses;
+}
 
 /**
  * Add a number to the graph with animated draw-in.
@@ -167,6 +177,7 @@ function animateSequenceDrawIn(newValues, mergeValue, willRescale) {
 
 // ── Merge flare animation ────────────────────────────────
 function animateMergeFlare(value) {
+  if (!pulseBudgetAvailable()) return;
   const node = getNodes().get(value);
   if (!node) return;
 
@@ -175,6 +186,7 @@ function animateMergeFlare(value) {
   const origScale = 1;
 
   activeAnims.push({
+    kind: 'pulse',
     update(now) {
       if (startTime < 0) startTime = now;
       const t = Math.min(1, (now - startTime) / MERGE_FLARE_DURATION);
@@ -239,11 +251,13 @@ function animateColorRescale() {
 
 // ── Path pulse ("already exists") ────────────────────────
 function animatePathPulse(values) {
+  if (!pulseBudgetAvailable()) return;
   // values is [n, ..., 1] — pulse travels from n down to 1
   let startTime = -1;
   const pulsePerNode = PATH_PULSE_DURATION / values.length;
 
   activeAnims.push({
+    kind: 'pulse',
     update(now) {
       if (startTime < 0) startTime = now;
       const elapsed = now - startTime;
@@ -284,11 +298,13 @@ function animatePathPulse(values) {
 
 // ── Animate anchor pulse on input "1" ────────────────────
 export function pulseAnchor() {
+  if (!pulseBudgetAvailable()) return;
   const node = getNodes().get(1);
   if (!node) return;
   let startTime = -1;
 
   activeAnims.push({
+    kind: 'pulse',
     update(now) {
       if (startTime < 0) startTime = now;
       const t = Math.min(1, (now - startTime) / 600);

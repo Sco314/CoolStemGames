@@ -11,6 +11,7 @@ import { initNumberLine, updateOrbRun, isOrbRunActive } from './numberline.js';
 import { initTimeSeries, updateTimeSeries, isTimeSeriesActive } from './timeseries.js';
 import { initSpiral, updateSpiral, isSpiralActive } from './spiral.js';
 import { initFlatChart, updateFlatChart, isFlatChartActive } from './flatchart.js';
+import { degradeRuntimeQuality, canDegradeRuntime } from './quality.js';
 
 // ── Block iOS Safari's page-level pinch-zoom gestures ───
 // touch-action: none should handle this, but iOS fires legacy
@@ -68,20 +69,34 @@ initUI((n) => {
 const clock = new THREE.Clock();
 const camera = getCamera();
 const controls = getControls();
+let slowFrameStreak = 0;
+const SLOW_FRAME_MS = 28;
+const SLOW_STREAK_TO_DEGRADE = 40;
 
 function animate() {
   requestAnimationFrame(animate);
 
   const dt = Math.min(clock.getDelta(), 0.05);
   const now = performance.now();
+  const frameMs = dt * 1000;
+  if (frameMs > SLOW_FRAME_MS) {
+    slowFrameStreak++;
+  } else {
+    slowFrameStreak = Math.max(0, slowFrameStreak - 2);
+  }
+  if (slowFrameStreak >= SLOW_STREAK_TO_DEGRADE && canDegradeRuntime()) {
+    degradeRuntimeQuality();
+    slowFrameStreak = 0;
+  }
 
   if (isOrbRunActive()) {
     // Number line mode: update playback and follow camera
     const camTarget = updateOrbRun(dt);
     if (camTarget) {
-      const lerp = Math.max(0.04, Math.min(0.3, camTarget.lerp ?? 0.12));
-      camera.position.lerp(camTarget.position, lerp);
-      controls.target.lerp(camTarget.lookAt, lerp);
+      const posAlpha = 1 - Math.exp(-8 * dt);
+      const lookAlpha = 1 - Math.exp(-10 * dt);
+      camera.position.lerp(camTarget.position, posAlpha);
+      controls.target.lerp(camTarget.lookAt, lookAlpha);
     }
     controls.update();
   } else if (isTimeSeriesActive()) {

@@ -60,3 +60,11 @@ export const CAMERA_FOV = 55;
 export const CAMERA_INITIAL_DISTANCE = 18;
 export const CAMERA_MIN_DISTANCE = 4;
 export const CAMERA_MAX_DISTANCE = 10000;
+
+// ── Orb Run traversal tuning ───────────────────────────
+export const travelDurationBase = 0.14;          // seconds
+export const travelDurationPerDistance = 0.24;   // seconds per world unit
+export const orbGrowthDuration = 0.12;           // seconds
+export const impactPauseMs = 60;                 // milliseconds
+export const launchImpulseStrength = 0.14;       // world units
+export const cameraLag = 10.0;                   // higher = snappier camera response
