@@ -1112,6 +1112,7 @@ function getCameraTarget(dt = 1 / 60) {
     currentStepFloat,
     totalSteps,
     pathSpline,
+    pathPositions,
     playState,
     tacticalWeight: tactical,
   });

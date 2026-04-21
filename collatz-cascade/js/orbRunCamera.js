@@ -5,14 +5,13 @@ import * as THREE from 'three';
 // bounding sphere so the camera actually frames the whole cone.
 // _UNIT vectors are normalized — direction only, multiplied by a
 // scene-radius-based distance.
-const INTRO_OFFSET_UNIT = new THREE.Vector3(-0.18, 0.45, 1.0).normalize();
-const FOLLOW_HEIGHT_BASE = 1.35;
-const FOLLOW_BACK_BASE = 2.6;
-const FOLLOW_SIDE_BASE = 0.55;
-const TERMINAL_OFFSET_UNIT = new THREE.Vector3(-0.15, 0.38, 1.0).normalize();
+const INTRO_OFFSET_UNIT = new THREE.Vector3(-0.2, 0.5, 1.0).normalize();
+const FOLLOW_DIST = 4.0;
+const FOLLOW_HEIGHT = 2.0;
+const TERMINAL_OFFSET_UNIT = new THREE.Vector3(-0.15, 0.4, 1.0).normalize();
 
-const FOLLOW_POS_STIFFNESS = 7.5;
-const LOOK_STIFFNESS = 6.5;
+const FOLLOW_POS_STIFFNESS = 5.0;
+const LOOK_STIFFNESS = 4.5;
 
 const tempA = new THREE.Vector3();
 const tempB = new THREE.Vector3();
@@ -89,7 +88,7 @@ export function createOrbRunCameraRig() {
     state.initialized = true;
   }
 
-  function getTarget({ dt, ballPos, currentStepFloat, totalSteps, pathSpline, playState, tacticalWeight = 0 }) {
+  function getTarget({ dt, ballPos, currentStepFloat, totalSteps, pathSpline, pathPositions, playState, tacticalWeight = 0 }) {
     if (!state.initialized) {
       return { position: ballPos.clone().addScaledVector(INTRO_OFFSET_UNIT, 4), lookAt: ballPos.clone() };
     }
@@ -98,8 +97,6 @@ export function createOrbRunCameraRig() {
     const terminalBlend = getTerminalBlend(currentStepFloat, state.terminalStartStep, totalSteps, playState);
 
     if (inIntro) {
-      // Wide shot of the full cone while the ball charges — frames the
-      // whole world, bias slightly toward the ball as launch approaches.
       const launchBias = Math.max(0, Math.min(1, currentStepFloat + 1));
       const introLook = state.introLookAt.clone().lerp(ballPos, launchBias * 0.25);
       return {
@@ -108,31 +105,33 @@ export function createOrbRunCameraRig() {
       };
     }
 
-    const tangent = sampleTangent(pathSpline, currentStepFloat, totalSteps);
-    const side = tempB.set(0, 1, 0).cross(tangent).normalize();
-    if (side.lengthSq() < 1e-6) side.set(0, 0, 1);
+    // Use the ball's actual hop direction (current→next orb) instead of
+    // the spline tangent. The spline through scattered 3D cone positions
+    // creates wild curves; the hop vector is what the player sees.
+    const curStep = Math.max(0, Math.floor(currentStepFloat));
+    const nextStep = Math.min((pathPositions?.length || 1) - 1, curStep + 1);
+    const hopDir = tempC.set(0, 0, -1);
+    if (pathPositions && pathPositions[curStep] && pathPositions[nextStep]) {
+      hopDir.copy(pathPositions[nextStep]).sub(pathPositions[curStep]);
+      if (hopDir.lengthSq() > 1e-6) hopDir.normalize();
+      else hopDir.set(0, 0, -1);
+    }
 
-    const scale = state.followScale;
+    // Camera sits behind + above the ball relative to its travel direction.
     const desiredFollow = tempA.copy(ballPos)
-      .addScaledVector(tangent, -FOLLOW_BACK_BASE * scale)
-      .addScaledVector(side, FOLLOW_SIDE_BASE * scale);
-    desiredFollow.y += FOLLOW_HEIGHT_BASE * scale;
+      .addScaledVector(hopDir, -FOLLOW_DIST);
+    desiredFollow.y += FOLLOW_HEIGHT;
 
     const followAlpha = dampFactor(FOLLOW_POS_STIFFNESS, dt);
     state.followAnchor.lerp(desiredFollow, followAlpha);
 
-    const lookAhead = sampleLookAhead(pathSpline, currentStepFloat, totalSteps);
-    const compositionWeight = Math.max(0, 0.28 - terminalBlend * 0.18);
-    const desiredLook = lookAhead.lerp(state.funnelCenter, compositionWeight);
+    // Look slightly ahead of the ball along its hop direction
+    const desiredLook = tempB.copy(ballPos).addScaledVector(hopDir, 1.5);
     const lookAlpha = dampFactor(LOOK_STIFFNESS, dt);
     state.followLook.lerp(desiredLook, lookAlpha);
 
-    const scale2 = state.followScale;
-    const tacticalPos = ballPos.clone().add(new THREE.Vector3(0, 2.5 * scale2, 4.0 * scale2));
-    const tacticalLook = ballPos.clone();
-
-    const pos = state.followAnchor.clone().lerp(tacticalPos, tacticalWeight * (1 - terminalBlend));
-    const lookAt = state.followLook.clone().lerp(tacticalLook, tacticalWeight * 0.6 * (1 - terminalBlend));
+    const pos = state.followAnchor.clone();
+    const lookAt = state.followLook.clone();
 
     if (terminalBlend > 0) {
       pos.lerp(state.terminalPos, terminalBlend);
