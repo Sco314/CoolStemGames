@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<!-- confetti-gif-maker.html — Confetti GIF Maker -->
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Confetti GIF Maker</title>
+<link rel="stylesheet" href="./styles.css">
+
+</head>
+<body>
+
+<!-- TEST AREA -->
+<div id="test-area">
+  <canvas id="c"></canvas>
+  <div id="ch-h"></div>
+  <div id="ch-v"></div>
+  <div id="ch-dot"></div>
+  <div id="test-hint">Click anywhere to test &nbsp;·&nbsp; drag to stream &nbsp;·&nbsp; [Space] center-launch</div>
+  <div id="particle-count">particles: 0</div>
+  <button id="launch-center-btn">🚀 Launch from Center</button>
+</div>
+
+<!-- CONTROL PANEL — 2 rows, no horizontal scroll -->
+<div id="panel">
+
+  <!-- ROW 1: physics/spawn settings -->
+  <div class="pr">
+
+    <div class="ps">
+      <div class="pt">Spawn</div>
+      <div class="sr">
+        <label>Count</label>
+        <span class="sv" id="v_count">115</span>
+        <input type="range" id="s_count" min="10" max="500" step="5" value="115">
+      </div>
+      <div class="sr">
+        <label>Spread px</label>
+        <span class="sv" id="v_spread">0</span>
+        <input type="range" id="s_spread" min="0" max="300" step="5" value="0">
+      </div>
+      <div class="pt sub">Shapes <span style="opacity:.4;font-size:7px;font-weight:400;letter-spacing:0;text-transform:none">— multi-select</span></div>
+      <div class="shape-row">
+        <button class="sb on" data-shape="rect"   title="Rectangle">▬</button>
+        <button class="sb on" data-shape="circle" title="Circle">●</button>
+        <button class="sb on" data-shape="star"   title="Star">★</button>
+        <button class="sb"    data-shape="tri"    title="Triangle">▲</button>
+        <button class="sb"    data-shape="line"   title="Ribbon">━</button>
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Launch Mode</div>
+      <div class="mode-row">
+        <button class="mb"    data-mode="burst">💥 Burst</button>
+        <button class="mb on" data-mode="bloom">🌸 Bloom</button>
+        <button class="mb"    data-mode="rain">🌧 Rain</button>
+        <button class="mb"    data-mode="fountain">⛲ Fount</button>
+      </div>
+      <div class="pt sub">Preset</div>
+      <div style="display:flex;gap:3px;align-items:stretch">
+        <select class="p-sel" id="preset-sel" style="flex:1">
+          <option value="">— Load preset —</option>
+          <option value="default">🎉 Default</option>
+          <option value="gentle">🌸 Gentle</option>
+          <option value="fireworks">🎆 Fireworks</option>
+          <option value="blizzard">❄️ Blizzard</option>
+          <option value="party">🥳 Party</option>
+          <option value="subtle">✨ Subtle</option>
+        </select>
+        <button class="ab" id="save-preset-btn" title="Save current settings">💾</button>
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Velocity</div>
+      <div class="sr">
+        <label>Horizontal</label>
+        <span class="sv" id="v_vx">14</span>
+        <input type="range" id="s_vx" min="0" max="30" step="0.5" value="14">
+      </div>
+      <div class="sr">
+        <label>Launch up</label>
+        <span class="sv" id="v_vy">16</span>
+        <input type="range" id="s_vy" min="1" max="40" step="0.5" value="16">
+      </div>
+      <div class="sr">
+        <label>Min upward</label>
+        <span class="sv" id="v_vyMin">4</span>
+        <input type="range" id="s_vyMin" min="0" max="20" step="0.5" value="4">
+      </div>
+      <div class="sr">
+        <label>Wind drift</label>
+        <span class="sv" id="v_wind">0.00</span>
+        <input type="range" id="s_wind" min="-3" max="3" step="0.05" value="0">
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Physics</div>
+      <div class="sr">
+        <label>Gravity</label>
+        <span class="sv" id="v_gravity">0.55</span>
+        <input type="range" id="s_gravity" min="0" max="2" step="0.01" value="0.55">
+      </div>
+      <div class="sr">
+        <label>Air drag %</label>
+        <span class="sv" id="v_drag">0%</span>
+        <input type="range" id="s_drag" min="0.9" max="1" step="0.002" value="1">
+      </div>
+      <div class="sr">
+        <label>Spin speed</label>
+        <span class="sv" id="v_spin">0.30</span>
+        <input type="range" id="s_spin" min="0" max="0.5" step="0.01" value="0.3">
+      </div>
+      <div class="sr">
+        <label>Fade rate</label>
+        <span class="sv" id="v_fade">0.005</span>
+        <input type="range" id="s_fade" min="0.001" max="0.04" step="0.001" value="0.005">
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Particle Size</div>
+      <div class="sr">
+        <label>Max width</label>
+        <span class="sv" id="v_w">8</span>
+        <input type="range" id="s_w" min="2" max="50" step="1" value="8">
+      </div>
+      <div class="sr">
+        <label>Max height</label>
+        <span class="sv" id="v_h">6</span>
+        <input type="range" id="s_h" min="1" max="50" step="1" value="6">
+      </div>
+      <div class="sr">
+        <label>Variance</label>
+        <span class="sv" id="v_sizeVar">50%</span>
+        <input type="range" id="s_sizeVar" min="0" max="1" step="0.05" value="0.5">
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="pt">Output</div>
+      <div style="display:flex;gap:4px">
+        <button class="ab hi" id="out-btn" style="flex:1">📋 Export</button>
+        <button class="ab" id="share-btn" style="flex:1">🔗 Share</button>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:3px">
+        <button class="ab" id="gif-open-btn" style="flex:1;color:#ff6b6b;border-color:rgba(255,75,75,0.3)">🎬 GIF</button>
+        <button class="ab" id="clear-btn" style="flex:1">🧹 Clear</button>
+        <button class="ab" id="reset-btn" style="flex:1">↩ Reset</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:5px;margin-top:4px;font-size:8.5px;color:rgba(255,255,255,0.4);cursor:pointer">
+        <input type="checkbox" id="auto-preview-cb" checked> Auto-preview
+      </label>
+      <button class="af-btn" id="af-btn" style="margin-top:4px">▶ Auto-fire: Off</button>
+      <div class="sr dim" id="rate-row">
+        <label>Rate (sec)</label>
+        <span class="sv" id="v_rate">2.0</span>
+        <input type="range" id="s_rate" min="0.3" max="6" step="0.1" value="2">
+      </div>
+    </div>
+
+  </div><!-- /pr row 1 -->
+
+  <!-- ROW 2: colors (full width) -->
+  <div class="pr">
+
+    <div class="ps" style="flex:1">
+      <div class="pt">Palette <span style="opacity:.4;font-size:7px;font-weight:400;letter-spacing:0;text-transform:none">tap=toggle · hold=edit</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center">
+        <div class="sw-row" id="sw-default" style="display:contents"></div>
+        <div class="cs-row" id="sw-custom" style="display:contents"></div>
+        <div class="bg-row" style="margin:0;flex-shrink:0">
+          <label>BG</label>
+          <input type="color" id="bg-color" value="#1a1a2e" title="Test area background">
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /pr row 2 -->
+
+</div><!-- /panel -->
+
+<!-- OUTPUT MODAL -->
+<div id="out-modal">
+  <div class="m-box">
+    <div class="m-head">
+      <div style="flex:1">
+        <h2>📋 Export Confetti Code</h2>
+        <p>Paste before &lt;/body&gt; · call launchConfetti(x, y)</p>
+      </div>
+      <button class="m-copy"  id="m-copy-btn">Copy All</button>
+      <button class="m-close" id="m-close-btn">✕ Close</button>
+    </div>
+    <pre id="out-code"></pre>
+    <div id="out-fb"></div>
+  </div>
+</div>
+
+<!-- GIF MAKER MODAL -->
+<div id="gif-modal">
+  <div class="gif-box">
+    <div class="gif-head">
+      <h2>🎬 GIF Maker</h2>
+      <button id="gif-close-btn">✕ Close</button>
+    </div>
+    <div class="gif-body">
+
+      <div class="gif-controls">
+        <label>Duration</label>
+        <span class="sv" id="gif-dur-val">3.0s</span>
+        <input type="range" id="gif-dur" min="1" max="8" step="0.5" value="3">
+      </div>
+
+      <div class="gif-controls">
+        <label>FPS</label>
+        <span class="sv" id="gif-fps-val">15</span>
+        <input type="range" id="gif-fps" min="5" max="30" step="1" value="15">
+      </div>
+
+      <div class="gif-controls">
+        <label>Scale</label>
+        <span class="sv" id="gif-scale-val">1x</span>
+        <input type="range" id="gif-scale" min="0.25" max="1" step="0.25" value="0.5">
+      </div>
+
+      <div class="gif-row">
+        <label style="font-size:10px;color:rgba(255,255,255,0.35)">Lower scale = smaller file. Captures the test area with current settings.</label>
+      </div>
+
+      <button id="gif-record-btn">⏺ Record GIF</button>
+
+      <div id="gif-progress">
+        <span id="gif-progress-text">Recording...</span>
+        <div class="bar"><div class="bar-fill" id="gif-bar-fill"></div></div>
+      </div>
+
+      <div id="gif-preview-area">
+        <img id="gif-preview-img" alt="GIF preview">
+        <div id="gif-size-info"></div>
+        <div class="gif-actions">
+          <button id="gif-download-btn">💾 Save GIF</button>
+          <button id="gif-share-btn">🔗 Share</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="./app.js"></script>
+</body>
+</html>
