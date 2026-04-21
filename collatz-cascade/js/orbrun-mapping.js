@@ -24,13 +24,16 @@ export function mapNumberToPosition(n, opts = {}) {
   const {
     heightPolicy = 'production',
     scale = 0.05,
-    heightScaleLarge = 1.25,
-    radiusScale = 0.6,
+    heightScaleLarge = 0.8,
+    radiusScale = 0.5,
     goldenAngle = DEFAULT_GOLDEN_ANGLE,
   } = opts;
 
   const nNum = Number(n);
-  const r = stoppingTime(n) * radiusScale;
+  // sqrt compresses long stopping-times so the cone stays compact:
+  // stoppingTime 100 → r=5 vs linear r=60. The shape is preserved.
+  const st = stoppingTime(n);
+  const r = Math.sqrt(st) * radiusScale;
 
   const thetaRaw = nNum * goldenAngle;
   const theta = ((thetaRaw % TAU) + TAU) % TAU;
