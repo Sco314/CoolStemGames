@@ -27,9 +27,9 @@ window.COOL_STEM_APPS = [
     bg: "radial-gradient(circle at 50% 50%, #3b1e0d 0%, #0a0f1e 80%)",
   },
   {
-    title: "Confetti Lab",
-    sub: "Design & test confetti effects",
-    href: "/confetti-lab/",
+    title: "Confetti Gif Maker",
+    sub: "Design & export confetti GIFs",
+    href: "/confetti-gif-maker/",
     bg: "linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%)",
   },
 ];
