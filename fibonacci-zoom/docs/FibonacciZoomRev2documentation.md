@@ -3,11 +3,13 @@
 **Versions covered:**
 - **v2.0** — Tier 1 (Boosts + Engine + Offline) — shipped 2026-04
 - **v2.5** — Tier 2 (Streak + Achievements + Skins) — shipped 2026-04
+- **v3.0** — Tier 3 (Combo + Golden Moment + Gallery + Weekly Challenge) — shipped 2026-04
 
 **Author:** Scott Sandvik
 **Source plans:**
 - `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 1.md`
 - `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 2.md`
+- `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 3.md`
 
 ---
 
@@ -43,11 +45,17 @@ All changes land in the single-file app `fibonacci-zoom/index.html`. No bundler,
 5. [Feature 5 — Achievements System](#feature-5--achievements-system)
 6. [Feature 6 — Themed Skins](#feature-6--themed-skins)
 
+### Tier 3 — v3.0 (Surprise + Rhythm + Community + Depth)
+7. [Feature 7 — Weekly Class Challenge](#feature-7--weekly-class-challenge)
+8. [Feature 8 — "Found in Nature" Gallery](#feature-8--found-in-nature-gallery)
+9. [Feature 9 — Combo System](#feature-9--combo-system)
+10. [Feature 10 — Golden Moment](#feature-10--golden-moment)
+
 ### Reference
-7. [State + Firestore schema reference](#state--firestore-schema-reference)
-8. [Testing checklist](#testing-checklist)
-9. [Maintenance notes](#maintenance-notes)
-10. [Changelog](#changelog)
+11. [State + Firestore schema reference](#state--firestore-schema-reference)
+12. [Testing checklist](#testing-checklist)
+13. [Maintenance notes](#maintenance-notes)
+14. [Changelog](#changelog)
 
 ---
 
@@ -395,6 +403,207 @@ Only the canvas bg and the positive-n arc stroke are overridden. The colored squ
 
 ---
 
+# Tier 3 — v3.0 Overview
+
+Tier 1 fixed pacing. Tier 2 gave the player an identity. Tier 3 gives the game a **pulse** — the small moments that make someone say "oh wait I got one!" and the larger rhythms that pull a player back next Monday. Four layered systems, all additive on top of Tier 1 & 2:
+
+7. **Weekly Class Challenge** — a second leaderboard tab whose challenge rotates every ISO week (Highest Peak → Deepest Dive → Most Clicks → Flower Hunter → Token Magnate). Top-3 players at week-end earn a permanent medal (🥇🥈🥉) displayed in their Account card.
+8. **"Found in Nature" Gallery** — a museum of 10 real-world Fibonacci phenomena (Wikimedia Commons images). New image every 3 levels: F(3), F(6), F(9) … F(30). Each entry ships a "Did you know?" prose fact.
+9. **Combo System** — clicking within 1s of your last click builds a combo. Tiers at 5 (×1.5), 10 (×2), 21 (×3), 55 (×5). Engine ticks intentionally do NOT build combo.
+10. **Golden Moment** — Cookie-Clicker-style randomly-appearing golden spiral (every 2–5 min of active play, 8-second window). Gives one of: +F(n) ticks, 5–34 🪙 tokens, or **Frenzy** — a 30-second ×7 multiplier that stacks with combo and also applies to engine ticks.
+
+**Multiplier stacking order** (important — this is the feel of the game):
+
+```
+ticks = clickMultiplier  ×  comboMultTier  ×  (frenzyActive ? 7 : 1)
+       + (fingersBonus if 5th click)
+       + (touchBonus  if 13th click)
+```
+
+The version header is updated to:
+
+```html
+<!-- v3.0 — Tier 3: Combo + Golden Moment + Gallery + Weekly Challenge (atop v2.5 Tier 2) -->
+```
+
+### New Firestore collection
+
+Tier 3 adds **one new collection** — the main `scores/{uid}` doc grows by a few fields; the new weekly leaderboard lives at a separate path:
+
+```
+weeklyScores/{weekId}/entries/{uid} → { uid, displayName, photoURL, metricKey, metric, updatedAt }
+```
+
+`weekId` is the ISO week string (e.g., `2026-W17`), and the metric is the numeric value being ranked (F(n) level, click count, flower count, or token total depending on the week's challenge).
+
+### ⚠️ Required Firestore security-rules update
+
+The new collection needs a rule allowing authenticated users to write their own entries. Update the Firestore console to:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /scores/{uid} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /weeklyScores/{weekId}/entries/{uid} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```
+
+Without this update, weekly-score writes will fail silently — the client catches the error (`console.error('❌ Weekly score write error…')`) but the weekly leaderboard stays empty. **Deploy the rule change before or alongside this release.**
+
+---
+
+## Feature 7 — Weekly Class Challenge
+
+### Problem
+
+The all-time leaderboard is a staircase: whoever has played longest dominates. A **weekly challenge** resets the field every Monday and gives every player a real shot at the top. It also hands teachers a ready-made classroom activity ("let's see who can win the Flower Hunter challenge this week"). And it rotates the *type* of challenge, so a player who is weak at one gets another chance the next week.
+
+### Design
+
+- A "week" is the **ISO week** (Monday 00:00 to Sunday 23:59 local).
+- All players compete on the same challenge. Type rotates automatically by ISO week number (`weekNum % 5`).
+- The `weeklyScores/{weekId}/entries/{uid}` collection stores per-player progress for that week only.
+- A new **Weekly tab** appears on the Leaderboard card alongside **All-time**.
+- At week transition, the client detects its own top-3 finish from last week and writes a **champion badge** (`{ weekId, rank, challenge, ts }`) into `state.weekly.championBadges`. Medals appear in the Account card.
+
+#### Challenge rotation (`WEEKLY_CHALLENGES`)
+
+| `weekNum % 5` | id | Title | Metric | Teaches |
+|---|---|---|---|---|
+| 0 | `highest` | Highest Peak | `highestAbsNThisWeek` | Exponential growth |
+| 1 | `lowest`  | Deepest Dive | `|lowestNThisWeek|`  | Negative indices |
+| 2 | `clicks`  | Most Clicks  | `clickCountThisWeek` | Persistence |
+| 3 | `flowers` | Flower Hunter| `flowersThisWeek`   | Attention + reflex |
+| 4 | `tokens`  | Token Magnate| `tokensThisWeek`    | Economic strategy |
+
+### Implementation notes (`index.html`)
+
+- **State addition:**
+  ```js
+  weekly: {
+    currentWeekId:        '',   // e.g., "2026-W17"
+    clickCountThisWeek:   0,
+    flowersThisWeek:      0,
+    tokensThisWeek:       0,
+    highestAbsNThisWeek:  0,
+    lowestNThisWeek:      1,
+    championBadges:       [],
+  },
+  ```
+- **`evaluateWeekly()`** — called from `onSignIn`. If `currentWeekId !== isoWeekStr()`, counters reset (anchoring `highestAbsNThisWeek` and `lowestNThisWeek` to the user's current progress) and `checkLastWeekChampion(oldWeek)` fires to detect top-3 finishes.
+- **`maybeUpdateWeeklyScore()`** — 2-second debounce wrapping the Firestore write to `weeklyScores/{weekId}/entries/{uid}`. Called from `tickInput` (every 10 clicks), `commitN` (on new peak or new depth), `collectFlower`, `awardBoostTokens`, and the Golden-Moment token reward.
+- **`checkLastWeekChampion(lastWeekId)`** — one-shot `get()` against `weeklyScores/{lastWeekId}/entries` ordered by `metric desc limit 3`. If the user is in the results, push a badge and fire a toast (🥇🥈🥉 based on rank).
+- **Leaderboard tabs (`activeLbTab`)** — clicking the All-time / Weekly buttons re-runs `restartLeaderboardListener()`, which either calls the existing `startLeaderboardListener()` (all-time) or the new `startWeeklyLeaderboardListener()` (weekly). The weekly listener orders by `metric desc limit 10` scoped to the current week.
+- **`renderChallengeHeader()`** — paints the amber-accented "This Week: {title}" header above the weekly leaderboard, with a live `formatTimeUntilMonday()` countdown.
+- **Champion badges UI** — `renderChampionBadges()` appends a `<div class="champion-badges">` under the user's "Best:" label in both desktop sidebar and mobile sheet, showing the last 5 medals.
+
+---
+
+## Feature 8 — "Found in Nature" Gallery
+
+### Problem
+
+The Mona Lisa easter egg at F(12) hinted at something beautiful: real images tied to real Fibonacci phenomena. Systematize it into a museum the player proudly shows to a skeptical friend.
+
+### Design
+
+- Unlocks start at F(3). A new image every 3 levels: F(3), F(6), F(9), F(12) … up to F(30) — 10 entries.
+- Image sources are free/CC-licensed **Wikimedia Commons** URLs. No hosting needed on our side; they load lazily on demand and fall back to the emblem placeholder via an inline `onerror` handler if a URL 404s or a school network blocks the CDN.
+- A **🖼️ Gallery** button sits in the top-bar next to the achievements 🏆. Opens a grid of 10 cards — unlocked ones show the real image, locked ones show the emblem silhouette.
+- Clicking an unlocked card opens a full-view modal with the image, title, prose fact, and unlock line.
+- A **NEW dot** (amber pulse) marks gallery items unlocked but not yet viewed. `state.galleryViewed[atN] = true` clears it.
+
+### Catalog (10 entries)
+
+| Level | Title | Why |
+|---|---|---|
+| F(3)  | Nautilus Shell      | logarithmic growth |
+| F(6)  | Sunflower Seed Head | 21/34/55 spirals |
+| F(9)  | Hurricane Isabel    | logarithmic limit shape |
+| F(12) | Mona Lisa           | Leonardo + φ |
+| F(15) | Messier 74 Galaxy   | grand-design spiral |
+| F(18) | Romanesco Broccoli  | natural fractal |
+| F(21) | Pinecone Spirals    | 8/13 spirals |
+| F(24) | Pineapple           | 5/8/13 spirals |
+| F(27) | Snail Shell         | φ growth |
+| F(30) | DNA Double Helix    | 21 Å / 34 Å |
+
+### Implementation notes (`index.html`)
+
+- **State addition:**
+  ```js
+  galleryViewed: {},   // { [atN]: true }
+  ```
+- **`renderGalleryGrid()`** — reads `state.highestAbsN` to decide locked state, `state.galleryViewed` for NEW dots. Locked cards render the emblem placeholder; unlocked cards render `<img src="…" loading="lazy" onerror="…">`.
+- **`openGalleryItem(atN)`** — populates the single-item viewer, marks `galleryViewed[atN] = true`, and debounced-saves.
+- **`showGalleryUnlockToast(item)`** — called from `commitN` whenever `state.highestAbsN === g.at`. Clicking the toast opens the gallery and jumps to the item.
+
+---
+
+## Feature 9 — Combo System
+
+### Problem
+
+Active clicking in the mid-game (F(13)–F(21)) becomes rote. A **combo** rewards rhythm and attention, and it gives players who bought the Engine a reason to still click occasionally.
+
+### Design
+
+- **Combo window:** 1 second between clicks.
+- **Combo tiers:** at 5 (×1.5), 10 (×2), 21 (×3), 55 (×5). Capped — no runaway past ×5.
+- **Decay:** >1s gap → combo resets. The display fades with a 100 ms grace window.
+- **Engine ticks do NOT build combo.** The engine loop calls `applyTicks` directly (not `tickInput`), so combo is naturally excluded. This keeps combos meaningful — you still have to *click*.
+- Two achievements unlock at 21 and 55: **Streaking** and **Unstoppable**.
+
+### Implementation notes (`index.html`)
+
+- **State addition (session-only, not persisted):**
+  ```js
+  combo: { count: 0, lastClickAt: 0, multTier: 1, fadeTimer: null },
+  ```
+- **`tickInput`** computes `ticksThisClick = clickMultiplier() * state.combo.multTier` and multiplies by 7 if Frenzy is active before adding the Tier 1 periodic bonuses.
+- **`comboMultiplier(count)` / `updateComboDisplay()` / `scheduleComboFade()`** — pure helpers that drive the floating #comboDisplay badge in the top-center of the canvas. A CSS `.pulse` class fires on milestone crossings (5/10/21/55).
+
+---
+
+## Feature 10 — Golden Moment
+
+### Problem
+
+Nothing in the current game is *surprising*. Every reward is predictable. A random reward — something that might appear at any moment — activates variable-ratio reinforcement, the most engaging pattern known to gaming.
+
+### Design
+
+- Every **2–5 minutes** of active play (`setTimeout` with random delay), a small **golden spiral** appears at a random position in the `#flowerLayer` for **8 seconds**.
+- Clicking gives a weighted random reward:
+  - **50%** — `+F(highestAbsN)` instant ticks
+  - **35%** — 5 / 8 / 13 / 21 / 34 🪙 Boost Tokens (Fibonacci-valued)
+  - **15%** — **Frenzy**: a 30-second ×7 multiplier on all clicks **and** engine ticks
+- Visibility-aware (`document.addEventListener('visibilitychange', …)`): pauses the spawn timer when the tab is hidden, resumes on show.
+- Does not spawn during celebration animations or below F(5). Boots via `initGoldenMoment()` after the user first reaches F(5) (hook in both `commitN` and `onSignIn`).
+- First catch unlocks the **Seized the Moment** achievement.
+
+### Implementation notes (`index.html`)
+
+- **State addition (session-only):**
+  ```js
+  goldenMoment: { activeEl: null, frenzyUntil: 0 },
+  ```
+  plus module-scope `goldenTimer` for the pending spawn.
+- **Frenzy hooks:**
+  - `tickInput`: `if (performance.now() < state.goldenMoment.frenzyUntil) ticksThisClick *= 7;`
+  - Engine loop: `const effective = frenzyActive ? whole * 7 : whole;` — Combo is excluded from the engine, but Frenzy is shared since it's a "session buff" not a rhythm reward.
+- **`showFrenzyBanner()`** — rAF-driven countdown painting the `#frenzyTimer` span until `frenzyUntil`. Banner is a shimmering amber bar across the top of the canvas.
+
+---
+
 ## State + Firestore schema reference
 
 ### New `state` fields
@@ -422,8 +631,22 @@ Only the canvas bg and the positive-n arc stroke are overridden. The colored squ
 | `activeSkin` | string | `'classic'` | Currently-applied skin id |
 | `_canvasBg` | string | `'#0a0e1a'` | Current canvas bg (skin-driven) |
 | `_spiralStrokeCol` | string | `'#f1f5f9'` | Current spiral arc color (skin-driven) |
+| `combo.count` | integer | 0 | Consecutive-click count (Tier 3, session-only) |
+| `combo.lastClickAt` | number | 0 | `performance.now()` of last human click (session-only) |
+| `combo.multTier` | number | 1 | Cached multiplier for current combo count |
+| `combo.fadeTimer` | id | `null` | `setTimeout` id for combo fade-out |
+| `goldenMoment.activeEl` | Element | `null` | Current on-screen golden-spiral DOM node |
+| `goldenMoment.frenzyUntil` | number | 0 | `performance.now()` end of Frenzy buff (session-only) |
+| `weekly.currentWeekId` | string | `''` | Active ISO week (e.g., `2026-W17`) |
+| `weekly.clickCountThisWeek` | integer | 0 | Human clicks this week |
+| `weekly.flowersThisWeek` | integer | 0 | Flowers collected this week |
+| `weekly.tokensThisWeek` | integer | 0 | Tokens earned this week |
+| `weekly.highestAbsNThisWeek` | integer | 0 | Peak |n| this week |
+| `weekly.lowestNThisWeek` | integer | 1 | Deepest negative n this week |
+| `weekly.championBadges` | array | `[]` | Past top-3 finishes `{weekId, rank, challenge, ts}` |
+| `galleryViewed` | object | `{}` | `{ [atN]: true }` clears NEW dots |
 
-### New Firestore fields (all under `scores/{uid}`)
+### New Firestore fields (all under `scores/{uid}` unless noted)
 
 | Field | Type | Written by | Read by |
 |---|---|---|---|
@@ -437,6 +660,19 @@ Only the canvas bg and the positive-n arc stroke are overridden. The colored squ
 | `achievements` | map | `saveProgress`, `maybeSaveScore` | `onSignIn` |
 | `lowestN` | number | `saveProgress`, `maybeSaveScore` | `onSignIn` |
 | `activeSkin` | string | `saveProgress`, `maybeSaveScore` | `onSignIn` (then `applySkin`) |
+| `weekly` | map | `saveProgress`, `maybeSaveScore` | `onSignIn` (then `evaluateWeekly`) |
+| `galleryViewed` | map | `saveProgress`, `maybeSaveScore`, `openGalleryItem` | `onSignIn` |
+
+**New Firestore collection** `weeklyScores/{weekId}/entries/{uid}`:
+
+| Field | Type | Written by | Read by |
+|---|---|---|---|
+| `uid` | string | `maybeUpdateWeeklyScore` | — |
+| `displayName` | string | `maybeUpdateWeeklyScore` | `renderWeeklyLeaderboard` |
+| `photoURL` | string | `maybeUpdateWeeklyScore` | `renderWeeklyLeaderboard` |
+| `metricKey` | string | `maybeUpdateWeeklyScore` | `renderWeeklyLeaderboard` |
+| `metric` | number | `maybeUpdateWeeklyScore` (2 s debounce) | `renderWeeklyLeaderboard`, `checkLastWeekChampion` |
+| `updatedAt` | serverTimestamp | `maybeUpdateWeeklyScore` | — |
 
 All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `displayName`, `photoURL`, and score fields.
 
@@ -467,6 +703,17 @@ All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `
 | `checkAchievements()` | Tier 2 — evaluates all 16 conditions; fires toasts for newly unlocked |
 | `showAchievementToast(id)` / `openAchievementsModal(scrollToId?)` / `renderAchievementsGrid()` / `showAchievementFact(id)` | Achievement UI pipeline |
 | `applySkin(id)` / `renderSkins()` / `showSkinUnlockToast(skin)` | Skin system |
+| `comboMultiplier(count)` / `updateComboDisplay()` / `scheduleComboFade()` | Tier 3 — combo helpers |
+| `initGoldenMoment()` / `scheduleNextGolden()` / `spawnGolden()` / `collectGolden(e)` | Tier 3 — random-reward pipeline |
+| `showFrenzyBanner()` | Tier 3 — rAF countdown for ×7 Frenzy buff |
+| `openGalleryModal()` / `renderGalleryGrid()` / `openGalleryItem(atN)` / `showGalleryUnlockToast(item)` | Tier 3 — gallery UI |
+| `currentChallengeType(weekId?)` / `currentChallengeMeta(weekId?)` / `currentWeeklyMetric()` | Tier 3 — weekly meta readers |
+| `evaluateWeekly()` | Tier 3 — week rollover + `checkLastWeekChampion` |
+| `maybeUpdateWeeklyScore()` | Tier 3 — debounced write to `weeklyScores/{weekId}/entries/{uid}` |
+| `checkLastWeekChampion(lastWeekId)` | Tier 3 — detects top-3 and pushes a badge |
+| `showChampionToast(badge)` / `renderChampionBadges()` | Tier 3 — champion UI |
+| `renderChallengeHeader()` / `formatTimeUntilMonday()` / `formatWeeklyMetric(key, value)` | Tier 3 — weekly LB header + formatting |
+| `startWeeklyLeaderboardListener()` / `renderWeeklyLeaderboard(rows)` / `restartLeaderboardListener()` | Tier 3 — tab-switched LB wiring |
 
 ---
 
@@ -549,6 +796,52 @@ All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `
 - [ ] Switch skins mid-session → canvas redraws without flicker
 - [ ] Click a skin-unlock toast → Settings opens and scrolls to the card
 
+### Feature 7 — Weekly Class Challenge
+
+- [ ] Weekly tab appears on the Leaderboard card
+- [ ] Challenge header shows "This Week: {title}" + description + countdown
+- [ ] `weekId` computed correctly (`YYYY-Wxx`)
+- [ ] Clicking racks up `weekly.clickCountThisWeek`; every 10 clicks writes to Firestore
+- [ ] Reaching a new peak writes the new `highest` metric on the "Highest Peak" week
+- [ ] Reaching a new depth writes the new `lowest` metric on the "Deepest Dive" week
+- [ ] Collecting flowers increments `weekly.flowersThisWeek`
+- [ ] Earning boost tokens increments `weekly.tokensThisWeek`
+- [ ] Two accounts on the same week see each other in real time (different browsers)
+- [ ] Manually setting `state.weekly.currentWeekId = ''` and reloading → `evaluateWeekly()` resets counters
+- [ ] User finishes in top 3 of last week → champion toast + medal shown under Account card
+
+### Feature 8 — Gallery
+
+- [ ] Gallery 🖼️ button visible next to Achievements 🏆
+- [ ] Grid shows 10 entries; locked ones render as grayscale emblems with F(n) captions
+- [ ] Reach F(3) — Nautilus unlocks, toast fires, image viewable
+- [ ] NEW dot disappears after first view of the item
+- [ ] Image load failure falls back to emblem placeholder (simulate by blocking Wikimedia)
+- [ ] Full-view modal shows image + title + fact + unlock line
+- [ ] Click backdrop closes modal
+
+### Feature 9 — Combo
+
+- [ ] Click 4 times rapidly — combo display hidden (< 2 threshold for first render)
+- [ ] Click 5 times within 1s each → ×1.5 visible, tick output reflects it
+- [ ] Click 10 times → ×2
+- [ ] Click 21 times → ×3 and `combo_21` achievement unlocks
+- [ ] Click 55 times → ×5 and `combo_55` achievement unlocks
+- [ ] Pause 2 seconds → combo display fades out, combo resets
+- [ ] Engine running autonomously → combo does NOT build from engine ticks
+- [ ] Reload — combo state does not persist (intentional)
+
+### Feature 10 — Golden Moment
+
+- [ ] Reach F(5), play for 2–5 minutes — golden spiral appears at random position
+- [ ] Click the spiral — one of 3 rewards fires; `golden_touch` achievement unlocks on first catch
+- [ ] Drawing the "Frenzy" outcome → amber banner shows, countdown updates, ×7 applies to both clicks and engine ticks
+- [ ] Frenzy banner counts down to 0 and disappears cleanly
+- [ ] Tab away during a spawn, come back → scheduler resumes (no orphan spawns)
+- [ ] Does not spawn during celebration zoom
+- [ ] Does not spawn below F(5)
+- [ ] Multiple catches over a session — rewards feel varied (rough 50/35/15 split)
+
 ---
 
 ## Maintenance notes
@@ -570,6 +863,18 @@ All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `
 - **Skins override CSS variables + two canvas fields only.** The `col(i)` per-level palette and semantic `--txt` (label color) are intentionally not skinned. Do not add more canvas-color overrides without updating this document and the testing checklist.
 - **Transient-only state fields** (`_dragExploredNs`, `streak.todayClaimed`, `_canvasBg`, `_spiralStrokeCol`) must not be written to Firestore — that would force clients to re-derive them on read. `_canvasBg` and `_spiralStrokeCol` are derived on sign-in from `applySkin(activeSkin)`.
 - **Achievement `id` strings are part of the storage contract.** Renaming one would orphan existing users' data. If renaming is ever needed, add a migration that copies old → new inside `onSignIn`.
+
+### Tier 3 maintenance notes
+
+- **Firestore security rule is required** for the `weeklyScores/{weekId}/entries/{uid}` collection — without it, weekly writes fail silently (caught in `console.error`). Deploy the rule from this document alongside any v3.0 release.
+- **Multiplier stacking order is load-bearing feel.** `tickInput` computes `clickMultiplier() × combo.multTier × (frenzy ? 7 : 1)` and then adds the Tier 1 periodic bonuses (Fingers / Touch). Do not reorder — the stacking multiplication is what makes a 55-combo during Frenzy feel dramatic without exponential runaway.
+- **Engine bypasses combo, shares Frenzy.** The engine loop calls `applyTicks` directly and therefore never contributes to or reads `state.combo`. It does honor Frenzy because Frenzy is a session-wide buff, not a rhythm reward.
+- **Golden Moment timing never walks forward.** Each cycle schedules **exactly one** `setTimeout` via `scheduleNextGolden()`. The `clearGoldenTimer()` call at the start of `scheduleNextGolden()` prevents drift or duplicate spawns if `initGoldenMoment()` is called twice (e.g., at boot and again when crossing F(5)).
+- **Weekly counters reset on ISO-week rollover only.** `evaluateWeekly()` is idempotent — calling it twice in the same week is a no-op. Don't call it on every commit; `onSignIn` (and the eventual post-midnight re-fire if we add a timer later) is enough.
+- **`galleryViewed` is content-keyed by `atN`, not gallery index.** If the `GALLERY` array is reordered, users' NEW dots still track correctly because they're indexed by the Fibonacci level, not the array position.
+- **Gallery image URLs are Wikimedia Commons direct links.** If one 404s in the future, replace the `src` and leave everything else alone. The `onerror` fallback to the emblem placeholder means a dead URL degrades gracefully, but the caption will still say the title — not ideal for a broken link.
+- **Champion badges live on the client.** `checkLastWeekChampion()` runs a `get()` at week rollover and writes to the user's own `scores/{uid}` doc. This is intentionally client-side (no Cloud Functions needed). Drift across clients is acceptable — a user who never signed in last week won't get the badge retroactively, which is the right behavior.
+- **Session-only state does not persist.** `combo`, `goldenMoment.activeEl`, `goldenMoment.frenzyUntil` all reset on reload. `state.achievements.combo_21`, `combo_55`, and `golden_touch` persist — the achievements are permanent even though the mechanical state isn't.
 
 ---
 
@@ -599,7 +904,20 @@ All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `
 - **Firestore** — new fields `streak`, `achievements`, `lowestN`, `activeSkin`. Merged writes only; existing users pick up defaults (`?? 0 / ?? {} / ?? 'classic'`).
 - **Hooks wired in:** `commitN` tracks `lowestN` + calls `checkAchievements()` + fires skin-unlock toasts; `buyBoost` / `buyEngine` call `checkAchievements()`; number-line drag handlers populate `_dragExploredNs`; `onSignIn` restores all Tier 2 state, applies the skin, and sequences the streak modal after the offline modal.
 
+### v3.0 — Tier 3 (Combo + Golden Moment + Gallery + Weekly Challenge)
+
+- **Added** Weekly Class Challenge with 5-way rotation (Highest Peak, Deepest Dive, Most Clicks, Flower Hunter, Token Magnate), Leaderboard tabs (All-time / Weekly), per-week challenge header + countdown, and champion-medal detection on week rollover.
+- **Added** "Found in Nature" Gallery with 10 Wikimedia Commons image entries unlocking every 3 levels (F(3) → F(30)). Each entry ships a prose fact; images fall back to an emblem placeholder on load failure. NEW dot marks unviewed unlocks.
+- **Added** Combo System — 1-second click window, 5/10/21/55 tiers giving ×1.5/×2/×3/×5 multipliers, floating #comboDisplay badge, with `combo_21` (Streaking) and `combo_55` (Unstoppable) achievements.
+- **Added** Golden Moment — Cookie-Clicker-style random spawn every 2–5 min for 8 s. Weighted rewards: 50% `+F(n)` ticks, 35% 5–34 🪙, 15% 30-second Frenzy buff (×7 on clicks and engine ticks). `golden_touch` (Seized the Moment) achievement on first catch.
+- **Refactored** `tickInput` — Combo and Frenzy multipliers now stack on top of `clickMultiplier()` (order: ClickMult × Combo × Frenzy, then Tier 1 periodic bonuses added).
+- **Refactored** engine loop — honors Frenzy (×7) but intentionally bypasses Combo.
+- **New Firestore collection** `weeklyScores/{weekId}/entries/{uid}`. Requires a security-rule update in the Firebase console (documented in this file under "Required Firestore security-rules update").
+- **Added** Firestore fields on `scores/{uid}`: `weekly`, `galleryViewed`. New achievements persist within existing `achievements` map.
+- **HTML:** top-bar gallery button (🖼️), gallery grid + item overlays, #comboDisplay + #frenzyBanner inside the canvas-box, lb-tabs + challenge-header on the Leaderboard card, champion-badges row in Account cards.
+- **CSS:** `.lb-tabs`, `.lb-challenge-header`, `.champion-badges`, `#comboDisplay` + `.combo-count` + `.combo-mult` + `@keyframes comboPulse`, `.golden-moment` + `@keyframes goldenPulse`, `#frenzyBanner` + `.frenzy-bar` + `@keyframes frenzyShimmer`, `.gallery-grid` + `.gallery-card` + `.new-dot`.
+
 ### Future tiers (not in this release)
 
-See `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 3.md` and beyond for the next-up features. Tiers 1 and 2 establish the mechanical loop (Tier 1) and the identity loop (Tier 2); subsequent tiers layer on top without refactoring the systems introduced here.
+See `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md` for the next-up features. Tiers 1 / 2 / 3 establish the mechanical loop (Tier 1), the identity loop (Tier 2), and the community + surprise loops (Tier 3); Tier 4 is planned for polish + advanced systems.
 
