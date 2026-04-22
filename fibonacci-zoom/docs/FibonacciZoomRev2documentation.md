@@ -4,12 +4,14 @@
 - **v2.0** — Tier 1 (Boosts + Engine + Offline) — shipped 2026-04
 - **v2.5** — Tier 2 (Streak + Achievements + Skins) — shipped 2026-04
 - **v3.0** — Tier 3 (Combo + Golden Moment + Gallery + Weekly Challenge) — shipped 2026-04
+- **v4.0** — Tier 4 (Level Facts + Classroom Challenge) — shipped 2026-04
 
 **Author:** Scott Sandvik
 **Source plans:**
 - `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 1.md`
 - `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 2.md`
 - `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 3.md`
+- `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md`
 
 ---
 
@@ -51,11 +53,15 @@ All changes land in the single-file app `fibonacci-zoom/index.html`. No bundler,
 9. [Feature 9 — Combo System](#feature-9--combo-system)
 10. [Feature 10 — Golden Moment](#feature-10--golden-moment)
 
+### Tier 4 — v4.0 (Classroom / Educational Layer)
+11. [Feature 11 — Level Pop-ups ("Why Does This Matter?")](#feature-11--level-pop-ups-why-does-this-matter)
+12. [Feature 12 — Classroom Challenge Mode](#feature-12--classroom-challenge-mode)
+
 ### Reference
-11. [State + Firestore schema reference](#state--firestore-schema-reference)
-12. [Testing checklist](#testing-checklist)
-13. [Maintenance notes](#maintenance-notes)
-14. [Changelog](#changelog)
+13. [State + Firestore schema reference](#state--firestore-schema-reference)
+14. [Testing checklist](#testing-checklist)
+15. [Maintenance notes](#maintenance-notes)
+16. [Changelog](#changelog)
 
 ---
 
@@ -604,6 +610,161 @@ Nothing in the current game is *surprising*. Every reward is predictable. A rand
 
 ---
 
+# Tier 4 — v4.0 Overview
+
+Tier 1 fixed pacing. Tier 2 gave the player an identity. Tier 3 added surprise, rhythm, and community. Tier 4 is the **educational layer** — the features that turn Fibonacci Zoom from a game into a teaching tool Scott can use in his classroom and recommend to other teachers.
+
+Two cooperating features ship in v4.0, both additive and respectful of prior tiers:
+
+11. **Level Pop-ups ("Why Does This Matter?")** — a small slide-in card on each new-high Fibonacci level that delivers a one-sentence fact about where that number lives in nature, mathematics, or culture. Optional "Learn more →" link jumps to the Tier 3 Gallery entry for that level when one exists. Auto-dismiss at 7 s; suppressible via a toggle in the Display section of Settings. Each fact shows once per `state.factsShown[n]`.
+12. **Classroom Challenge Mode** — admin-only short-lived event (5 / 10 / 15 / 30 / 60 min). Admin creates a challenge with a 4-character join code (from an I/O/0/1-free alphabet); students enter the code via a **🏫 Join Challenge** button on the Account card. A banner across the top of the app shows the target F(n), countdown, and the student's current rank. Reaching the target fires a celebration modal; when the timer ends (or the admin ends early) everyone sees a final-results modal. Users who close the tab mid-challenge auto-resume on their next sign-in.
+
+Version header updated to:
+
+```html
+<!-- v4.0 — Tier 4: Level Facts + Classroom Challenge (atop v3.0 Tier 3) -->
+```
+
+### ⚠️ Required Firestore security-rules update
+
+Classroom Challenge Mode requires a new collection and its subcollection. Update the Firestore rules before or alongside this release:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /scores/{uid} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /weeklyScores/{weekId}/entries/{uid} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /challenges/{code} {
+      allow read:   if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == resource.data.creatorUid;
+      allow delete: if false;
+
+      match /participants/{uid} {
+        allow read:  if true;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+  }
+}
+```
+
+Without these rules, create/join/progress writes fail silently (caught in `console.error`); Feature 11 continues to work and all earlier tiers are unaffected.
+
+### ⚠️ Required Firestore composite index
+
+The auto-resume-on-sign-in flow uses `fbDb.collectionGroup('participants').where('uid', '==', currentUser.uid)`. Firebase will surface a one-click link in the console error the first time this query runs. Create the index with:
+
+- **Collection ID:** `participants`
+- **Query scope:** Collection group
+- **Fields:** `uid` (ascending)
+
+Until the index is built, the resume query logs `⚠️  Resume-challenge lookup skipped: <reason>` and the user can still re-join manually via the code.
+
+---
+
+## Feature 11 — Level Pop-ups ("Why Does This Matter?")
+
+### Problem
+
+The game already rewards reaching a Fibonacci level — confetti, tokens, skin unlocks, achievements. What's missing is the **single sentence of context** that plants the math in the player's mind at the exact moment dopamine is firing. The Tier 3 Gallery has rich facts, but they only appear when the user opens the gallery. Level-up time is the best possible teaching window.
+
+### Design
+
+- On every **new high** that has an entry in `LEVEL_FACTS`, a small card slides in from the bottom-right (or bottom-full-width on mobile).
+- The card contains: the Fibonacci number + value, a one-sentence fact, an optional "Learn more →" link that opens the Tier 3 Gallery to the matching entry when one exists at this level.
+- The card auto-dismisses after ~7 s (the `factSlide` animation completes), or the ✕ dismisses early.
+- **User preference**: toggle in the Settings Display section (`state.suppressFacts`) silences every future card.
+- Each fact shows exactly once per account (`state.factsShown[n]`). After an admin Reset, the user will see them again on re-progression since Reset only clears position state, not Tier 4 history.
+
+### Catalog (`LEVEL_FACTS`)
+
+One fact per Fibonacci milestone from F(3) to F(21), plus sparser entries at F(34), F(55), F(89), F(144). Sample:
+
+- **F(5) = 5.** "Apple cores have five seed pockets in a star. Starfish have five arms. Most flowers have five petals. This isn't coincidence."
+- **F(8) = 21.** "Sunflowers have 21 seed spirals in one direction (and 34 in the other — next level)."
+- **F(13) = 233.** "The Fibonacci sequence appears in Pascal's triangle: the shallow diagonals sum to Fibonacci numbers. Try it."
+
+See `LEVEL_FACTS` in `index.html` for the full 25-entry table.
+
+### Implementation notes (`index.html`)
+
+- **State additions:**
+  ```js
+  factsShown:    {},      // { [n]: true } — fact already displayed for this n
+  suppressFacts: false,   // user preference (Display-section toggle)
+  ```
+- **`showLevelFact(n)`** — pure UI helper; no-ops if suppressed, already shown, or no entry for `n`. Updates `state.factsShown[n]`, triggers `debouncedSaveProgress`, restarts the animation by briefly clearing `display`/`animation` with a forced reflow. Wires "Learn more →" to `openGalleryModal()` + `openGalleryItem(n)` when `GALLERY.some(g => g.at === n)`.
+- **`commitN(newN)` hook**: after `maybeSaveScore(newN)`, if `isNewHigh` call `showLevelFact(Math.abs(newN))`. Placement is deliberate — achievement toasts fire from the top-right, the fact card from the bottom-right, so they do not overlap visually.
+- **Toggle** — the existing `.toggle-item[data-key="suppressFacts"]` in the Display section is picked up by the generic settings toggle handler; no bespoke wiring needed.
+
+---
+
+## Feature 12 — Classroom Challenge Mode
+
+### Problem
+
+Scott teaches CTE Process Technology. A teacher with a classroom-worthy tool wants to run a **timed event**: *"Class, let's see who reaches F(21) first. 30 minutes. Go."* The Tier 3 Weekly Challenge is automatic and community-wide; the Classroom Challenge is **teacher-created, short-lived, and scoped to a class**.
+
+### Design
+
+- Admin-only creation (gated by the existing `isAdmin` email-whitelist flag).
+- Admin opens Settings → **Classroom Challenge** (ADMIN-badged section), picks a target (F(8) / F(13) / F(21) / F(34)) and a duration (5/10/15/30/60 min), optional name, and clicks **Create Challenge**.
+- A 4-character join code is generated from `CHALLENGE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'` (no `0`/`O`/`1`/`I` — legibility-first). The admin auto-joins as the creator.
+- Students open Fibonacci Zoom, click **🏫 Join Challenge** on the Account card, enter the code. They appear as participants.
+- While active, a banner across the top of the app shows `{name} · Target F(n) · mm:ss left · Code: CODE · You: F(x) · rank/total` with an admin-only **End** button and a leave ✕ for everyone.
+- Reaching the target writes `reachedTargetTs` and fires a ×3 confetti burst + a "You reached F(n)!" modal. The challenge continues until the timer expires or the admin ends early.
+- When the challenge ends (timer or admin-end), the `onSnapshot` listener sees `status === 'ended'` and opens a final-results modal on everyone's screen showing the top 10 + the user's rank.
+- Users who close the tab mid-challenge are auto-resumed on their next sign-in via a `collectionGroup('participants').where('uid', '==', uid)` query.
+
+### Firestore schema (new)
+
+```
+challenges/{code} = {
+  code, name, creatorUid, creatorName,
+  targetN, startTs, endTs, endedEarly, status  // 'active' | 'ended'
+}
+
+challenges/{code}/participants/{uid} = {
+  uid, displayName, photoURL,
+  currentN, reachedTargetTs, joinedTs, updatedAt
+}
+```
+
+### Implementation notes (`index.html`)
+
+- **State addition (session-only apart from auto-resume on sign-in):**
+  ```js
+  challenge: {
+    activeCode: null, isCreator: false, doc: null,
+    unsubDoc: null, unsubList: null, startingN: 1,
+  },
+  _challengeTargetReached: false,
+  ```
+- **`createChallenge()`** — admin-only. Writes `challenges/{code}` with `status: 'active'`, auto-joins as creator, calls `renderAdminChallengePanel()` to flip the admin section to the "share this code" view with an **End Challenge Now** button.
+- **`submitJoinChallenge()`** — reads the 4-char code, validates (exists, `status === 'active'`, `endTs > now`), closes the join modal, calls `joinChallenge(code)`.
+- **`joinChallenge(code, asCreator)`** — writes the participants doc with the user's current `n`, starts the subscriptions.
+- **`subscribeToChallenge(code)`** — two `onSnapshot` listeners: the doc (for countdown + status, which also triggers the results modal when status flips to `ended`) and the participants subcollection ordered by `currentN desc limit 20` (for live rank/leaderboard).
+- **`reportChallengeProgress(n)`** — debounced 500 ms. Writes `currentN` and sets `reachedTargetTs` the first time `|n| >= targetN`, then fires `showChallengeCompleteBanner()`.
+- **`handleChallengeEnd()`** — admin-only writes `status: 'ended'` once (idempotent via the `status === 'active'` guard). The results modal fires from everyone's `onSnapshot` listener via `_resultsShownForCode` dedupe.
+- **`endChallengeSession()`** — tears down listeners, clears state, hides the banner, clears `_resultsShownForCode`, and restores the admin create form via `renderAdminChallengePanel()`.
+- **`resumeActiveChallenge()`** (called from `onSignIn`) — `collectionGroup('participants').where('uid', '==', uid).get()`. For each match, fetches the parent challenge doc; if `status === 'active'` and `endTs > now`, re-subscribes. Requires the composite index noted above; catches with a `⚠️` console warning if the index isn't yet built.
+
+### Admin vs student experience
+
+- Admin sees the Classroom Challenge section in Settings; non-admin doesn't (handled by the existing `applyAdminVisibility()` on `data-admin="true"`).
+- Admin's banner shows the extra **End** button; it's hidden for non-creators.
+- Admin's Settings panel flips between "create form" and "active panel with code + End Now button" based on `state.challenge.activeCode && state.challenge.isCreator`.
+
+---
+
 ## State + Firestore schema reference
 
 ### New `state` fields
@@ -645,6 +806,14 @@ Nothing in the current game is *surprising*. Every reward is predictable. A rand
 | `weekly.lowestNThisWeek` | integer | 1 | Deepest negative n this week |
 | `weekly.championBadges` | array | `[]` | Past top-3 finishes `{weekId, rank, challenge, ts}` |
 | `galleryViewed` | object | `{}` | `{ [atN]: true }` clears NEW dots |
+| `factsShown` | object | `{}` | Tier 4 — `{ [n]: true }`; fact already displayed for this n |
+| `suppressFacts` | boolean | `false` | Tier 4 — Display-section toggle to silence "Did you know?" cards |
+| `challenge.activeCode` | string \| null | `null` | Tier 4 — session-only current challenge code |
+| `challenge.isCreator` | boolean | `false` | Tier 4 — true when the user created the active challenge |
+| `challenge.doc` | object \| null | `null` | Tier 4 — cached challenge doc from `onSnapshot` (session-only) |
+| `challenge.unsubDoc` / `challenge.unsubList` | function \| null | `null` | Tier 4 — `onSnapshot` unsub handles (session-only) |
+| `challenge.startingN` | integer | 1 | Tier 4 — user's n at join time |
+| `_challengeTargetReached` | boolean | `false` | Tier 4 — transient flag to ensure target celebration fires once |
 
 ### New Firestore fields (all under `scores/{uid}` unless noted)
 
@@ -662,6 +831,8 @@ Nothing in the current game is *surprising*. Every reward is predictable. A rand
 | `activeSkin` | string | `saveProgress`, `maybeSaveScore` | `onSignIn` (then `applySkin`) |
 | `weekly` | map | `saveProgress`, `maybeSaveScore` | `onSignIn` (then `evaluateWeekly`) |
 | `galleryViewed` | map | `saveProgress`, `maybeSaveScore`, `openGalleryItem` | `onSignIn` |
+| `factsShown` | map | `saveProgress`, `maybeSaveScore`, `showLevelFact` | `onSignIn` |
+| `suppressFacts` | boolean | `saveProgress`, `maybeSaveScore`, Settings toggle | `onSignIn` |
 
 **New Firestore collection** `weeklyScores/{weekId}/entries/{uid}`:
 
@@ -675,6 +846,32 @@ Nothing in the current game is *surprising*. Every reward is predictable. A rand
 | `updatedAt` | serverTimestamp | `maybeUpdateWeeklyScore` | — |
 
 All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `displayName`, `photoURL`, and score fields.
+
+**New Firestore collection (Tier 4)** `challenges/{code}`:
+
+| Field | Type | Written by | Read by |
+|---|---|---|---|
+| `code` | string | `createChallenge` | `renderChallengeBanner`, `renderAdminChallengePanel` |
+| `name` | string | `createChallenge` | `renderChallengeBanner`, `showChallengeResultsModal` |
+| `creatorUid` | string | `createChallenge` | `resumeActiveChallenge`, security rule |
+| `creatorName` | string | `createChallenge` | — |
+| `targetN` | integer | `createChallenge` | `reportChallengeProgress`, `showChallengeCompleteBanner` |
+| `startTs` | serverTimestamp | `createChallenge` | — |
+| `endTs` | Timestamp | `createChallenge` | `renderChallengeBanner` countdown, `submitJoinChallenge`, `resumeActiveChallenge` |
+| `endedEarly` | boolean | `handleChallengeEnd` (admin End-Now) | — |
+| `status` | `'active' \| 'ended'` | `createChallenge`, `handleChallengeEnd` | `subscribeToChallenge` (fires results modal on end), `submitJoinChallenge`, `resumeActiveChallenge` |
+
+**Subcollection** `challenges/{code}/participants/{uid}`:
+
+| Field | Type | Written by | Read by |
+|---|---|---|---|
+| `uid` | string | `joinChallenge` | `resumeActiveChallenge` (via `collectionGroup`) |
+| `displayName` | string | `joinChallenge` | `renderChallengeLeaderboard`, `showChallengeResultsModal` |
+| `photoURL` | string | `joinChallenge` | — |
+| `currentN` | integer | `joinChallenge`, `reportChallengeProgress` (500 ms debounce) | `renderChallengeLeaderboard` ordering, results modal |
+| `reachedTargetTs` | serverTimestamp \| null | `reportChallengeProgress` on first target reach | — |
+| `joinedTs` | serverTimestamp | `joinChallenge` | — |
+| `updatedAt` | serverTimestamp | all writes | — |
 
 ### Key new functions
 
@@ -714,6 +911,17 @@ All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `
 | `showChampionToast(badge)` / `renderChampionBadges()` | Tier 3 — champion UI |
 | `renderChallengeHeader()` / `formatTimeUntilMonday()` / `formatWeeklyMetric(key, value)` | Tier 3 — weekly LB header + formatting |
 | `startWeeklyLeaderboardListener()` / `renderWeeklyLeaderboard(rows)` / `restartLeaderboardListener()` | Tier 3 — tab-switched LB wiring |
+| `showLevelFact(n)` | Tier 4 — slide-in fact card for a Fibonacci level milestone |
+| `generateChallengeCode()` | Tier 4 — 4-char code from the legible alphabet |
+| `createChallenge()` | Tier 4 — admin-only, writes `challenges/{code}` and auto-joins creator |
+| `submitJoinChallenge()` / `joinChallenge(code, asCreator)` | Tier 4 — validate + write participants doc |
+| `subscribeToChallenge(code)` | Tier 4 — onSnapshot on doc + participants |
+| `reportChallengeProgress(n)` | Tier 4 — debounced write of current n + target reach |
+| `renderChallengeBanner()` / `renderChallengeLeaderboard(participants)` | Tier 4 — banner countdown + live rank |
+| `showChallengeCompleteBanner()` | Tier 4 — target-reached celebration modal |
+| `handleChallengeEnd()` / `showChallengeResultsModal()` / `endChallengeSession()` | Tier 4 — end-of-event flow |
+| `renderAdminChallengePanel()` | Tier 4 — admin Settings flip between create form and active panel |
+| `resumeActiveChallenge()` | Tier 4 — on sign-in, re-enters an active challenge via `collectionGroup('participants')` |
 
 ---
 
@@ -842,6 +1050,43 @@ All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `
 - [ ] Does not spawn below F(5)
 - [ ] Multiple catches over a session — rewards feel varied (rough 50/35/15 split)
 
+### Feature 11 — Level Pop-ups
+
+- [ ] Reach F(3) for first time → fact card slides in from bottom-right with F(3)=2 fact
+- [ ] Auto-dismiss after ~7 s
+- [ ] ✕ dismisses early
+- [ ] "Learn more →" opens Tier 3 Gallery to the matching entry (F(3) → Nautilus, F(6) → Sunflower, …)
+- [ ] Level with no gallery entry (e.g., F(4)) — "Learn more" hidden
+- [ ] Toggle "Hide Did You Know? cards" in Display settings — no cards on new levels
+- [ ] Fact only shows once per `n` per account (re-reaching F(3) does not re-show)
+- [ ] After an admin Reset + re-progress, cards do NOT reappear (factsShown persists across sessions; clear manually via Firestore console if needed)
+- [ ] On mobile (<640px): fact card spans full width at the bottom
+
+### Feature 12 — Classroom Challenge
+
+Admin flow:
+- [ ] Admin user sees the "Classroom Challenge" ADMIN-badged section in Settings
+- [ ] Non-admin user does NOT see the section
+- [ ] Create challenge with target + duration → 4-char code generated, Firestore `challenges/{code}` written, admin auto-joins as creator, Settings panel flips to the "share this code" view
+- [ ] Banner appears with countdown + the admin-only **End** button
+- [ ] Clicking **End Challenge Now** (confirm dialog) flips the doc to `status: 'ended'`; results modal fires for admin + all participants
+
+Student flow:
+- [ ] **🏫 Join Challenge** button visible in desktop + mobile Account card after sign-in
+- [ ] Invalid code → "No challenge with that code"
+- [ ] Expired code → "This challenge has expired"
+- [ ] Ended code → "This challenge has ended"
+- [ ] Valid active code → banner appears with countdown + current rank
+- [ ] Commit advances write `currentN` (debounced 500 ms) — ranking updates in real time across browsers
+- [ ] Reaching target → confetti ×3 bursts + "You reached F(n)!" modal; `reachedTargetTs` written exactly once
+- [ ] Leave ✕ in banner → confirm → local challenge session ends (but participant doc remains for ranking)
+- [ ] Challenge timer expires → results modal shows for everyone, not just admin
+
+Persistence / resume:
+- [ ] Close tab mid-challenge, reopen → banner re-appears, subscriptions re-attach via `collectionGroup('participants')` query
+- [ ] First run of the query in a new Firebase project prompts to create the `participants` composite index; create it, re-test
+- [ ] Once the challenge ends while tab is closed, next sign-in does NOT auto-resume (`status === 'ended'` skipped)
+
 ---
 
 ## Maintenance notes
@@ -875,6 +1120,17 @@ All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `
 - **Gallery image URLs are Wikimedia Commons direct links.** If one 404s in the future, replace the `src` and leave everything else alone. The `onerror` fallback to the emblem placeholder means a dead URL degrades gracefully, but the caption will still say the title — not ideal for a broken link.
 - **Champion badges live on the client.** `checkLastWeekChampion()` runs a `get()` at week rollover and writes to the user's own `scores/{uid}` doc. This is intentionally client-side (no Cloud Functions needed). Drift across clients is acceptable — a user who never signed in last week won't get the badge retroactively, which is the right behavior.
 - **Session-only state does not persist.** `combo`, `goldenMoment.activeEl`, `goldenMoment.frenzyUntil` all reset on reload. `state.achievements.combo_21`, `combo_55`, and `golden_touch` persist — the achievements are permanent even though the mechanical state isn't.
+
+### Tier 4 maintenance notes
+
+- **Firestore security rule is required** before Feature 12 works. Deploy the updated rule (snippet under "Required Firestore security-rules update" above). Without it, `create` / `join` / progress writes fail silently and the teacher sees an empty challenge.
+- **Composite index is required** before auto-resume works. Firebase prompts with a one-click link the first time `resumeActiveChallenge` runs; create it. Until then, `⚠️  Resume-challenge lookup skipped` prints and the student must re-enter their code.
+- **No Cloud Functions.** Challenge end + results detection is purely client-driven via `onSnapshot` on `challenges/{code}`. The admin commits `status: 'ended'`; every other client's listener sees it and fires the results modal. `_resultsShownForCode` dedupes against re-fires if the status listener fires multiple times.
+- **Timer countdown is a `setInterval(1 s)`** scheduled inside `renderChallengeBanner`. On each snapshot update, the old interval is cleared; on session end, `endChallengeSession()` clears it too. Do not move the `setInterval` outside the snapshot callback — re-triggering on every render resets correctly only because the old interval is cleared first.
+- **Reporting progress is debounced 500 ms.** One student clicking rapidly does not spam Firestore. The target-reached flag (`_challengeTargetReached`) is session-only and ensures the celebration modal fires exactly once even with late retries.
+- **`LEVEL_FACTS` keys are absolute `n`** (always positive integers). `showLevelFact` is called with `Math.abs(newN)` — this is intentional since the facts describe Fibonacci values and F(-n) shares the magnitude of F(n).
+- **Facts persist across account resets.** `state.factsShown` is saved to Firestore so a user who reaches F(3) once never sees the card twice. If a teacher wants students to re-experience the facts, they can clear the field manually in the Firestore console or the student can toggle the setting off and back on (currently the toggle suppresses but does not re-enable; adding a per-level "mark unseen" button is a future task).
+- **Single active challenge per user.** Joining a second challenge implicitly ends the first locally by overwriting `state.challenge.activeCode` (the old listeners are torn down by `subscribeToChallenge` which calls `unsub()` before re-subscribing). The user's old participant doc remains in Firestore for the old challenge's ranking.
 
 ---
 
@@ -934,4 +1190,25 @@ Classroom-test feedback pass on Tier 1/2/3 feel. No new systems; everything is p
 ### Future tiers (not in this release)
 
 See `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md` for the next-up features. Tiers 1 / 2 / 3 establish the mechanical loop (Tier 1), the identity loop (Tier 2), and the community + surprise loops (Tier 3); Tier 4 is planned for the educational / classroom layer (level-fact pop-ups + classroom challenge mode).
+### v4.0 — Tier 4 (Level Facts + Classroom Challenge)
+
+- **Added** "Why Does This Matter?" level-up fact card (`#factCard`) with 25-entry `LEVEL_FACTS` catalog covering F(3)–F(21) plus F(34), F(55), F(89), F(144). "Learn more" link opens the Tier 3 Gallery to the matching entry when available.
+- **Added** Display-section Settings toggle to suppress fact cards (`state.suppressFacts`). Fact visibility tracked per-level in `state.factsShown`.
+- **Added** Classroom Challenge Mode — admin-only 5/10/15/30/60-minute classroom events with 4-character join codes from an I/O/0/1-free alphabet, live countdown banner + rank, confetti celebration on reaching target, final results modal for everyone on challenge end, and admin "End Challenge Now" shortcut.
+- **Added** auto-resume of in-progress challenges on sign-in via `collectionGroup('participants').where('uid', '==', uid)` — surviving closed tabs and browser restarts.
+- **New Firestore collection** `challenges/{code}` + subcollection `participants/{uid}`. Requires a security-rule update (documented in this file) and a composite index on `participants` collection group by `uid` (Firebase prompts to create it).
+- **Hooks wired in:** `commitN` → `showLevelFact(Math.abs(newN))` on new high; `commitN` → `reportChallengeProgress(newN)` when `state.challenge.activeCode`; `onSignIn` → `resumeActiveChallenge()` in both the data-exists and first-time-sign-in branches.
+- **UI:** top-bar challenge banner, desktop + mobile 🏫 Join Challenge buttons in the Account card, admin-badged Classroom Challenge section in Settings with `data-admin="true"` gating.
+- **CSS:** `.fact-card` + `@keyframes factSlide` + `.fact-link`/`.fact-level`/`.fact-text` + mobile-bottom-full-width variant; `.challenge-banner` + `.ch-banner-main`/`.ch-banner-title`/`.ch-banner-code`/`.ch-banner-rank`/`.ch-banner-end`/`.ch-banner-leave` + mobile sizing.
+
+### Future tiers (not in this release)
+
+The Tier 4 source plan (`fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md`) closes out the planned four-tier revision arc. Tiers 1/2/3/4 together deliver:
+
+- **Pacing (Tier 1)** — Boost Tokens, Golden Ratio Engine, Offline Progress.
+- **Identity (Tier 2)** — Daily Streak, 16+ Achievements, Themed Skins.
+- **Surprise + Community (Tier 3)** — Weekly Class Challenge, "Found in Nature" Gallery, Combo System, Golden Moment.
+- **Classroom (Tier 4)** — Level Pop-up Facts, Classroom Challenge Mode.
+
+Further work is out of scope for this revision document; any Tier 5+ features should ship under a new revision document (`FibonacciZoomRev3documentation.md`) to keep this file focused on the v2.0–v4.0 arc.
 

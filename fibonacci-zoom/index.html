@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v3.0 — Tier 3: Combo + Golden Moment + Gallery + Weekly Challenge (atop v2.5 Tier 2) -->
+<!-- v4.0 — Tier 4: Level Facts + Classroom Challenge (atop v3.0 Tier 3) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1016,6 +1016,107 @@ html, body {
   z-index: 1;
 }
 
+/* ── Tier 4: Level-up fact card ──────────────────────── */
+.fact-card {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  width: 320px; max-width: calc(100vw - 40px);
+  background: #111827;
+  border: 1px solid var(--amber);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.5), 0 0 20px rgba(245,166,35,0.2);
+  z-index: 90;
+  animation: factSlide 7s ease-in-out forwards;
+  pointer-events: auto;
+}
+@keyframes factSlide {
+  0%   { transform: translateY(120%); opacity: 0; }
+  5%   { transform: translateY(0);    opacity: 1; }
+  90%  { transform: translateY(0);    opacity: 1; }
+  100% { transform: translateY(120%); opacity: 0; }
+}
+.fact-card-close {
+  position: absolute; top: 8px; right: 12px;
+  color: var(--txt3); cursor: pointer;
+  font-size: 14px; line-height: 1;
+}
+.fact-card-close:hover { color: var(--txt); }
+.fact-level {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--amber);
+  font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.fact-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 15px; color: var(--txt);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.fact-actions { display: flex; justify-content: flex-end; }
+.fact-link {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--amber);
+  text-decoration: none;
+  padding: 4px 10px;
+  border: 1px solid var(--amber);
+  border-radius: 5px;
+  transition: all .15s;
+  cursor: pointer;
+}
+.fact-link:hover { background: var(--amber); color: #0b0f1a; }
+@media (max-width: 640px) {
+  .fact-card {
+    bottom: 10px; right: 10px; left: 10px;
+    width: auto; max-width: none;
+  }
+}
+
+/* ── Tier 4: Classroom Challenge banner ──────────────── */
+.challenge-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(90deg, rgba(245,166,35,0.15), rgba(245,166,35,0.05));
+  border: 1px solid var(--amber);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--txt);
+  flex-shrink: 0;
+}
+.ch-banner-main { flex: 1; min-width: 0; }
+.ch-banner-title { font-weight: 600; }
+.ch-banner-code {
+  font-size: 10px; color: var(--txt2); margin-top: 2px;
+}
+.ch-banner-rank {
+  padding: 4px 10px;
+  background: var(--amber); color: #0b0f1a;
+  border-radius: 5px; font-weight: 700;
+  white-space: nowrap;
+}
+.ch-banner-end {
+  background: transparent; border: 1px solid var(--red);
+  color: var(--red); border-radius: 5px;
+  padding: 4px 8px; font-size: 10px; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+}
+.ch-banner-end:hover { background: var(--red); color: #0b0f1a; }
+.ch-banner-leave {
+  background: none; border: none; color: var(--txt3); cursor: pointer;
+  font-size: 14px; padding: 4px 8px;
+}
+.ch-banner-leave:hover { color: var(--txt); }
+@media (max-width: 640px) {
+  .challenge-banner { font-size: 10px; padding: 8px 10px; gap: 6px; }
+  .ch-banner-code { font-size: 9px; }
+  .ch-banner-rank { padding: 3px 6px; font-size: 10px; }
+}
+
 </style>
 </head>
 <body>
@@ -1046,6 +1147,21 @@ html, body {
     </div>
   </div>
 
+  <!-- Tier 4: Classroom Challenge banner (visible only while a challenge is active) -->
+  <div id="challengeBanner" class="challenge-banner" style="display:none;">
+    <div class="ch-banner-main">
+      <div class="ch-banner-title">
+        <span id="chBannerName">Class Challenge</span> ·
+        Target F(<span id="chBannerTarget">13</span>) ·
+        <span id="chBannerCountdown">--:--</span> left
+      </div>
+      <div class="ch-banner-code">Code: <strong id="chBannerCode">----</strong></div>
+    </div>
+    <div class="ch-banner-rank" id="chBannerRank">—</div>
+    <button class="ch-banner-end" id="chBannerEnd" style="display:none;" title="End challenge for everyone">End</button>
+    <button class="ch-banner-leave" id="chBannerLeave" title="Leave challenge">✕</button>
+  </div>
+
   <!-- Unified Settings overlay -->
   <div class="overlay-backdrop" id="settingsOverlay">
     <div class="overlay-panel admin-hidden" id="settingsPanel">
@@ -1057,6 +1173,11 @@ html, body {
         <div class="toggle-item" data-key="showNegative">
           <div class="toggle-sw on"></div>
           <span class="toggle-lbl">Negative n coloring</span>
+        </div>
+        <!-- Tier 4: suppress level-up fact cards -->
+        <div class="toggle-item" data-key="suppressFacts">
+          <div class="toggle-sw"></div>
+          <span class="toggle-lbl">Hide "Did you know?" cards</span>
         </div>
       </div>
 
@@ -1106,6 +1227,37 @@ html, body {
             <span class="toggle-lbl">Scroll wheel input</span>
           </div>
           <span class="admin-badge">ADMIN</span>
+        </div>
+      </div>
+
+      <!-- Tier 4: Classroom Challenge (admin only) -->
+      <div data-admin="true">
+        <div class="overlay-section" style="margin-top:16px;">
+          Classroom Challenge <span class="admin-badge" style="margin-left:6px;">ADMIN</span>
+        </div>
+        <div id="challengeAdminPanel">
+          <div id="challengeCreateForm">
+            <input type="text" id="challengeName" placeholder="Challenge name (optional)" maxlength="40" class="guest-name-input">
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <select id="challengeTarget" class="guest-name-input" style="flex:1">
+                <option value="8">F(8) = 21</option>
+                <option value="13" selected>F(13) = 233</option>
+                <option value="21">F(21) = 10,946</option>
+                <option value="34">F(34) = 5.7M</option>
+              </select>
+              <select id="challengeDuration" class="guest-name-input" style="flex:1">
+                <option value="5">5 min</option>
+                <option value="10" selected>10 min</option>
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">60 min</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" id="challengeCreateBtn" style="width:100%;margin-top:10px;">
+              Create Challenge
+            </button>
+          </div>
+          <div id="challengeActivePanel" style="display:none;"></div>
         </div>
       </div>
 
@@ -1236,6 +1388,10 @@ html, body {
             </svg>
             Sign in with Google
           </button>
+          <!-- Tier 4: Join Classroom Challenge -->
+          <button class="auth-btn" id="joinChallengeBtn" style="margin-top:6px;font-size:10px;padding:6px 8px;">
+            🏫 Join Challenge
+          </button>
           <button class="signout-btn" id="signOutBtn" style="display:none">sign out</button>
         </div>
       </div>
@@ -1298,6 +1454,10 @@ html, body {
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
           </svg>
           Sign in with Google
+        </button>
+        <!-- Tier 4: Join Classroom Challenge (mobile) -->
+        <button class="auth-btn" id="mobileJoinChallengeBtn" style="margin-top:6px;font-size:10px;padding:6px 8px;">
+          🏫 Join Challenge
         </button>
         <button class="signout-btn" id="mobileSignOutBtn" style="display:none">sign out</button>
       </div>
@@ -1373,6 +1533,33 @@ html, body {
 
 <!-- Tier 2: Achievement toast container (also used by Tier 3 Gallery + Champion toasts) -->
 <div id="achievementToasts"></div>
+
+<!-- Tier 4: "Why Does This Matter?" level-up fact card -->
+<div id="factCard" class="fact-card" style="display:none;">
+  <div class="fact-card-close" id="factCardClose">✕</div>
+  <div class="fact-level" id="factLevel"></div>
+  <div class="fact-text" id="factText"></div>
+  <div class="fact-actions">
+    <a class="fact-link" id="factLearnMore" href="#">Learn more →</a>
+  </div>
+</div>
+
+<!-- Tier 4: Join Classroom Challenge modal -->
+<div class="overlay-backdrop" id="joinChallengeOverlay">
+  <div class="overlay-panel" style="width:320px;max-width:94vw;">
+    <button class="overlay-close" id="joinChallengeClose">✕</button>
+    <div class="overlay-title">🏫 Join Challenge</div>
+    <p style="font-size:12px;color:var(--txt2);margin-bottom:12px;">
+      Enter the 4-character code from your teacher.
+    </p>
+    <input type="text" id="challengeCodeInput" class="guest-name-input" maxlength="4"
+           placeholder="CODE" style="font-size:22px;text-align:center;letter-spacing:8px;text-transform:uppercase;">
+    <button class="btn btn-primary" id="challengeJoinBtn" style="width:100%;margin-top:12px;">
+      Join
+    </button>
+    <div id="joinChallengeError" style="color:var(--red);font-size:11px;margin-top:8px;min-height:14px;text-align:center;"></div>
+  </div>
+</div>
 
 <!-- Tier 3: Gallery grid overlay -->
 <div class="overlay-backdrop" id="galleryOverlay">
@@ -1551,6 +1738,21 @@ const state = {
 
   // ── v3.0 Tier 3: Gallery viewed-flags ────────────────────────────
   galleryViewed: {},               // { [atN]: true } — cleared after user opens the item
+
+  // ── v4.0 Tier 4: Level pop-ups ("Why Does This Matter?") ────────
+  factsShown:    {},               // { [n]: true } — fact already displayed for this n
+  suppressFacts: false,            // user preference toggle (Display section)
+
+  // ── v4.0 Tier 4: Classroom Challenge (session-only apart from auto-resume) ──
+  challenge: {
+    activeCode: null,
+    isCreator:  false,
+    doc:        null,   // cached challenge doc
+    unsubDoc:   null,
+    unsubList:  null,
+    startingN:  1,
+  },
+  _challengeTargetReached: false,  // session-only flag for first-time target celebration
 };
 
 // ─── Boost + Engine catalogs (v2.0 Tier 1) ───────────────────────
@@ -1689,6 +1891,36 @@ const WEEKLY_CHALLENGES = [
   { key: 'flowers', title: 'Flower Hunter', desc: 'Collect the most flowers',             unit: 'flowers' },
   { key: 'tokens',  title: 'Token Magnate', desc: 'Earn the most Boost Tokens',           unit: 'tokens'  },
 ];
+
+// ─── Tier 4: Level-up facts ("Why Does This Matter?") ──────────────
+const LEVEL_FACTS = {
+  3:  "F(3) = 2. Every flowering plant that puts out leaves in an alternating pattern does it with two leaves per cycle — the simplest Fibonacci arrangement.",
+  4:  "F(4) = 3. A clover has three leaves. A daisy family root has three main branches. Three is the first Fibonacci number that isn't 1 or 2.",
+  5:  "F(5) = 5. Apple cores have five seed pockets in a star. Starfish have five arms. Most flowers have five petals. This isn't coincidence.",
+  6:  "F(6) = 8. Octopi have eight arms. Spiders have eight legs. Many seashells coil in groups of eight bands.",
+  7:  "F(7) = 13. A year has roughly 13 lunar cycles. Many moth species lay eggs in groups of 13.",
+  8:  "F(8) = 21. Sunflowers have 21 seed spirals in one direction (and 34 in the other — next level).",
+  9:  "F(9) = 34. The other sunflower direction. Also the number of vertebrae in the average giraffe neck lineage.",
+  10: "F(10) = 55. The ratio F(10)/F(9) = 55/34 ≈ 1.6176. Already extremely close to φ ≈ 1.6180. The sequence converges.",
+  11: "F(11) = 89. Your spiral now contains 11 squares and 11 quarter-arcs. If you drew it life-size with F(1)=1 inch, your drawing would be 89 inches wide.",
+  12: "F(12) = 144 — a dozen dozen. Known since ancient times as a 'gross'. A completely coincidental but delightful alignment.",
+  13: "F(13) = 233. The Fibonacci sequence appears in Pascal's triangle: the shallow diagonals sum to Fibonacci numbers. Try it.",
+  14: "F(14) = 377. If you had F(14) pennies, stacked flat, the tower would be about as tall as a four-story building.",
+  15: "F(15) = 610. The ratio F(15)/F(14) = 610/377 ≈ 1.6180. Twelve decimal places of φ are now visible in this sequence.",
+  16: "F(16) = 987. A standard deck of cards shuffled 'perfectly' 8 times returns to its original order. Coincidence? Yes, but 8 is Fibonacci.",
+  17: "F(17) = 1,597. Leonardo of Pisa (1170–1250), nicknamed Fibonacci, introduced this sequence to Europe in 1202 as a puzzle about rabbit populations.",
+  18: "F(18) = 2,584. Honeybee family trees follow the Fibonacci sequence exactly: a male bee has 1 parent (the queen), a female has 2 (both queen and drone).",
+  19: "F(19) = 4,181. The Fibonacci numbers are the ONLY solutions to x² - x - 1 = 0 that grow discretely. This equation defines φ.",
+  20: "F(20) = 6,765. F(20) is also a Lucas number — part of another sequence that follows the same rule but starts 2, 1, 3, 4, 7...",
+  21: "F(21) = 10,946. You reached F(21) — a Fibonacci index that is itself Fibonacci. These are rare and called 'Fibonacci-in-index' numbers.",
+  34: "F(34) = 5,702,887. Grown past five million with just 34 steps. The sequence outpaces most polynomial growth from this point on.",
+  55: "F(55) = 139,583,862,445. Roughly the number of seconds in 4,400 years. Your click count crossed the boundary of recorded human history.",
+  89: "F(89) = 1,779,979,416,004,714,189. Nearly two billion billion. In base-10, F(n) has approximately n × 0.209 digits — a direct consequence of φ.",
+  144:"F(144) = 555,565,404,224,292,694,404,015,791,808. Written out, it's 30 digits. Somewhere in the middle of this number lives the string '144' again — entirely by chance.",
+};
+
+// ─── Tier 4: Classroom Challenge code alphabet (0/O/1/I removed) ───
+const CHALLENGE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // ─── Tier 2: Skin catalog ─────────────────────────────────────────
 const SKINS = [
@@ -2659,6 +2891,15 @@ function commitN(newN) {
 
   maybeSaveScore(newN);
   debouncedSaveProgress();
+
+  // v4.0 Tier 4 — "Why Does This Matter?" fact card on every new high
+  if (isNewHigh) {
+    showLevelFact(Math.abs(newN));
+  }
+  // v4.0 Tier 4 — report progress to active Classroom Challenge (debounced)
+  if (state.challenge.activeCode) {
+    reportChallengeProgress(newN);
+  }
 
   // Celebration: zoom-through animation on new high score (n >= 8)
   if (isNewHigh && Math.abs(newN) >= 8) {
@@ -3956,6 +4197,389 @@ function restartLeaderboardListener() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// ═══  v4.0 Tier 4: Level Facts + Classroom Challenge       ════════
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Feature 11: "Why Does This Matter?" level pop-ups ────────────
+function showLevelFact(n) {
+  if (state.suppressFacts)   return;
+  if (state.factsShown[n])   return;
+  const fact = LEVEL_FACTS[n];
+  if (!fact) return;
+
+  state.factsShown[n] = true;
+  if (currentUser && fbDb) debouncedSaveProgress();
+
+  const card    = document.getElementById('factCard');
+  const levelEl = document.getElementById('factLevel');
+  const textEl  = document.getElementById('factText');
+  const linkEl  = document.getElementById('factLearnMore');
+  if (!card || !levelEl || !textEl || !linkEl) return;
+
+  levelEl.textContent = `F(${n}) = ${fmt(fib(n))}`;
+  textEl.textContent  = fact;
+
+  // Restart animation
+  card.style.display   = 'none';
+  card.style.animation = 'none';
+  void card.offsetWidth;          // force reflow
+  card.style.animation = '';
+  card.style.display   = 'block';
+
+  // "Learn more" links to the Tier 3 Gallery entry if one exists at this n
+  const hasGallery = typeof GALLERY !== 'undefined' && GALLERY.some(g => g.at === n);
+  if (hasGallery) {
+    linkEl.style.display = '';
+    linkEl.onclick = e => {
+      e.preventDefault();
+      card.style.display = 'none';
+      if (typeof openGalleryModal === 'function') {
+        openGalleryModal();
+        setTimeout(() => openGalleryItem(n), 200);
+      }
+    };
+  } else {
+    linkEl.style.display = 'none';
+  }
+
+  // Auto-dismiss after animation completes (7s + 100ms grace)
+  setTimeout(() => { if (card.style.display !== 'none') card.style.display = 'none'; }, 7100);
+}
+
+// ── Feature 12: Classroom Challenge ──────────────────────────────
+function generateChallengeCode() {
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += CHALLENGE_CODE_CHARS[Math.floor(Math.random() * CHALLENGE_CODE_CHARS.length)];
+  }
+  return code;
+}
+
+async function createChallenge() {
+  if (!isAdmin || !currentUser || !fbDb) return;
+  const name     = document.getElementById('challengeName').value.trim() || 'Class Challenge';
+  const targetN  = parseInt(document.getElementById('challengeTarget').value, 10);
+  const duration = parseInt(document.getElementById('challengeDuration').value, 10);
+  const code     = generateChallengeCode();
+
+  const now   = firebase.firestore.FieldValue.serverTimestamp();
+  const endMs = Date.now() + duration * 60_000;
+  const endTs = firebase.firestore.Timestamp.fromMillis(endMs);
+
+  try {
+    await fbDb.collection('challenges').doc(code).set({
+      code, name,
+      creatorUid:  currentUser.uid,
+      creatorName: currentUser.displayName || 'Admin',
+      targetN,
+      startTs:     now,
+      endTs,
+      endedEarly:  false,
+      status:      'active',
+    });
+    console.log(`✅ Challenge ${code} created (${name}, target F(${targetN}), ${duration}m)`);
+    state.challenge.isCreator = true;
+    state._challengeTargetReached = false;
+    await joinChallenge(code, true);
+    renderAdminChallengePanel();
+  } catch (err) {
+    console.error('❌ Challenge create error:', err.message);
+  }
+}
+
+async function submitJoinChallenge() {
+  if (!fbDb) return;
+  const code  = document.getElementById('challengeCodeInput').value.trim().toUpperCase();
+  const errEl = document.getElementById('joinChallengeError');
+  errEl.textContent = '';
+  if (code.length !== 4) { errEl.textContent = 'Code must be 4 characters'; return; }
+  try {
+    const doc = await fbDb.collection('challenges').doc(code).get();
+    if (!doc.exists)                              { errEl.textContent = 'No challenge with that code'; return; }
+    const data = doc.data();
+    if (data.status !== 'active')                 { errEl.textContent = 'This challenge has ended';   return; }
+    if (data.endTs && data.endTs.toMillis && data.endTs.toMillis() < Date.now()) {
+      errEl.textContent = 'This challenge has expired'; return;
+    }
+    closeOverlay('joinChallengeOverlay');
+    await joinChallenge(code, false);
+  } catch (err) {
+    errEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+async function joinChallenge(code, asCreator) {
+  if (!currentUser || !fbDb) return;
+  try {
+    await fbDb.collection('challenges').doc(code).collection('participants').doc(currentUser.uid).set({
+      uid:             currentUser.uid,
+      displayName:     currentUser.displayName || 'Guest',
+      photoURL:        currentUser.photoURL || '',
+      currentN:        state.n,
+      reachedTargetTs: null,
+      joinedTs:        firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt:       firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    state.challenge.activeCode = code;
+    state.challenge.startingN  = state.n;
+    if (asCreator) state.challenge.isCreator = true;
+    subscribeToChallenge(code);
+    console.log(`✅ Joined challenge ${code}`);
+  } catch (err) {
+    console.error('❌ Challenge join error:', err.message);
+  }
+}
+
+function subscribeToChallenge(code) {
+  if (!fbDb) return;
+  if (state.challenge.unsubDoc)  state.challenge.unsubDoc();
+  if (state.challenge.unsubList) state.challenge.unsubList();
+
+  state.challenge.unsubDoc = fbDb.collection('challenges').doc(code)
+    .onSnapshot(snap => {
+      if (!snap.exists) { endChallengeSession(); return; }
+      state.challenge.doc = snap.data();
+      renderChallengeBanner();
+      if (state.challenge.doc.status === 'ended') {
+        // Final results fire for everyone when admin ends or timer expires
+        showChallengeResultsModal();
+      }
+    }, err => console.error('❌ Challenge doc listener error:', err.message));
+
+  state.challenge.unsubList = fbDb.collection('challenges').doc(code)
+    .collection('participants').orderBy('currentN', 'desc').limit(20)
+    .onSnapshot(snap => {
+      renderChallengeLeaderboard(snap.docs.map(d => d.data()));
+    }, err => console.error('❌ Challenge participants listener error:', err.message));
+}
+
+let challengeCountdownTimer = null;
+function renderChallengeBanner() {
+  const b   = document.getElementById('challengeBanner');
+  const doc = state.challenge.doc;
+  if (!b) return;
+  if (!doc || doc.status === 'ended') { b.style.display = 'none'; return; }
+  b.style.display = 'flex';
+  document.getElementById('chBannerName').textContent   = doc.name || 'Class Challenge';
+  document.getElementById('chBannerTarget').textContent = doc.targetN;
+  document.getElementById('chBannerCode').textContent   = doc.code;
+  document.getElementById('chBannerEnd').style.display  =
+    state.challenge.isCreator ? '' : 'none';
+
+  if (challengeCountdownTimer) clearInterval(challengeCountdownTimer);
+  function updateCountdown() {
+    const end    = doc.endTs && doc.endTs.toMillis ? doc.endTs.toMillis() : Date.now();
+    const msLeft = Math.max(0, end - Date.now());
+    const mm = Math.floor(msLeft / 60000);
+    const ss = Math.floor((msLeft % 60000) / 1000);
+    const el = document.getElementById('chBannerCountdown');
+    if (el) el.textContent = `${mm}:${String(ss).padStart(2, '0')}`;
+    if (msLeft <= 0) {
+      clearInterval(challengeCountdownTimer);
+      challengeCountdownTimer = null;
+      handleChallengeEnd();
+    }
+  }
+  updateCountdown();
+  challengeCountdownTimer = setInterval(updateCountdown, 1000);
+}
+
+function renderChallengeLeaderboard(participants) {
+  const rankEl = document.getElementById('chBannerRank');
+  if (!rankEl) return;
+  const myIdx = participants.findIndex(p => p.uid === (currentUser && currentUser.uid));
+  rankEl.textContent = myIdx >= 0
+    ? `You: F(${participants[myIdx].currentN}) · ${myIdx + 1}/${participants.length}`
+    : 'Not ranked';
+}
+
+let challengeReportTimer = 0;
+function reportChallengeProgress(n) {
+  if (!state.challenge.activeCode || !currentUser || !fbDb) return;
+  clearTimeout(challengeReportTimer);
+  challengeReportTimer = setTimeout(async () => {
+    const update = {
+      currentN:  n,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    const target = state.challenge.doc && state.challenge.doc.targetN;
+    if (target && Math.abs(n) >= target && !state._challengeTargetReached) {
+      update.reachedTargetTs = firebase.firestore.FieldValue.serverTimestamp();
+      state._challengeTargetReached = true;
+      showChallengeCompleteBanner();
+    }
+    try {
+      await fbDb.collection('challenges').doc(state.challenge.activeCode)
+        .collection('participants').doc(currentUser.uid).set(update, { merge: true });
+    } catch (err) {
+      console.error('❌ Challenge progress error:', err.message);
+    }
+  }, 500);
+}
+
+function showChallengeCompleteBanner() {
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => launchConfetti(state._sw / 2, state._sh / 2, 100), i * 300);
+  }
+  const target = state.challenge.doc ? state.challenge.doc.targetN : '?';
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay-backdrop open';
+  overlay.innerHTML = `
+    <div class="overlay-panel" style="text-align:center;">
+      <div style="font-size:60px;margin-bottom:10px;">🎉</div>
+      <div style="font-size:22px;font-weight:700;color:var(--amber);margin-bottom:8px;font-family:'Cormorant Garamond',serif;">You reached F(${target})!</div>
+      <p style="color:var(--txt2);font-size:13px;">The challenge continues — keep climbing to stay at the top.</p>
+      <button class="btn btn-primary" id="chCompleteOk" style="margin-top:16px;">Nice</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const btn = overlay.querySelector('#chCompleteOk');
+  if (btn) btn.addEventListener('click', () => overlay.remove());
+  setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 7000);
+}
+
+async function handleChallengeEnd() {
+  const code = state.challenge.activeCode;
+  if (!code || !fbDb) return;
+  // Admin commits the final ended status once
+  if (state.challenge.isCreator && state.challenge.doc && state.challenge.doc.status === 'active') {
+    try {
+      await fbDb.collection('challenges').doc(code).set({ status: 'ended' }, { merge: true });
+      console.log(`✅ Challenge ${code} ended`);
+    } catch (err) { console.error('❌ End challenge error:', err.message); }
+  }
+  // (Results modal fires via the onSnapshot listener seeing status === 'ended')
+}
+
+let _resultsShownForCode = null;
+function showChallengeResultsModal() {
+  const code = state.challenge.activeCode;
+  if (!code || !fbDb) return;
+  if (_resultsShownForCode === code) return;
+  _resultsShownForCode = code;
+
+  fbDb.collection('challenges').doc(code).collection('participants')
+    .orderBy('currentN', 'desc').limit(20).get()
+    .then(snap => {
+      const rows = snap.docs.map(d => d.data());
+      const myIdx = rows.findIndex(r => r.uid === (currentUser && currentUser.uid));
+      const myRank = myIdx >= 0 ? myIdx + 1 : null;
+      const me = myIdx >= 0 ? rows[myIdx] : null;
+      const targetN = state.challenge.doc ? state.challenge.doc.targetN : '?';
+      const name    = state.challenge.doc ? state.challenge.doc.name    : 'Class Challenge';
+
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay-backdrop open';
+      const rankLine = myRank
+        ? `<div style="font-size:36px;color:var(--amber);font-weight:700;font-family:'Cormorant Garamond',serif;">${myRank} of ${rows.length}</div><div style="font-size:11px;color:var(--txt2);font-family:'JetBrains Mono',monospace;">Reached F(${me.currentN})</div>`
+        : `<div style="font-size:16px;color:var(--txt2);">You did not score</div>`;
+      overlay.innerHTML = `
+        <div class="overlay-panel" style="width:420px;max-width:94vw;">
+          <div class="overlay-title">🏁 Challenge Ended</div>
+          <p style="color:var(--txt2);font-size:12px;margin-bottom:12px;">
+            ${escHtml(name)} · Target F(${targetN})
+          </p>
+          <div style="background:var(--bg2);border-radius:8px;padding:14px;margin-bottom:14px;text-align:center;">
+            <div style="font-size:10px;color:var(--txt3);font-family:'JetBrains Mono',monospace;">Your final rank</div>
+            ${rankLine}
+          </div>
+          <div class="overlay-section">Final Standings</div>
+          <div style="max-height:240px;overflow-y:auto;">${rows.slice(0, 10).map((r, i) => `
+            <div class="lb-row">
+              <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${['🥇','🥈','🥉'][i] || `${i+1}.`}</div>
+              <div class="lb-name ${currentUser && r.uid===currentUser.uid?'is-me':''}">${escHtml(r.displayName || 'Anonymous')}</div>
+              <div class="lb-score">F(${r.currentN})</div>
+            </div>`).join('')}
+          </div>
+          <button class="btn btn-primary" style="width:100%;margin-top:14px;" id="chResultsOk">Close</button>
+        </div>`;
+      document.body.appendChild(overlay);
+      const ok = overlay.querySelector('#chResultsOk');
+      if (ok) ok.addEventListener('click', () => {
+        overlay.remove();
+        endChallengeSession();
+      });
+    })
+    .catch(err => console.error('❌ Results fetch error:', err.message));
+}
+
+function endChallengeSession() {
+  if (state.challenge.unsubDoc)  state.challenge.unsubDoc();
+  if (state.challenge.unsubList) state.challenge.unsubList();
+  state.challenge = {
+    activeCode: null, isCreator: false, doc: null,
+    unsubDoc: null, unsubList: null, startingN: 1,
+  };
+  state._challengeTargetReached = false;
+  _resultsShownForCode = null;
+  const b = document.getElementById('challengeBanner');
+  if (b) b.style.display = 'none';
+  if (challengeCountdownTimer) { clearInterval(challengeCountdownTimer); challengeCountdownTimer = null; }
+  renderAdminChallengePanel();
+}
+
+async function resumeActiveChallenge() {
+  // Called on sign-in. Finds any participants/{uid} entry under any active
+  // challenge and re-subscribes. Requires a Firestore composite index on
+  // collection group "participants" with field "uid" (Firebase will prompt
+  // to create it on first run).
+  if (!currentUser || !fbDb) return;
+  if (state.challenge.activeCode) return; // already in a session (unlikely)
+  try {
+    const q = await fbDb.collectionGroup('participants')
+      .where('uid', '==', currentUser.uid).get();
+    for (const doc of q.docs) {
+      const parent = doc.ref.parent.parent;
+      if (!parent) continue;
+      const code = parent.id;
+      const chSnap = await fbDb.collection('challenges').doc(code).get();
+      if (!chSnap.exists) continue;
+      const data = chSnap.data();
+      if (data.status !== 'active') continue;
+      if (data.endTs && data.endTs.toMillis && data.endTs.toMillis() <= Date.now()) continue;
+      state.challenge.activeCode = code;
+      state.challenge.isCreator  = data.creatorUid === currentUser.uid;
+      state._challengeTargetReached =
+        data.targetN && Math.abs(state.highestAbsN) >= data.targetN;
+      subscribeToChallenge(code);
+      console.log(`✅ Resumed active challenge ${code}`);
+      break;
+    }
+  } catch (err) {
+    console.warn('⚠️  Resume-challenge lookup skipped:', err.message);
+  }
+}
+
+function renderAdminChallengePanel() {
+  const createForm = document.getElementById('challengeCreateForm');
+  const active     = document.getElementById('challengeActivePanel');
+  if (!createForm || !active) return;
+  if (state.challenge.activeCode && state.challenge.isCreator) {
+    createForm.style.display = 'none';
+    active.style.display = '';
+    active.innerHTML = `
+      <div style="text-align:center;padding:14px;background:var(--bg2);border-radius:8px;">
+        <div style="font-size:10px;color:var(--txt3);font-family:'JetBrains Mono',monospace;">Share this code</div>
+        <div style="font-size:44px;color:var(--amber);font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:8px;">${state.challenge.activeCode}</div>
+      </div>
+      <button class="btn btn-secondary" id="chEndEarlyBtn" style="width:100%;margin-top:10px;">End Challenge Now</button>`;
+    const endBtn = document.getElementById('chEndEarlyBtn');
+    if (endBtn) {
+      endBtn.addEventListener('click', async () => {
+        if (!confirm('End this challenge now for all participants?')) return;
+        try {
+          await fbDb.collection('challenges').doc(state.challenge.activeCode)
+            .set({ status: 'ended', endedEarly: true }, { merge: true });
+          handleChallengeEnd();
+        } catch (err) { console.error('❌ End-early error:', err.message); }
+      });
+    }
+  } else {
+    createForm.style.display = '';
+    active.style.display = 'none';
+  }
+}
+
 function updateModeInfo() {
   const el = document.getElementById('modeInfo');
   if (state.mode === 'standard') {
@@ -4184,9 +4808,48 @@ function closeOverlay(id) { document.getElementById(id).classList.remove('open')
 
 document.getElementById('settingsBtn').addEventListener('click', () => {
   renderSkins();  // v2.5 Tier 2 — refresh skin lock/active state on open
+  renderAdminChallengePanel(); // v4.0 Tier 4 — show create form or active-panel
   openOverlay('settingsOverlay');
 });
 document.getElementById('settingsClose').addEventListener('click', () => closeOverlay('settingsOverlay'));
+
+// ─── Tier 4: Level-fact + Classroom Challenge wiring ─────────────
+document.getElementById('factCardClose').addEventListener('click', () => {
+  document.getElementById('factCard').style.display = 'none';
+});
+function openJoinChallengeDialog() {
+  if (!currentUser) { console.warn('⚠️  Must be signed in to join a challenge'); return; }
+  openOverlay('joinChallengeOverlay');
+  const input = document.getElementById('challengeCodeInput');
+  if (input) { input.value = ''; input.focus(); }
+  document.getElementById('joinChallengeError').textContent = '';
+}
+document.getElementById('joinChallengeBtn').addEventListener('click', openJoinChallengeDialog);
+const mobileJoinBtn = document.getElementById('mobileJoinChallengeBtn');
+if (mobileJoinBtn) mobileJoinBtn.addEventListener('click', openJoinChallengeDialog);
+document.getElementById('joinChallengeClose').addEventListener('click', () => closeOverlay('joinChallengeOverlay'));
+document.getElementById('joinChallengeOverlay').addEventListener('click', e => {
+  if (e.target.id === 'joinChallengeOverlay') closeOverlay('joinChallengeOverlay');
+});
+document.getElementById('challengeJoinBtn').addEventListener('click', submitJoinChallenge);
+document.getElementById('challengeCodeInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitJoinChallenge();
+});
+document.getElementById('challengeCreateBtn').addEventListener('click', createChallenge);
+document.getElementById('chBannerEnd').addEventListener('click', async () => {
+  if (!state.challenge.isCreator) return;
+  if (!confirm('End this challenge now for all participants?')) return;
+  try {
+    await fbDb.collection('challenges').doc(state.challenge.activeCode)
+      .set({ status: 'ended', endedEarly: true }, { merge: true });
+    handleChallengeEnd();
+  } catch (err) { console.error('❌ End-early error:', err.message); }
+});
+document.getElementById('chBannerLeave').addEventListener('click', () => {
+  if (confirm('Leave this challenge? Your progress stays in your score.')) {
+    endChallengeSession();
+  }
+});
 
 // ─── Tier 2: Streak + Achievements wiring ────────────────────────
 document.getElementById('streakBadge').addEventListener('click', () => {
@@ -4678,6 +5341,9 @@ async function onSignIn(user) {
         state.weekly.championBadges      = Array.isArray(data.weekly.championBadges) ? data.weekly.championBadges : [];
       }
       state.galleryViewed = data.galleryViewed ?? {};
+      // v4.0 Tier 4 — restore level-fact history + preference
+      state.factsShown    = data.factsShown    ?? {};
+      state.suppressFacts = data.suppressFacts ?? false;
 
       // Keep whichever is further: guest progress or saved progress
       if (guestAbsN > userBestAbsN) {
@@ -4731,6 +5397,8 @@ async function onSignIn(user) {
       // UX polish: refresh always-visible sidebar panels after restore
       renderSidebarAchievements();
       renderSidebarGallery();
+      // v4.0 Tier 4 — auto-resume an in-progress Classroom Challenge
+      resumeActiveChallenge();
     } else {
       // Anonymous user with no saved data — sign them out to start fresh
       // (this handles stale anonymous sessions persisted by Firebase IndexedDB)
@@ -4759,6 +5427,8 @@ async function onSignIn(user) {
       // UX polish: refresh always-visible sidebar panels after restore
       renderSidebarAchievements();
       renderSidebarGallery();
+      // v4.0 Tier 4 — auto-resume an in-progress Classroom Challenge
+      resumeActiveChallenge();
     }
     drawSpiral();
     drawNumberLine();
@@ -4837,6 +5507,9 @@ async function maybeSaveScore(n) {
         championBadges:      state.weekly.championBadges || [],
       },
       galleryViewed: state.galleryViewed || {},
+      // v4.0 Tier 4 fields
+      factsShown:    state.factsShown    || {},
+      suppressFacts: !!state.suppressFacts,
       displayName: currentUser.displayName || currentUser.email || 'Guest',
       photoURL:    currentUser.photoURL    || '',
       uid:         currentUser.uid,
@@ -4898,6 +5571,9 @@ async function saveProgress() {
         championBadges:      state.weekly.championBadges || [],
       },
       galleryViewed: state.galleryViewed || {},
+      // v4.0 Tier 4 fields
+      factsShown:    state.factsShown    || {},
+      suppressFacts: !!state.suppressFacts,
       // Identity
       displayName: currentUser.displayName || currentUser.email || 'Guest',
       photoURL:    currentUser.photoURL    || '',

@@ -523,6 +523,43 @@ body {
   z-index: 25;
 }
 
+/* ── Discovery counter (top-right during Orb Run) ──────── */
+#discovery-counter {
+  position: absolute;
+  top: 8px;
+  right: 150px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(11,16,32,0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 6px 14px;
+  z-index: 10;
+}
+#discovery-counter.hidden { display: none; }
+#discovery-icon { font-size: 18px; }
+#discovery-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: #c8bfe7;
+  line-height: 1;
+}
+.discovery-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #667799;
+}
+
+/* Follow button active state */
+#nl-follow.active {
+  background: rgba(200,191,231,0.2);
+  border-color: #c8bfe7;
+  color: #c8bfe7;
+}
+
 /* ── Utility ───────────────────────────────────────────── */
 .hidden { display: none !important; }
 
