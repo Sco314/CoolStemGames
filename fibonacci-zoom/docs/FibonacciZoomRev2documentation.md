@@ -917,7 +917,21 @@ All writes use `{ merge: true }` to preserve the pre-existing `generatedName`, `
 - **HTML:** top-bar gallery button (🖼️), gallery grid + item overlays, #comboDisplay + #frenzyBanner inside the canvas-box, lb-tabs + challenge-header on the Leaderboard card, champion-badges row in Account cards.
 - **CSS:** `.lb-tabs`, `.lb-challenge-header`, `.champion-badges`, `#comboDisplay` + `.combo-count` + `.combo-mult` + `@keyframes comboPulse`, `.golden-moment` + `@keyframes goldenPulse`, `#frenzyBanner` + `.frenzy-bar` + `@keyframes frenzyShimmer`, `.gallery-grid` + `.gallery-card` + `.new-dot`.
 
+### v3.1 — UX polish (post-Tier-3)
+
+Classroom-test feedback pass on Tier 1/2/3 feel. No new systems; everything is presentation.
+
+- **Gallery images** — swapped pinned Wikimedia thumb URLs for Wikipedia `Special:FilePath` redirects. This follows file renames automatically and survives a broader set of Wikimedia cache edge cases. Each entry gains a `wiki` slug and the gallery-item modal now shows a **Read more on Wikipedia →** link next to the unlock line.
+- **Gallery item modal** — if the thumb fails to load, the `<img>` hides instead of rendering as a broken icon (the fact + Wikipedia link still carry the value).
+- **Gallery tiles** — min column width bumped from 120 px to 180 px; tiles now use a 4:3 image area with a dedicated `.img-wrap` + readable Cormorant caption (13 px serif) below. Locked tiles show a larger, more visible placeholder emblem.
+- **Achievement / skin / gallery unlock toasts** — dwell time raised from 5 s to **12 s** so readers have time to finish the fact. Toasts now carry the full "Did you know?" fact inline (`.ach-fact`), pause on hover, and ship a ✕ close button. Click-body still jumps to the achievement card.
+- **Always-visible desktop panels** — Achievements and Found-in-Nature are no longer hidden behind icon buttons. The left sidebar now hosts two compact panels (Achievements grid of 16 emblems, Gallery grid of 10 thumbnails). Clicking any unlocked cell opens the same fact card / gallery-item modal as before. Top-bar 🏆 and 🖼️ icon buttons are hidden on desktop (≥900 px) since the content is always on screen.
+- **Boosts card prominence** — larger title (`⚡ Boosts · N 🪙` 16–18 px), 14 px boost names, 13 px cost pills with tinted backgrounds. When any owned-but-affordable upgrade is waiting, the card border pulses amber (`.boosts-ready`) so players notice they can spend.
+- **Mobile bottom sheet** — now mirrors the desktop sidebars. Account, Boosts, Engine, **Achievements, Found-in-Nature**, and Leaderboard are all in the sheet. On mobile the 🏆 and 🖼️ icon buttons stay (quick access into the fact modals) while the bottom sheet carries the browse-grid affordance. Same render pipeline feeds both desktop (`#sidebar*Grid`) and mobile (`#mobile*Grid`) targets.
+- **CSS additions** — `.card-hint`, `.card-title-count`, `.sidebar-ach-grid`/`.sidebar-ach-emblem`, `.sidebar-gallery-grid`/`.sidebar-gallery-tile`, `.gallery-card .img-wrap`, `.toast-close`, `.boosts-ready`.
+- **JS additions** — `renderSidebarAchievements()` and `renderSidebarGallery()` render the same content into both desktop and mobile IDs. Hooked into `checkAchievements`, `commitN` (after gallery unlock), `openGalleryItem` (to clear NEW dots), boot, and both `onSignIn` success branches.
+
 ### Future tiers (not in this release)
 
-See `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md` for the next-up features. Tiers 1 / 2 / 3 establish the mechanical loop (Tier 1), the identity loop (Tier 2), and the community + surprise loops (Tier 3); Tier 4 is planned for polish + advanced systems.
+See `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md` for the next-up features. Tiers 1 / 2 / 3 establish the mechanical loop (Tier 1), the identity loop (Tier 2), and the community + surprise loops (Tier 3); Tier 4 is planned for the educational / classroom layer (level-fact pop-ups + classroom challenge mode).
 
