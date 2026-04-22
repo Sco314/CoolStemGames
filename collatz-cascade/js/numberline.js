@@ -113,6 +113,25 @@ let operatorLight = null;
 let shooterMesh = null;
 let active = false;
 
+// Persistent state (survives across runs — the accumulating world)
+const persistentTrails = [];   // { line, hue } from completed runs
+const persistentVisited = [];  // old visitedInstanced meshes, dimmed
+const discoveredValues = new Set(); // valueKeys ever activated
+let runNewCount = 0;           // new orbs this run
+let runSharedCount = 0;        // re-hit orbs this run
+
+// Follow camera toggle
+let followBall = false;
+
+// Ball trail (short glowing tail behind the ball)
+let ballTrailPositions = [];
+let ballTrailLine = null;
+const BALL_TRAIL_LENGTH = 6;
+
+// Scene guides
+let sceneGuidesGroup = null;
+let targetMarkerMesh = null;
+
 // Sequence + path
 let sequence = [];          // raw values[] — mirror of sequenceSteps.map(s => s.value)
 let sequenceSteps = [];     // orbrun-sequence step[] with metadata (isRepeat, isLoopEntry, isTerminal, …)
@@ -216,6 +235,10 @@ export function getHitCount() { return hitCount; }
 export function getMilestoneCallout() { return milestoneCallout; }
 export function formatValue(n) { return fmtValue(n); }
 export function updateOrbRun(dt) { return updateNumberLine(dt); }
+export function getFollowBall() { return followBall; }
+export function setFollowBall(v) { followBall = !!v; }
+export function getDiscoveryCount() { return discoveredValues.size; }
+export function getRunDiscovery() { return { newCount: runNewCount, sharedCount: runSharedCount }; }
 export function setOrbRunPerformanceMode(mode) {
   perfMode = mode === 'eco' ? 'eco' : 'auto';
 }
@@ -335,6 +358,11 @@ export function initNumberLine(scene) {
     color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.25,
     metalness: 0.2, roughness: 0.6, transparent: true, opacity: 0.6,
   });
+
+  // Stronger ball light so it's visible from far away
+  if (operatorLight) { operatorLight.intensity = 2.0; operatorLight.distance = 12; }
+
+  buildSceneGuides();
 }
 
 export function showNumberLine() {
@@ -353,14 +381,48 @@ export function hideNumberLine() {
   mathDisplay = null;
 }
 
-export function clearNumberLine() {
-  disposePath();
+// resetRun: end the current run but KEEP persistent orbs + trails.
+// Used between runs so the world accumulates.
+export function resetRun() {
+  // Move current trail to persistent (dimmed)
+  if (trailLine) {
+    trailLine.material.opacity = 0.12;
+    trailLine.material.needsUpdate = true;
+    persistentTrails.push({ line: trailLine, hue: orbRunHue });
+    trailLine = null;
+  }
+  if (previewLine) {
+    nlGroup.remove(previewLine);
+    previewLine.geometry.dispose();
+    previewLine.material.dispose();
+    previewLine = null;
+  }
+  // Move current visited orbs to persistent (dimmed)
+  if (visitedInstanced) {
+    visitedInstanced.material.opacity = 0.18;
+    visitedInstanced.material.needsUpdate = true;
+    persistentVisited.push(visitedInstanced);
+    visitedInstanced = null;
+  }
+  if (futureInstanced) {
+    nlGroup.remove(futureInstanced);
+    futureInstanced.dispose();
+    futureInstanced = null;
+  }
+  // Release active-range meshes (kept as detail during run)
+  for (const orb of stepOrbs) {
+    if (!orb || !orb.mesh) continue;
+    nlGroup.remove(orb.mesh);
+    if (orb.label) { orb.mesh.remove(orb.label); orb.label.material.map?.dispose(); orb.label.material.dispose(); }
+    orb.mesh.geometry.dispose();
+    orb.mesh.material.dispose();
+  }
+  stepOrbs = [];
   sequence = [];
   sequenceSteps = [];
   pathPositions = [];
   pathSpline = null;
   importance = [];
-  stepOrbs = [];
   orbRunRegistry = null;
   orbStateRegistry = null;
   orbRunHue = null;
@@ -389,9 +451,36 @@ export function clearNumberLine() {
   peakLog2 = 0;
   currentImpactStreak = 0;
   maxImpactStreak = 0;
+  runNewCount = 0;
+  runSharedCount = 0;
   if (operatorBall) operatorBall.visible = false;
   resetShooterChargeVisuals();
   cleanupDensityBand();
+  // Clean ball trail
+  if (ballTrailLine) { nlGroup.remove(ballTrailLine); ballTrailLine.geometry.dispose(); ballTrailLine.material.dispose(); ballTrailLine = null; }
+  ballTrailPositions = [];
+}
+
+// clearNumberLine: full wipe including persistent state.
+export function clearNumberLine() {
+  resetRun();
+  // Dispose persistent trails
+  for (const pt of persistentTrails) {
+    nlGroup.remove(pt.line);
+    pt.line.geometry.dispose();
+    pt.line.material.dispose();
+  }
+  persistentTrails.length = 0;
+  // Dispose persistent visited meshes
+  for (const iv of persistentVisited) {
+    nlGroup.remove(iv);
+    iv.dispose();
+  }
+  persistentVisited.length = 0;
+  discoveredValues.clear();
+  // Remove scene guides
+  if (sceneGuidesGroup) { nlGroup.remove(sceneGuidesGroup); sceneGuidesGroup = null; }
+  if (targetMarkerMesh) { nlGroup.remove(targetMarkerMesh); targetMarkerMesh = null; }
 }
 
 // ── Path computation ────────────────────────────────────
@@ -651,8 +740,9 @@ function disposePath() {
 
 // ── Sequence launch ─────────────────────────────────────
 export function startSequence(n) {
-  // buildOrbRunSequence handles BigInt via worker internally and appends
-  // the 4→2→1 tail under STOP_POLICY_PLAY_TERMINAL_ONCE.
+  // If a run is already playing, preserve its orbs/trails and reset playback
+  if (playState !== 'idle' && playState !== 'complete') resetRun();
+  else if (playState === 'complete') resetRun();
   buildOrbRunSequence(n, { stopPolicy: STOP_POLICY_PLAY_TERMINAL_ONCE })
     .then(steps => { if (steps.length) launchSequence(n, steps); });
 }
@@ -918,6 +1008,12 @@ export function updateNumberLine(dt) {
   const currentStep = Math.floor(Math.max(0, currentStepFloat));
   updateOrbTiers(currentStep, dt);
 
+  // Ball trail: short glowing tail behind the ball
+  updateBallTrail();
+
+  // Target marker: faint ring at next orb's position
+  updateTargetMarker();
+
   return getCameraTarget(dt);
 }
 
@@ -926,8 +1022,14 @@ function activateOrb(orb) {
   orb.activated = true;
   orbStateRegistry?.incrementActivation(orb.value);
   orb.activationMix = 0;
-  // Appearance is applied uniformly each frame by updateOrbTiers via the
-  // shared semantic contract (getOrbStyle). No per-representation write here.
+  // Track discovery
+  const key = typeof orb.value === 'bigint' ? String(orb.value) : String(orb.value);
+  if (discoveredValues.has(key)) {
+    runSharedCount++;
+  } else {
+    discoveredValues.add(key);
+    runNewCount++;
+  }
 }
 
 function markTerminalLoopOnce() {
@@ -1139,6 +1241,101 @@ function updateRuntimePressure(dt) {
     const target = Math.max(10, Math.floor((qualityProfile?.maxVisibleOrbs || 50) * 0.35));
     VISIBLE_RANGE = target;
   }
+}
+
+// ── Ball trail (glowing tail behind the ball) ───────────
+function updateBallTrail() {
+  if (!operatorBall || !operatorBall.visible) return;
+  ballTrailPositions.push(operatorBall.position.clone());
+  if (ballTrailPositions.length > BALL_TRAIL_LENGTH) ballTrailPositions.shift();
+  if (ballTrailPositions.length < 2) return;
+
+  if (ballTrailLine) {
+    nlGroup.remove(ballTrailLine);
+    ballTrailLine.geometry.dispose();
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(ballTrailPositions);
+  if (!ballTrailLine) {
+    const mat = new THREE.LineBasicMaterial({ color: 0xffeedd, transparent: true, opacity: 0.6 });
+    ballTrailLine = new THREE.Line(geo, mat);
+    ballTrailLine.renderOrder = 2;
+  } else {
+    ballTrailLine.geometry = geo;
+  }
+  if (!ballTrailLine.parent) nlGroup.add(ballTrailLine);
+}
+
+// ── Target marker (faint ring at the next orb position) ──
+function updateTargetMarker() {
+  if (!targetMarkerMesh) {
+    const ringGeo = new THREE.RingGeometry(0.12, 0.16, 16);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffd866, transparent: true, opacity: 0.0, side: THREE.DoubleSide, depthTest: false,
+    });
+    targetMarkerMesh = new THREE.Mesh(ringGeo, ringMat);
+    targetMarkerMesh.renderOrder = 3;
+    nlGroup.add(targetMarkerMesh);
+  }
+  const nextIdx = hopToStep;
+  if (nextIdx >= 0 && nextIdx < pathPositions.length && playState !== 'complete' && playState !== 'idle') {
+    targetMarkerMesh.position.copy(pathPositions[nextIdx]);
+    targetMarkerMesh.lookAt(operatorBall.position);
+    const pulse = 0.3 + 0.15 * Math.sin(performance.now() * 0.005);
+    targetMarkerMesh.material.opacity = pulse;
+  } else {
+    targetMarkerMesh.material.opacity = 0;
+  }
+}
+
+// ── Scene guides (ground plane, axis, height labels) ─────
+export function buildSceneGuides() {
+  if (sceneGuidesGroup) { nlGroup.remove(sceneGuidesGroup); }
+  sceneGuidesGroup = new THREE.Group();
+
+  // Vertical axis (thin line from origin upward)
+  const axisGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 15, 0),
+  ]);
+  const axisMat = new THREE.LineBasicMaterial({ color: 0x334466, transparent: true, opacity: 0.3 });
+  sceneGuidesGroup.add(new THREE.Line(axisGeo, axisMat));
+
+  // Ground rings at y=0 showing radius bands (stoppingTime)
+  for (let r = 1; r <= 5; r++) {
+    const radius = Math.sqrt(r * 20) * 0.5;
+    const ringGeo = new THREE.RingGeometry(radius - 0.01, radius + 0.01, 48);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x223355, transparent: true, opacity: 0.12, side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.01;
+    sceneGuidesGroup.add(ring);
+  }
+
+  // Height labels
+  const heightLabels = [
+    { y: Math.log2(11) * 0.8, text: '~10' },
+    { y: Math.log2(101) * 0.8, text: '~100' },
+    { y: Math.log2(1001) * 0.8, text: '~1k' },
+    { y: Math.log2(10001) * 0.8, text: '~10k' },
+  ];
+  for (const hl of heightLabels) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#667799';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(hl.text, 32, 22);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.5, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(0.8, 0.4, 1);
+    sprite.position.set(-0.5, hl.y, 0);
+    sceneGuidesGroup.add(sprite);
+  }
+
+  nlGroup.add(sceneGuidesGroup);
 }
 
 // ── Density band (for huge sequences) ───────────────────

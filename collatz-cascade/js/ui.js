@@ -25,8 +25,9 @@ import {
   getMathDisplay, getPlayState, formatValue,
   setSpeed, getSpeed, setPaused, isPausedPlayback, getRunStats,
   setOrbRunPerformanceMode,
-  clearNumberLine, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
+  clearNumberLine, resetRun, setOrbVisibleMax, getOrbVisibleMax, MAX_ORBS,
   isDensityMode, skipToEnd, getHitCount, getMilestoneCallout,
+  getFollowBall, setFollowBall, getDiscoveryCount, getRunDiscovery,
 } from './numberline.js';
 import {
   showTimeSeries, hideTimeSeries, addTimeSeriesNumber,
@@ -555,6 +556,26 @@ export function initUI(onSubmit) {
   const skipBtn = document.getElementById('nl-skip');
   skipBtn.addEventListener('click', () => skipToEnd());
 
+  // Follow Ball toggle
+  const followBtn = document.getElementById('nl-follow');
+  followBtn.addEventListener('click', () => {
+    const next = !getFollowBall();
+    setFollowBall(next);
+    followBtn.classList.toggle('active', next);
+    followBtn.textContent = next ? 'Free Cam' : 'Follow Ball';
+  });
+
+  // Clear All (wipe persistent orbs + trails)
+  const clearAllBtn = document.getElementById('nl-clear-all');
+  clearAllBtn.addEventListener('click', () => {
+    clearNumberLine();
+    discoveryCountEl.textContent = '0';
+  });
+
+  // Discovery counter (persistent)
+  const discoveryCounterEl = document.getElementById('discovery-counter');
+  const discoveryCountEl = document.getElementById('discovery-count');
+
   const MOBILE_PARTICLE_CAP = 180;
   let userGraphVisibleMax = getGraphVisibleMax();
   let particleLoadSetting = mobileTier ? 'low' : 'auto';
@@ -728,6 +749,14 @@ export function initUI(onSubmit) {
     requestAnimationFrame(updateMathBar);
     // Show/hide Skip button based on density mode
     skipBtn.classList.toggle('hidden', !(numberLineMode && isDensityMode() && getPlayState() !== 'complete'));
+
+    // Discovery counter: visible in Orb Run mode, updates every frame
+    if (numberLineMode) {
+      discoveryCounterEl.classList.remove('hidden');
+      discoveryCountEl.textContent = String(getDiscoveryCount());
+    } else {
+      discoveryCounterEl.classList.add('hidden');
+    }
 
     // Milestone callout
     const callout = getMilestoneCallout();
@@ -934,10 +963,20 @@ export function initUI(onSubmit) {
     const peakEl = document.getElementById('results-peak');
     if (peakEl) peakEl.textContent = `Peak value: ${results.peakDisplay}`;
 
-    // Score + streak
+    // Score + discovery
     const scoreEl = document.getElementById('results-score');
     if (results.mode === 'freeExplore') {
-      scoreEl.textContent = '';
+      const disc = getRunDiscovery();
+      const total = getDiscoveryCount();
+      scoreEl.textContent = disc.newCount > 0 ? `+${disc.newCount} new orbs` : '';
+      const verdictEl = document.getElementById('results-verdict');
+      if (verdictEl && disc.newCount > 0) {
+        verdictEl.textContent = `${total} total discovered${disc.sharedCount > 0 ? ` | ${disc.sharedCount} shared` : ''}`;
+        verdictEl.className = 'results-verdict correct';
+      } else if (verdictEl) {
+        verdictEl.textContent = `${total} total discovered — try a bigger number!`;
+        verdictEl.className = 'results-verdict close';
+      }
     } else {
       scoreEl.textContent = `+${results.roundScore}`;
     }
