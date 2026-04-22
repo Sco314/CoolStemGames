@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.5 — Tier 2: Streak + Achievements + Skins (atop v2.0 Tier 1) -->
+<!-- v3.0 — Tier 3: Combo + Golden Moment + Gallery + Weekly Challenge (atop v2.5 Tier 2) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -716,6 +716,162 @@ html, body {
 }
 .skin-card.skin-locked .skin-name::before { content: '🔒 '; }
 
+/* ── Tier 3: Combo display ────────────────────────────── */
+#comboDisplay {
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 7; pointer-events: none; display: none;
+  text-align: center;
+  font-family: 'Cormorant Garamond', serif;
+  transition: opacity 0.3s;
+}
+.combo-count {
+  font-size: 42px; font-weight: 700;
+  background: linear-gradient(135deg, var(--amber-l), var(--orange));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(245,166,35,0.4);
+}
+.combo-mult {
+  font-size: 14px; font-weight: 600;
+  color: var(--amber);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 2px;
+  letter-spacing: .1em;
+}
+@keyframes comboPulse {
+  0%   { transform: translateX(-50%) scale(1.3); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+#comboDisplay.pulse { animation: comboPulse .25s ease-out; }
+
+/* ── Tier 3: Golden Moment + Frenzy banner ──────────────── */
+.golden-moment {
+  position: absolute;
+  width: 44px; height: 44px;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: goldenPulse 8s ease-in-out forwards;
+  filter: drop-shadow(0 0 12px rgba(251,191,36,0.8));
+  z-index: 7;
+}
+.golden-moment svg { width: 100%; height: 100%; }
+@keyframes goldenPulse {
+  0%   { transform: scale(0);   opacity: 0; }
+  6%   { transform: scale(1.3); opacity: 1; }
+  10%  { transform: scale(1); }
+  50%  { transform: scale(1.1); }
+  90%  { transform: scale(1);   opacity: 1; }
+  100% { transform: scale(0);   opacity: 0; }
+}
+#frenzyBanner {
+  display: none;
+  position: absolute; top: 10px; left: 10px; right: 10px;
+  z-index: 8; pointer-events: none;
+}
+.frenzy-bar {
+  background: linear-gradient(90deg, #fbbf24, #f97316, #fbbf24);
+  background-size: 200% 100%;
+  animation: frenzyShimmer 2s linear infinite;
+  color: #0b0f1a;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  box-shadow: 0 4px 20px rgba(251,191,36,0.5);
+  letter-spacing: .1em;
+}
+@keyframes frenzyShimmer {
+  0%   { background-position:   0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* ── Tier 3: Weekly leaderboard tabs ─────────────────────── */
+.lb-tabs { display: flex; gap: 4px; margin-left: auto; }
+.lb-tab {
+  padding: 3px 8px; font-size: 10px;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 5px; color: var(--txt2);
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer; transition: all .15s;
+}
+.lb-tab:hover { border-color: var(--amber); color: var(--amber); }
+.lb-tab.active {
+  background: var(--amber); color: #0b0f1a; border-color: var(--amber);
+}
+.lb-challenge-header {
+  padding: 8px; margin-bottom: 8px;
+  background: rgba(245,166,35,0.08);
+  border-left: 3px solid var(--amber);
+  border-radius: 4px;
+  font-size: 11px; color: var(--txt2);
+}
+.lb-challenge-header .ch-title {
+  font-weight: 700; color: var(--amber); font-size: 12px;
+  margin-bottom: 3px;
+}
+.lb-challenge-header .ch-countdown {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; color: var(--txt3);
+  margin-top: 4px;
+}
+.champion-badges {
+  margin-top: 6px; font-size: 14px;
+  letter-spacing: 2px;
+}
+
+/* ── Tier 3: Gallery ─────────────────────────────────── */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.gallery-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all .2s;
+  aspect-ratio: 1;
+  position: relative;
+}
+.gallery-card:hover:not(.gallery-locked) {
+  border-color: var(--amber);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+.gallery-card img {
+  width: 100%; height: 70%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-card .caption {
+  padding: 6px 8px;
+  font-size: 11px; color: var(--txt);
+  font-weight: 600; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gallery-card.gallery-locked { cursor: default; }
+.gallery-card.gallery-locked .img-placeholder {
+  width: 100%; height: 70%;
+  background: var(--bg); display: flex;
+  align-items: center; justify-content: center;
+  font-size: 38px; opacity: 0.2; filter: grayscale(1);
+}
+.gallery-card.gallery-locked .caption {
+  color: var(--txt3);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+}
+.gallery-card .new-dot {
+  position: absolute; top: 6px; right: 6px;
+  width: 10px; height: 10px; background: var(--amber);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--amber);
+}
+
 </style>
 </head>
 <body>
@@ -740,6 +896,8 @@ html, body {
       </button>
       <!-- Tier 2: Achievements -->
       <button class="icon-btn" id="achievementsBtn" title="Achievements">🏆</button>
+      <!-- Tier 3: Gallery -->
+      <button class="icon-btn" id="galleryBtn" title="Found in Nature">🖼️</button>
       <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
     </div>
   </div>
@@ -868,6 +1026,17 @@ html, body {
         <canvas id="spiralCanvas"></canvas>
         <canvas id="confettiCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;"></canvas>
         <div id="flowerLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;z-index:6;pointer-events:none;"></div>
+        <!-- Tier 3: Combo counter + Frenzy banner -->
+        <div id="comboDisplay">
+          <div class="combo-count" id="comboCount">0</div>
+          <div class="combo-mult" id="comboMult">×1</div>
+        </div>
+        <div id="frenzyBanner">
+          <div class="frenzy-bar">
+            <span>⚡ FRENZY — ×7 clicks</span>
+            <span id="frenzyTimer">30s</span>
+          </div>
+        </div>
         <div class="canvas-footer">
           <span id="zoomLbl"></span>
         </div>
@@ -923,7 +1092,14 @@ html, body {
 
       <!-- Leaderboard card -->
       <div class="card">
-        <div class="card-title">🏆 Leaderboard</div>
+        <div class="card-title">
+          🏆 Leaderboard
+          <div class="lb-tabs">
+            <button class="lb-tab active" data-tab="alltime">All-time</button>
+            <button class="lb-tab" data-tab="weekly">Weekly</button>
+          </div>
+        </div>
+        <div class="lb-challenge-header" id="lbChallengeHeader" style="display:none;"></div>
         <div id="lbList"><div class="lb-empty">Loading…</div></div>
         <div class="lb-status" id="lbStatus"></div>
       </div>
@@ -1013,8 +1189,33 @@ html, body {
   </div>
 </div>
 
-<!-- Tier 2: Achievement toast container -->
+<!-- Tier 2: Achievement toast container (also used by Tier 3 Gallery + Champion toasts) -->
 <div id="achievementToasts"></div>
+
+<!-- Tier 3: Gallery grid overlay -->
+<div class="overlay-backdrop" id="galleryOverlay">
+  <div class="overlay-panel" style="width:580px;max-width:94vw;max-height:85vh;overflow-y:auto;">
+    <button class="overlay-close" id="galleryClose">✕</button>
+    <div class="overlay-title">🖼️ Found in Nature · <span id="galleryCount">0</span> / <span id="galleryTotal">0</span></div>
+    <p style="font-size:12px;color:var(--txt2);line-height:1.5;margin-bottom:16px;">
+      The Fibonacci sequence appears throughout the natural world. Reach new levels to unlock more.
+    </p>
+    <div id="galleryGrid"></div>
+  </div>
+</div>
+
+<!-- Tier 3: Gallery single-item viewer -->
+<div class="overlay-backdrop" id="galleryItemOverlay">
+  <div class="overlay-panel" style="width:600px;max-width:94vw;padding:0;overflow:hidden;">
+    <button class="overlay-close" id="galleryItemClose" style="background:rgba(0,0,0,0.5);border-radius:50%;width:30px;height:30px;">✕</button>
+    <img id="galleryItemImg" style="width:100%;display:block;max-height:60vh;object-fit:cover;" alt="">
+    <div style="padding:20px;">
+      <div id="galleryItemTitle" style="font-size:20px;font-weight:700;color:var(--amber);margin-bottom:10px;font-family:'Cormorant Garamond',serif;"></div>
+      <div id="galleryItemFact" style="font-size:14px;color:var(--txt);line-height:1.6;font-family:'Cormorant Garamond',serif;"></div>
+      <div id="galleryItemUnlock" style="font-size:10px;color:var(--txt3);margin-top:14px;font-family:'JetBrains Mono',monospace;"></div>
+    </div>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -1137,6 +1338,34 @@ const state = {
   activeSkin:       'classic',
   _canvasBg:        '#0a0e1a',     // canvas clear color (overridden by skins)
   _spiralStrokeCol: '#f1f5f9',     // spiral arc stroke for positive n (skin-overridden)
+
+  // ── v3.0 Tier 3: Combo (session-only; not persisted) ─────────────
+  combo: {
+    count:       0,
+    lastClickAt: 0,
+    multTier:    1,
+    fadeTimer:   null,
+  },
+
+  // ── v3.0 Tier 3: Golden Moment + Frenzy (session-only) ───────────
+  goldenMoment: {
+    activeEl:    null,
+    frenzyUntil: 0,
+  },
+
+  // ── v3.0 Tier 3: Weekly Challenge ────────────────────────────────
+  weekly: {
+    currentWeekId:        '',
+    clickCountThisWeek:   0,
+    flowersThisWeek:      0,
+    tokensThisWeek:       0,
+    highestAbsNThisWeek:  0,
+    lowestNThisWeek:      1,
+    championBadges:       [],     // [{ weekId, rank, challenge, ts }]
+  },
+
+  // ── v3.0 Tier 3: Gallery viewed-flags ────────────────────────────
+  galleryViewed: {},               // { [atN]: true } — cleared after user opens the item
 };
 
 // ─── Boost + Engine catalogs (v2.0 Tier 1) ───────────────────────
@@ -1201,6 +1430,67 @@ const ACHIEVEMENTS = [
     fact: 'Mathematicians often play with numbers just to see what happens. Curiosity is how discovery starts.' },
   { id: 'collector',    emblem: '🏆', title: 'Completionist',      unlock: 'Unlock all other achievements',
     fact: 'Every shape in nature is a compromise between growth and space. Same with achievements — you claimed them all.' },
+
+  // v3.0 Tier 3 — Combo + Golden Moment
+  { id: 'combo_21',     emblem: '⚡', title: 'Streaking',           unlock: 'Reach a 21-click combo',
+    fact: '21 clicks in under 21 seconds is F(8) worth of reflex. Jazz drummers know this rhythm.' },
+  { id: 'combo_55',     emblem: '🔥', title: 'Unstoppable',         unlock: 'Reach a 55-click combo',
+    fact: '55 straight clicks. Your dopamine loop just peaked.' },
+  { id: 'golden_touch', emblem: '✨', title: 'Seized the Moment',   unlock: 'Catch a Golden Moment',
+    fact: 'Variable-ratio reinforcement — not knowing when the next reward will come — is the most engaging pattern in psychology. You just experienced it.' },
+];
+
+// ─── Tier 3: Gallery ("Found in Nature") catalog ──────────────────
+const GALLERY = [
+  { at: 3,  emblem: '🐚',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/NautilusCutawayLogarithmicSpiral.jpg/480px-NautilusCutawayLogarithmicSpiral.jpg',
+    title: 'Nautilus Shell',
+    fact: 'The chambered nautilus grows each new section about φ times larger than the last. Cutting the shell in half reveals this perfect logarithmic spiral.' },
+  { at: 6,  emblem: '🌻',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Helianthus_whorl.jpg/480px-Helianthus_whorl.jpg',
+    title: 'Sunflower Seed Head',
+    fact: 'Sunflower florets pack into two opposing spirals — typically 21 clockwise and 34 counter-clockwise, or 34/55, or 55/89. Always consecutive Fibonacci numbers.' },
+  { at: 9,  emblem: '🌀',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Hurricane_Isabel_from_ISS.jpg/480px-Hurricane_Isabel_from_ISS.jpg',
+    title: 'Hurricane Isabel',
+    fact: 'Seen from the International Space Station, hurricane arms trace a near-perfect logarithmic spiral — the limiting shape of the Fibonacci spiral.' },
+  { at: 12, emblem: '🖼️',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/480px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg',
+    title: 'Mona Lisa',
+    fact: "Leonardo da Vinci studied φ obsessively. The Mona Lisa's composition contains multiple golden-ratio rectangles — her face, the horizon line, the spiral of her hair." },
+  { at: 15, emblem: '🌌',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/50/Messier_74_by_HST.jpg/480px-Messier_74_by_HST.jpg',
+    title: 'Messier 74 Galaxy',
+    fact: 'M74, a "grand design" spiral galaxy, displays two prominent arms that follow a logarithmic curve — the same mathematics that shapes your spiral right now.' },
+  { at: 18, emblem: '🌿',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Fractal_Broccoli.jpg/480px-Fractal_Broccoli.jpg',
+    title: 'Romanesco Broccoli',
+    fact: 'Each bud on a Romanesco is itself composed of smaller buds in the same pattern — a natural fractal. Its spirals follow Fibonacci counts.' },
+  { at: 21, emblem: '🌲',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Pineconespiral.jpg/480px-Pineconespiral.jpg',
+    title: 'Pinecone Spirals',
+    fact: 'Pinecones have two families of spirals: typically 8 going one way and 13 going the other. Sometimes 5/8 on smaller cones. Always Fibonacci.' },
+  { at: 24, emblem: '🍍',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Pineapple_%284006%29.JPG/480px-Pineapple_%284006%29.JPG',
+    title: 'Pineapple',
+    fact: 'The hexagonal "eyes" of a pineapple form three spirals: 5, 8, and 13. Count them next time you eat one.' },
+  { at: 27, emblem: '🐌',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Helix_aspersa_shell.jpg/480px-Helix_aspersa_shell.jpg',
+    title: 'Snail Shell',
+    fact: "Land snails grow by adding new chambers that are φ times larger. The shell is a record of the snail's entire life — each turn representing a growth phase." },
+  { at: 30, emblem: '🧬',
+    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/DNA_orbit_animated.gif/240px-DNA_orbit_animated.gif',
+    title: 'DNA Double Helix',
+    fact: 'The B-form DNA molecule is 21 Å wide and 34 Å per complete turn — F(8) and F(9). The ratio is φ. Life itself is Fibonacci.' },
+];
+
+// ─── Tier 3: Weekly challenge metadata ─────────────────────────────
+const WEEKLY_CHALLENGES = [
+  { key: 'highest', title: 'Highest Peak',  desc: 'Reach the highest F(n) this week',     unit: 'level'   },
+  { key: 'lowest',  title: 'Deepest Dive',  desc: 'Reach the most negative F(n)',         unit: 'depth'   },
+  { key: 'clicks',  title: 'Most Clicks',   desc: 'Rack up the most clicks',              unit: 'clicks'  },
+  { key: 'flowers', title: 'Flower Hunter', desc: 'Collect the most flowers',             unit: 'flowers' },
+  { key: 'tokens',  title: 'Token Magnate', desc: 'Earn the most Boost Tokens',           unit: 'tokens'  },
 ];
 
 // ─── Tier 2: Skin catalog ─────────────────────────────────────────
@@ -1442,6 +1732,9 @@ function spawnFlower() {
     e.stopPropagation();
     if (e.type === 'touchend') e.preventDefault();
     bulkTick(+1, 5);
+    // v3.0 Tier 3 — weekly flower-hunter metric
+    state.weekly.flowersThisWeek++;
+    maybeUpdateWeeklyScore();
     const rect = el.getBoundingClientRect();
     const boxRect = cc.getBoundingClientRect();
     launchConfetti(rect.left - boxRect.left + 22, rect.top - boxRect.top + 22, 20);
@@ -2041,6 +2334,19 @@ function tickInput(dir) {
   state.nlIndAlpha = 1.0;
   state.clickCounter++;
 
+  // v3.0 Tier 3 — combo tracking (human clicks only; engine loop bypasses tickInput)
+  const now = performance.now();
+  if (now - state.combo.lastClickAt < 1000) state.combo.count++;
+  else                                       state.combo.count = 1;
+  state.combo.lastClickAt = now;
+  state.combo.multTier    = comboMultiplier(state.combo.count);
+  updateComboDisplay();
+  scheduleComboFade();
+
+  // v3.0 Tier 3 — weekly click-count tracking + light-rate Firestore write
+  state.weekly.clickCountThisWeek++;
+  if (state.weekly.clickCountThisWeek % 10 === 0) maybeUpdateWeeklyScore();
+
   if (state.mode === 'standard') {
     commitN(state.n + dir);
     return;
@@ -2054,7 +2360,9 @@ function tickInput(dir) {
   }
 
   // v2.0 Tier 1 — compute ticks for this click from multipliers
-  let ticksThisClick = clickMultiplier();
+  // v3.0 Tier 3 — stack Frenzy × Combo × ClickMultiplier
+  let ticksThisClick = clickMultiplier() * state.combo.multTier;
+  if (performance.now() < state.goldenMoment.frenzyUntil) ticksThisClick *= 7;
 
   // Periodic bonuses: Fibonacci Fingers (F(5)=5 every 5th click)
   if (state.boostUpgrades.fingers && state.clickCounter % 5 === 0) {
@@ -2113,10 +2421,28 @@ function commitN(newN) {
       if (s.unlock > 0 && state.highestAbsN === s.unlock) showSkinUnlockToast(s);
     });
     renderSkins();
+    // v3.0 Tier 3 — gallery unlock toast at F(3), F(6), F(9)…
+    GALLERY.forEach(g => {
+      if (state.highestAbsN === g.at) showGalleryUnlockToast(g);
+    });
+    // v3.0 Tier 3 — kick off Golden Moments at F(5)
+    if (state.highestAbsN === 5 && typeof goldenTimer !== 'undefined' && !goldenTimer) {
+      initGoldenMoment();
+    }
+    // v3.0 Tier 3 — weekly "Highest Peak" metric
+    if (state.highestAbsN > state.weekly.highestAbsNThisWeek) {
+      state.weekly.highestAbsNThisWeek = state.highestAbsN;
+      maybeUpdateWeeklyScore();
+    }
   }
   // v2.5 Tier 2 — track lowest n for negative-exploration achievements
   if (typeof newN === 'number' && newN < (state.lowestN ?? 1)) {
     state.lowestN = newN;
+    // v3.0 Tier 3 — weekly "Deepest Dive" metric
+    if (state.lowestN < state.weekly.lowestNThisWeek) {
+      state.weekly.lowestNThisWeek = state.lowestN;
+      maybeUpdateWeeklyScore();
+    }
   }
   // v2.5 Tier 2 — evaluate achievements on every commit (cheap)
   checkAchievements();
@@ -2219,6 +2545,9 @@ function awardBoostTokens(absN) {
   const total = base + bonus;
   state.boostTokens         += total;
   state.boostTokensLifetime += total;
+  // v3.0 Tier 3 — weekly token-magnate metric
+  state.weekly.tokensThisWeek += total;
+  maybeUpdateWeeklyScore();
   updateTokenDisplay();
   if (total > 0) {
     // Token popup near top-right of canvas
@@ -2426,12 +2755,15 @@ function startEngineLoop() {
     const whole = Math.floor(state.engine.accumulator);
     if (whole > 0) {
       state.engine.accumulator -= whole;
+      // v3.0 Tier 3 — Frenzy shares with the engine (combo does NOT)
+      const frenzyActive = performance.now() < state.goldenMoment.frenzyUntil;
+      const effective    = frenzyActive ? whole * 7 : whole;
       if (state.mode === 'standard') {
         // In standard mode each tick = 1 commit (not F(|n|) ticks)
-        for (let i = 0; i < whole; i++) commitN(state.n + 1);
+        for (let i = 0; i < effective; i++) commitN(state.n + 1);
       } else {
         if (state.stepDir !== 1) { state.stepDir = 1; state.subStep = 0; }
-        applyTicks(whole);
+        applyTicks(effective);
       }
       updateModeInfo();
       if (state.engine.upgrades.interest) {
@@ -2832,6 +3164,492 @@ function showSkinUnlockToast(skin) {
   setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5100);
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// ═══  v3.0 Tier 3: Combo + Golden Moment + Gallery + Weekly   ═════
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Feature 9: Combo ─────────────────────────────────────────────
+function comboMultiplier(count) {
+  if (count >= 55) return 5;
+  if (count >= 21) return 3;
+  if (count >= 10) return 2;
+  if (count >= 5)  return 1.5;
+  return 1;
+}
+
+function updateComboDisplay() {
+  const el      = document.getElementById('comboDisplay');
+  const countEl = document.getElementById('comboCount');
+  const multEl  = document.getElementById('comboMult');
+  if (!el || !countEl || !multEl) return;
+  if (state.combo.count < 2) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = '';
+  el.style.opacity = '1';
+  el.style.transition = '';
+  countEl.textContent = state.combo.count;
+  multEl.textContent  = '×' + state.combo.multTier;
+  if ([5, 10, 21, 55].includes(state.combo.count)) {
+    el.classList.remove('pulse');
+    void el.offsetWidth; // force reflow
+    el.classList.add('pulse');
+  }
+  // Combo achievements (non-persisted combo state, but achievements persist)
+  if (state.combo.count >= 21 && !state.achievements.combo_21) {
+    state.achievements.combo_21 = Date.now();
+    showAchievementToast('combo_21');
+    if (currentUser && fbDb) debouncedSaveProgress();
+  }
+  if (state.combo.count >= 55 && !state.achievements.combo_55) {
+    state.achievements.combo_55 = Date.now();
+    showAchievementToast('combo_55');
+    if (currentUser && fbDb) debouncedSaveProgress();
+  }
+}
+
+function scheduleComboFade() {
+  if (state.combo.fadeTimer) clearTimeout(state.combo.fadeTimer);
+  state.combo.fadeTimer = setTimeout(() => {
+    const el = document.getElementById('comboDisplay');
+    if (!el) return;
+    el.style.transition = 'opacity 0.4s';
+    el.style.opacity    = '0';
+    setTimeout(() => {
+      state.combo.count    = 0;
+      state.combo.multTier = 1;
+      el.style.display     = 'none';
+      el.style.transition  = '';
+    }, 400);
+  }, 1100);
+}
+
+// ── Feature 10: Golden Moment ────────────────────────────────────
+let goldenTimer = null;
+function initGoldenMoment() {
+  scheduleNextGolden();
+  if (!initGoldenMoment._vchHooked) {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') scheduleNextGolden();
+      else clearGoldenTimer();
+    });
+    initGoldenMoment._vchHooked = true;
+  }
+}
+function scheduleNextGolden() {
+  clearGoldenTimer();
+  const delay = 120000 + Math.random() * 180000; // 2–5 min
+  goldenTimer = setTimeout(spawnGolden, delay);
+}
+function clearGoldenTimer() {
+  if (goldenTimer) { clearTimeout(goldenTimer); goldenTimer = null; }
+}
+
+function spawnGolden() {
+  if (celebrationAF)                           { scheduleNextGolden(); return; }
+  if (document.visibilityState !== 'visible')  { scheduleNextGolden(); return; }
+  const layer = document.getElementById('flowerLayer');
+  if (!layer) { scheduleNextGolden(); return; }
+  const box = layer.getBoundingClientRect();
+  if (box.width < 100 || box.height < 100)     { scheduleNextGolden(); return; }
+
+  const el = document.createElement('div');
+  el.className = 'golden-moment';
+  el.innerHTML = `
+    <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="gg" cx="50%" cy="50%">
+          <stop offset="0%" stop-color="#fff8dc"/>
+          <stop offset="50%" stop-color="#fbbf24"/>
+          <stop offset="100%" stop-color="#b45309"/>
+        </radialGradient>
+      </defs>
+      <circle cx="22" cy="22" r="18" fill="url(#gg)" stroke="#fbbf24" stroke-width="1.5"/>
+      <path d="M 22,8 Q 32,14 32,22 Q 32,30 22,30 Q 14,30 14,22" fill="none" stroke="#78350f" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
+  el.style.left = (30 + Math.random() * (box.width  - 72)) + 'px';
+  el.style.top  = (30 + Math.random() * (box.height - 72)) + 'px';
+  el.style.pointerEvents = 'auto';
+
+  el.addEventListener('click',    collectGolden);
+  el.addEventListener('touchend', e => { e.preventDefault(); collectGolden(e); }, { passive: false });
+
+  layer.appendChild(el);
+  state.goldenMoment.activeEl = el;
+
+  // Auto-remove after 8s
+  setTimeout(() => {
+    if (el.parentNode) el.remove();
+    if (state.goldenMoment.activeEl === el) state.goldenMoment.activeEl = null;
+    scheduleNextGolden();
+  }, 8000);
+}
+
+function collectGolden(e) {
+  if (e) e.stopPropagation();
+  const el = state.goldenMoment.activeEl;
+  if (!el) return;
+  const rect    = el.getBoundingClientRect();
+  const boxRect = document.getElementById('flowerLayer').getBoundingClientRect();
+  const x = rect.left - boxRect.left + 22;
+  const y = rect.top  - boxRect.top  + 22;
+  el.remove();
+  state.goldenMoment.activeEl = null;
+
+  const roll = Math.random();
+  if (roll < 0.5) {
+    // +F(highestAbsN) ticks
+    const ticks = Number(fibPos(Math.max(1, state.highestAbsN)));
+    if (state.mode !== 'standard' && state.stepDir !== 1) {
+      state.stepDir = 1; state.subStep = 0;
+    }
+    applyTicks(ticks);
+    launchConfetti(x, y, 40);
+    showPointsAnimation(x, y - 20, `F(${state.highestAbsN})`);
+  } else if (roll < 0.85) {
+    // Token bonus
+    const choices = [5, 8, 13, 21, 34];
+    const tokens  = choices[Math.floor(Math.random() * choices.length)];
+    state.boostTokens         += tokens;
+    state.boostTokensLifetime += tokens;
+    state.weekly.tokensThisWeek += tokens;
+    maybeUpdateWeeklyScore();
+    updateTokenDisplay();
+    launchConfetti(x, y, 30);
+    showPointsAnimation(x, y - 20, `${tokens} 🪙`);
+  } else {
+    // Frenzy!
+    state.goldenMoment.frenzyUntil = performance.now() + 30000;
+    launchConfetti(x, y, 80);
+    showFrenzyBanner();
+  }
+
+  if (!state.achievements.golden_touch) {
+    state.achievements.golden_touch = Date.now();
+    showAchievementToast('golden_touch');
+    if (currentUser && fbDb) debouncedSaveProgress();
+  }
+
+  scheduleNextGolden();
+}
+
+let frenzyBannerAF = null;
+function showFrenzyBanner() {
+  const banner = document.getElementById('frenzyBanner');
+  if (!banner) return;
+  banner.style.display = '';
+  const end = state.goldenMoment.frenzyUntil;
+  function tick(now) {
+    const remaining = Math.max(0, end - now);
+    const timerEl   = document.getElementById('frenzyTimer');
+    if (timerEl) timerEl.textContent = Math.ceil(remaining / 1000) + 's';
+    if (remaining > 0) {
+      frenzyBannerAF = requestAnimationFrame(tick);
+    } else {
+      banner.style.display = 'none';
+      frenzyBannerAF = null;
+    }
+  }
+  if (frenzyBannerAF) cancelAnimationFrame(frenzyBannerAF);
+  frenzyBannerAF = requestAnimationFrame(tick);
+}
+
+// ── Feature 8: Gallery ("Found in Nature") ──────────────────────
+function openGalleryModal() {
+  renderGalleryGrid();
+  document.getElementById('galleryOverlay').classList.add('open');
+}
+
+function renderGalleryGrid() {
+  const grid  = document.getElementById('galleryGrid');
+  const count = document.getElementById('galleryCount');
+  const total = document.getElementById('galleryTotal');
+  if (!grid || !count || !total) return;
+  const unlocked = GALLERY.filter(g => state.highestAbsN >= g.at).length;
+  count.textContent = unlocked;
+  total.textContent = GALLERY.length;
+
+  grid.innerHTML = '<div class="gallery-grid">' + GALLERY.map(g => {
+    const locked = state.highestAbsN < g.at;
+    const isNew  = !locked && !state.galleryViewed[g.at];
+    let cls = 'gallery-card';
+    if (locked) cls += ' gallery-locked';
+    return `
+      <div class="${cls}" data-at="${g.at}">
+        ${isNew ? '<div class="new-dot"></div>' : ''}
+        ${locked
+          ? `<div class="img-placeholder">${g.emblem}</div>`
+          : `<img src="${g.src}" alt="${g.title}" loading="lazy" onerror="this.outerHTML='<div class=\\'img-placeholder\\'>${g.emblem}</div>'">`}
+        <div class="caption">${locked ? `F(${g.at})` : g.title}</div>
+      </div>`;
+  }).join('') + '</div>';
+
+  grid.querySelectorAll('.gallery-card:not(.gallery-locked)').forEach(card => {
+    card.addEventListener('click', () => openGalleryItem(parseInt(card.dataset.at, 10)));
+  });
+}
+
+function openGalleryItem(atN) {
+  const item = GALLERY.find(g => g.at === atN);
+  if (!item) return;
+  document.getElementById('galleryItemImg').src   = item.src;
+  document.getElementById('galleryItemImg').alt   = item.title;
+  document.getElementById('galleryItemTitle').textContent  = item.title;
+  document.getElementById('galleryItemFact').textContent   = item.fact;
+  document.getElementById('galleryItemUnlock').textContent =
+    `Unlocked at F(${item.at}) = ${fmt(fib(item.at))}`;
+  document.getElementById('galleryItemOverlay').classList.add('open');
+  // Mark viewed + clear NEW dot
+  state.galleryViewed[atN] = true;
+  if (currentUser && fbDb) debouncedSaveProgress();
+  renderGalleryGrid();
+}
+
+function showGalleryUnlockToast(item) {
+  const container = document.getElementById('achievementToasts');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.innerHTML = `
+    <div class="emblem">${item.emblem}</div>
+    <div>
+      <div class="ach-label">Gallery: new image</div>
+      <div class="ach-title">${item.title}</div>
+    </div>`;
+  toast.addEventListener('click', () => {
+    toast.remove();
+    openGalleryModal();
+    setTimeout(() => openGalleryItem(item.at), 200);
+  });
+  container.appendChild(toast);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5100);
+}
+
+// ── Feature 7: Weekly Class Challenge ────────────────────────────
+function currentChallengeType(weekId = state.weekly.currentWeekId) {
+  if (!weekId) return 0;
+  const weekNum = parseInt(weekId.split('-W')[1], 10);
+  if (!Number.isFinite(weekNum)) return 0;
+  return weekNum % WEEKLY_CHALLENGES.length;
+}
+function currentChallengeMeta(weekId) {
+  return WEEKLY_CHALLENGES[currentChallengeType(weekId)];
+}
+
+function currentWeeklyMetric() {
+  const ch = currentChallengeMeta();
+  switch (ch.key) {
+    case 'highest': return state.weekly.highestAbsNThisWeek;
+    case 'lowest':  return Math.abs(state.weekly.lowestNThisWeek);
+    case 'clicks':  return state.weekly.clickCountThisWeek;
+    case 'flowers': return state.weekly.flowersThisWeek;
+    case 'tokens':  return state.weekly.tokensThisWeek;
+  }
+  return 0;
+}
+
+let _weeklyWriteTimer = 0;
+function maybeUpdateWeeklyScore() {
+  if (!currentUser || !fbDb) return;
+  const weekId = state.weekly.currentWeekId;
+  if (!weekId) return;
+  clearTimeout(_weeklyWriteTimer);
+  _weeklyWriteTimer = setTimeout(async () => {
+    const ch = currentChallengeMeta();
+    const metric = currentWeeklyMetric();
+    try {
+      await fbDb.collection('weeklyScores').doc(weekId).collection('entries').doc(currentUser.uid).set({
+        uid:         currentUser.uid,
+        displayName: currentUser.displayName || currentUser.email || 'Guest',
+        photoURL:    currentUser.photoURL || '',
+        metricKey:   ch.key,
+        metric,
+        updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (err) {
+      console.error('❌ Weekly score write error:', err.message);
+    }
+  }, 2000);
+}
+
+function evaluateWeekly() {
+  const thisWeek = isoWeekStr();
+  if (state.weekly.currentWeekId === thisWeek) return;
+
+  const oldWeek = state.weekly.currentWeekId;
+  state.weekly.currentWeekId       = thisWeek;
+  state.weekly.clickCountThisWeek  = 0;
+  state.weekly.flowersThisWeek     = 0;
+  state.weekly.tokensThisWeek      = 0;
+  state.weekly.highestAbsNThisWeek = state.highestAbsN;
+  state.weekly.lowestNThisWeek     = state.lowestN ?? 1;
+
+  if (oldWeek) checkLastWeekChampion(oldWeek);
+  if (currentUser && fbDb) debouncedSaveProgress();
+  // Re-render challenge header if user is on Weekly tab
+  if (activeLbTab === 'weekly') renderChallengeHeader();
+}
+
+async function checkLastWeekChampion(lastWeekId) {
+  if (!currentUser || !fbDb) return;
+  try {
+    const snap = await fbDb.collection('weeklyScores').doc(lastWeekId)
+      .collection('entries').orderBy('metric', 'desc').limit(3).get();
+    const rows  = snap.docs.map(d => d.data());
+    const myIdx = rows.findIndex(r => r.uid === currentUser.uid);
+    if (myIdx === -1) return;
+    const rank      = myIdx + 1;
+    const challenge = currentChallengeType(lastWeekId);
+    const badge = { weekId: lastWeekId, rank, challenge, ts: Date.now() };
+    state.weekly.championBadges = state.weekly.championBadges || [];
+    state.weekly.championBadges.push(badge);
+    if (currentUser && fbDb) debouncedSaveProgress();
+    showChampionToast(badge);
+    renderChampionBadges();
+  } catch (err) {
+    console.error('❌ Champion check error:', err.message);
+  }
+}
+
+function showChampionToast(badge) {
+  const medals = ['🥇','🥈','🥉'];
+  const container = document.getElementById('achievementToasts');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.innerHTML = `
+    <div class="emblem">${medals[badge.rank - 1] || '🏅'}</div>
+    <div>
+      <div class="ach-label">Weekly Champion</div>
+      <div class="ach-title">${badge.weekId} · Rank ${badge.rank}</div>
+    </div>`;
+  container.appendChild(toast);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 6000);
+}
+
+function renderChampionBadges() {
+  const badges = state.weekly.championBadges || [];
+  const medals = ['🥇','🥈','🥉'];
+  const recent = badges.slice(-5).map(b => medals[b.rank - 1] || '🏅').join(' ');
+  // Desktop
+  let desk = document.getElementById('championBadges');
+  const deskAnchor = document.getElementById('userBestScore');
+  if (deskAnchor) {
+    if (!desk) {
+      desk = document.createElement('div');
+      desk.id = 'championBadges';
+      desk.className = 'champion-badges';
+      deskAnchor.parentNode.insertBefore(desk, deskAnchor.nextSibling);
+    }
+    desk.textContent = recent;
+    desk.style.display = recent ? '' : 'none';
+  }
+  // Mobile mirror
+  let mobi = document.getElementById('mobileChampionBadges');
+  const mobiAnchor = document.getElementById('mobileUserBestScore');
+  if (mobiAnchor) {
+    if (!mobi) {
+      mobi = document.createElement('div');
+      mobi.id = 'mobileChampionBadges';
+      mobi.className = 'champion-badges';
+      mobiAnchor.parentNode.insertBefore(mobi, mobiAnchor.nextSibling);
+    }
+    mobi.textContent = recent;
+    mobi.style.display = recent ? '' : 'none';
+  }
+}
+
+// ── Weekly leaderboard tab + listener ───────────────────────────
+let activeLbTab = 'alltime';
+
+function formatTimeUntilMonday() {
+  const now = new Date();
+  const nextMonday = new Date(now);
+  const dayNr = (now.getDay() + 6) % 7; // 0 = Monday
+  nextMonday.setDate(now.getDate() + (7 - dayNr));
+  nextMonday.setHours(0, 0, 0, 0);
+  const ms = nextMonday - now;
+  const days = Math.floor(ms / 86400000);
+  const hrs  = Math.floor((ms % 86400000) / 3600000);
+  return days > 0 ? `${days}d ${hrs}h` : `${hrs}h`;
+}
+
+function renderChallengeHeader() {
+  const header = document.getElementById('lbChallengeHeader');
+  if (!header) return;
+  const weekId    = state.weekly.currentWeekId || isoWeekStr();
+  const ch        = currentChallengeMeta(weekId);
+  const countdown = formatTimeUntilMonday();
+  header.innerHTML = `
+    <div class="ch-title">This Week: ${ch.title}</div>
+    <div>${ch.desc}</div>
+    <div class="ch-countdown">${weekId} · resets in ${countdown}</div>`;
+}
+
+function formatWeeklyMetric(key, value) {
+  if (key === 'highest' || key === 'lowest') return `F(${value})`;
+  if (value == null) return '—';
+  try { return fmt(BigInt(Math.round(value))); }
+  catch (e) { return String(value); }
+}
+
+function startWeeklyLeaderboardListener() {
+  const weekId = state.weekly.currentWeekId || isoWeekStr();
+  if (!fbDb || !weekId) return;
+  lbUnsub = fbDb.collection('weeklyScores').doc(weekId).collection('entries')
+    .orderBy('metric', 'desc')
+    .limit(10)
+    .onSnapshot(snap => {
+      renderWeeklyLeaderboard(snap.docs.map(d => d.data()));
+    }, err => {
+      console.error('❌ Weekly LB error:', err.message);
+      const list = document.getElementById('lbList');
+      if (list) list.innerHTML = '<div class="lb-empty">Could not load weekly leaderboard</div>';
+    });
+}
+
+function renderWeeklyLeaderboard(rows) {
+  const ch   = currentChallengeMeta();
+  const list = document.getElementById('lbList');
+  if (!list) return;
+  if (!rows.length) {
+    const emptyHtml = '<div class="lb-empty">No entries yet — be first!</div>';
+    list.innerHTML = emptyHtml;
+    syncMobileLeaderboard(emptyHtml, '');
+    document.getElementById('lbStatus').textContent = '';
+    return;
+  }
+  const rankClass = i => i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
+  const medal     = i => ['🥇','🥈','🥉'][i] ?? `${i+1}.`;
+  const isMe      = row => currentUser && row.uid === currentUser.uid;
+  list.innerHTML = rows.map((row, i) => `
+    <div class="lb-row">
+      <div class="lb-rank ${rankClass(i)}">${medal(i)}</div>
+      ${row.photoURL
+        ? `<img class="lb-avatar" src="${row.photoURL}" alt="" referrerpolicy="no-referrer">`
+        : `<div class="lb-avatar"></div>`}
+      <div class="lb-name ${isMe(row) ? 'is-me' : ''}">${escHtml(row.displayName || 'Anonymous')}</div>
+      <div class="lb-score">${formatWeeklyMetric(ch.key, row.metric)}</div>
+    </div>`).join('');
+  const statusText = `${rows.length} player${rows.length !== 1 ? 's' : ''}`;
+  document.getElementById('lbStatus').textContent = statusText;
+  syncMobileLeaderboard(list.innerHTML, statusText);
+}
+
+function restartLeaderboardListener() {
+  if (lbUnsub) { lbUnsub(); lbUnsub = null; }
+  const header = document.getElementById('lbChallengeHeader');
+  if (activeLbTab === 'alltime') {
+    if (header) header.style.display = 'none';
+    startLeaderboardListener();
+  } else {
+    if (header) header.style.display = '';
+    renderChallengeHeader();
+    startWeeklyLeaderboardListener();
+  }
+}
+
 function updateModeInfo() {
   const el = document.getElementById('modeInfo');
   if (state.mode === 'standard') {
@@ -3077,6 +3895,24 @@ document.getElementById('achievementsOverlay').addEventListener('click', e => {
   if (e.target.id === 'achievementsOverlay') closeOverlay('achievementsOverlay');
 });
 
+// ─── Tier 3: Gallery + Leaderboard tab wiring ────────────────────
+document.getElementById('galleryBtn').addEventListener('click', openGalleryModal);
+document.getElementById('galleryClose').addEventListener('click', () => closeOverlay('galleryOverlay'));
+document.getElementById('galleryItemClose').addEventListener('click', () => closeOverlay('galleryItemOverlay'));
+document.getElementById('galleryOverlay').addEventListener('click', e => {
+  if (e.target.id === 'galleryOverlay') closeOverlay('galleryOverlay');
+});
+document.getElementById('galleryItemOverlay').addEventListener('click', e => {
+  if (e.target.id === 'galleryItemOverlay') closeOverlay('galleryItemOverlay');
+});
+document.querySelectorAll('.lb-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeLbTab = btn.dataset.tab;
+    document.querySelectorAll('.lb-tab').forEach(b => b.classList.toggle('active', b === btn));
+    restartLeaderboardListener();
+  });
+});
+
 document.getElementById('settingsOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('settingsOverlay')) closeOverlay('settingsOverlay');
 });
@@ -3246,6 +4082,12 @@ updateModeInfo();
 updateTokenDisplay();   // v2.0 Tier 1 — paints boost + engine cards
 renderSkins();          // v2.5 Tier 2 — initial skin grid (Classic only unlocked)
 updateStreakBadge();    // v2.5 Tier 2 — seed streak badge
+// v3.0 Tier 3 — seed weekly ID so Weekly tab works before Firebase signs in
+if (!state.weekly.currentWeekId) {
+  state.weekly.currentWeekId       = isoWeekStr();
+  state.weekly.highestAbsNThisWeek = state.highestAbsN;
+  state.weekly.lowestNThisWeek     = state.lowestN ?? 1;
+}
 </script>
 
 <!-- Firebase SDKs (compat v9 — works as plain script tags, no bundler needed) -->
@@ -3516,6 +4358,18 @@ async function onSignIn(user) {
       state.activeSkin   = data.activeSkin   ?? 'classic';
       applySkin(state.activeSkin);
 
+      // v3.0 Tier 3 — restore weekly + gallery state
+      if (data.weekly) {
+        state.weekly.currentWeekId       = data.weekly.currentWeekId       ?? '';
+        state.weekly.clickCountThisWeek  = data.weekly.clickCountThisWeek  ?? 0;
+        state.weekly.flowersThisWeek     = data.weekly.flowersThisWeek     ?? 0;
+        state.weekly.tokensThisWeek      = data.weekly.tokensThisWeek      ?? 0;
+        state.weekly.highestAbsNThisWeek = data.weekly.highestAbsNThisWeek ?? state.highestAbsN;
+        state.weekly.lowestNThisWeek     = data.weekly.lowestNThisWeek     ?? (state.lowestN ?? 1);
+        state.weekly.championBadges      = Array.isArray(data.weekly.championBadges) ? data.weekly.championBadges : [];
+      }
+      state.galleryViewed = data.galleryViewed ?? {};
+
       // Keep whichever is further: guest progress or saved progress
       if (guestAbsN > userBestAbsN) {
         // Guest got further than saved — keep current position and save it
@@ -3560,6 +4414,11 @@ async function onSignIn(user) {
       renderSkins();
       checkAchievements();
       if (!offlineModalShown) evaluateStreak();  // else the offline Collect handler calls evaluateStreak
+      // v3.0 Tier 3 — weekly challenge + gallery + golden moment
+      evaluateWeekly();
+      renderChampionBadges();
+      if (activeLbTab === 'weekly') renderChallengeHeader();
+      if (state.highestAbsN >= 5 && !goldenTimer) initGoldenMoment();
     } else {
       // Anonymous user with no saved data — sign them out to start fresh
       // (this handles stale anonymous sessions persisted by Firebase IndexedDB)
@@ -3580,6 +4439,11 @@ async function onSignIn(user) {
       updateStreakBadge();
       renderSkins();
       evaluateStreak();
+      // v3.0 Tier 3 — seed weekly challenge state and render
+      evaluateWeekly();
+      renderChampionBadges();
+      if (activeLbTab === 'weekly') renderChallengeHeader();
+      if (state.highestAbsN >= 5 && !goldenTimer) initGoldenMoment();
     }
     drawSpiral();
     drawNumberLine();
@@ -3647,6 +4511,17 @@ async function maybeSaveScore(n) {
       achievements: state.achievements,
       lowestN:      state.lowestN ?? 1,
       activeSkin:   state.activeSkin || 'classic',
+      // v3.0 Tier 3 fields
+      weekly: {
+        currentWeekId:       state.weekly.currentWeekId,
+        clickCountThisWeek:  state.weekly.clickCountThisWeek,
+        flowersThisWeek:     state.weekly.flowersThisWeek,
+        tokensThisWeek:      state.weekly.tokensThisWeek,
+        highestAbsNThisWeek: state.weekly.highestAbsNThisWeek,
+        lowestNThisWeek:     state.weekly.lowestNThisWeek,
+        championBadges:      state.weekly.championBadges || [],
+      },
+      galleryViewed: state.galleryViewed || {},
       displayName: currentUser.displayName || currentUser.email || 'Guest',
       photoURL:    currentUser.photoURL    || '',
       uid:         currentUser.uid,
@@ -3697,6 +4572,17 @@ async function saveProgress() {
       achievements: state.achievements,
       lowestN:      state.lowestN ?? 1,
       activeSkin:   state.activeSkin || 'classic',
+      // v3.0 Tier 3 fields
+      weekly: {
+        currentWeekId:       state.weekly.currentWeekId,
+        clickCountThisWeek:  state.weekly.clickCountThisWeek,
+        flowersThisWeek:     state.weekly.flowersThisWeek,
+        tokensThisWeek:      state.weekly.tokensThisWeek,
+        highestAbsNThisWeek: state.weekly.highestAbsNThisWeek,
+        lowestNThisWeek:     state.weekly.lowestNThisWeek,
+        championBadges:      state.weekly.championBadges || [],
+      },
+      galleryViewed: state.galleryViewed || {},
       // Identity
       displayName: currentUser.displayName || currentUser.email || 'Guest',
       photoURL:    currentUser.photoURL    || '',
