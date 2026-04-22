@@ -71,6 +71,12 @@ export const WALK_TURN_SPEED         = 2.2;  // radians per second (keyboard tur
 export const WALK_CAMERA_DISTANCE    = 20;   // how far behind the astronaut
 export const WALK_CAMERA_HEIGHT      = 10;   // how high above
 export const WALK_INTERACT_RADIUS    = 8;    // how close to a fuel tank to interact
+export const WALK_PLAY_RADIUS        = 180;  // hard cap on astronaut x/z movement
+export const WALK_MOUSE_SENSITIVITY  = 0.0025;
+export const WALK_PITCH_MIN          = -0.45; // camera below-and-behind (looking up)
+export const WALK_PITCH_MAX          =  1.15; // camera high-and-behind (looking down)
+export const WALK_GROUND_AMPLITUDE   = 3.0;   // peak height variation of moon surface
+export const WALK_CRATER_COUNT       = 20;
 
 // ---------- Particle tunables (ported subset — expand as needed) ----------
 export const CONE_PS_MAX_PARTICLES     = 1100;
