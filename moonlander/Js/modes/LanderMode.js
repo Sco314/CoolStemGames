@@ -5,7 +5,6 @@
 // whose position/rotation we can hand off seamlessly to the walk mode.
 //
 // STUBBED AREAS (marked with TODO) are left as clean insertion points:
-//   - Particle systems (reuse Particles.js stubs)
 //   - Starfield background
 //
 // The jerk-based thrust physics from tblazevic IS implemented below — that's
@@ -21,6 +20,7 @@ import {
   MAIN_COLLIDER_SCALE, SMALL_COLLIDER_SCALE,
   FOOT_COLLIDER_OFFSET_X, FOOT_COLLIDER_OFFSET_Y,
   LANDING_EDGE_MARGIN_FRAC, PAD_MULTIPLIER_WEIGHTS, SCORE_PER_LANDING,
+  CAMERA_ZOOM_ALTITUDE, CAMERA_ZOOM_FACTOR,
   ORTHO_NEAR, ORTHO_FAR, MODE
 } from '../Constants.js';
 import { GameState, update as updateState, notify } from '../GameState.js';
@@ -28,6 +28,7 @@ import { Input } from '../Input.js';
 import { setLanderTelemetry, setCenterMessage } from '../HUD.js';
 import { points as terrainPoints } from '../TerrainData.js';
 import { Sounds } from '../Sound.js';
+import { ParticleSystemCone, ParticleSystemExplosion } from '../Particles.js';
 
 // ----- mode-local state (reset in enter(), cleared in exit()) -----
 let scene = null;
@@ -38,6 +39,8 @@ let footColliderLeft = null;     // child Object3D at left foot
 let footColliderRight = null;    // child Object3D at right foot
 let terrainSegments = [];        // [{ left: Vec2, right: Vec2, slope: number, multiplier: number }]
 let disposables = [];            // geometries/materials/textures to dispose on exit
+let thrusterParticles = null;    // ParticleSystemCone — exhaust trail
+let explosionParticles = null;   // ParticleSystemExplosion — crash burst
 
 // Scratch vectors reused each frame — avoids per-frame allocations.
 const _mainWorld  = new THREE.Vector3();
@@ -80,7 +83,17 @@ export const LanderMode = {
     buildTerrain();
     buildLander();
     // TODO: buildStarfield();  — port tblazevic createStars()
-    // TODO: initParticles();   — thruster cone + explosion (see Particles.js stub)
+
+    // Particle systems: exhaust cone tracks the lander, explosion fires on crash.
+    thrusterParticles  = new ParticleSystemCone(scene, lander);
+    explosionParticles = new ParticleSystemExplosion(scene, lander);
+    disposables.push({ dispose: () => thrusterParticles?.dispose() });
+    disposables.push({ dispose: () => explosionParticles?.dispose() });
+
+    // Reset zoom state in case a previous life left the camera zoomed in.
+    camera.zoom = 1;
+    camera.position.set(0, 0, 100);
+    camera.updateProjectionMatrix();
 
     // Initial spawn
     respawn();
@@ -93,7 +106,7 @@ export const LanderMode = {
     console.log('◀ LanderMode.exit');
     Sounds.rocket?.stop();
 
-    // Dispose every geometry, material, and texture we created.
+    // Dispose every geometry, material, texture, and pooled subsystem.
     for (const d of disposables) {
       if (d.geometry) d.geometry.dispose();
       if (d.material) {
@@ -101,9 +114,12 @@ export const LanderMode = {
         else d.material.dispose();
       }
       if (d.texture) d.texture.dispose();
+      if (typeof d.dispose === 'function') d.dispose();
     }
     disposables = [];
     terrainSegments = [];
+    thrusterParticles = null;
+    explosionParticles = null;
 
     // Detach lander from scene but DO NOT dispose its meshes — the transition
     // and walk mode may want to render the parked lander visually. Main.js
@@ -117,7 +133,14 @@ export const LanderMode = {
   },
 
   update(dt) {
-    if (landingResolved) return;
+    // Particles keep animating across landingResolved so the crash explosion
+    // and any in-flight exhaust can finish their lifetime visibly.
+    if (landingResolved) {
+      if (thrusterParticles) thrusterParticles.emitting = false;
+      thrusterParticles?.update(dt);
+      explosionParticles?.update(dt);
+      return;
+    }
 
     // --- rotation ---
     if (Input.isDown('ArrowLeft'))  lander.rotation.z += ANGULAR_VELOCITY * dt;
@@ -142,6 +165,8 @@ export const LanderMode = {
       currentAcceleration = Math.max(0, currentAcceleration - THRUSTER_JERK * ACCEL_FALLOFF_MULT * dt);
       Sounds.rocket?.stop();
     }
+    // Exhaust streams while the player is actively burning fuel.
+    if (thrusterParticles) thrusterParticles.emitting = wantThrust;
 
     // --- integrate ---
     // Forward vector points "up" from the lander, rotated by lander.rotation.z.
@@ -168,6 +193,13 @@ export const LanderMode = {
       vSpeed:  -velY,
       angleDeg: -angle * 180 / Math.PI
     });
+
+    // --- camera zoom near ground (final-approach drama) ---
+    updateCameraZoom(altitude);
+
+    // --- particle integration ---
+    thrusterParticles?.update(dt);
+    explosionParticles?.update(dt);
 
     // Notify subscribers for per-second-ish updates (score/fuel) less frequently.
     // For now, notify once per update — cheap enough at 60fps with small listeners.
@@ -414,11 +446,33 @@ function resolveLanding(segment, segmentIndex) {
 
 function resolveCrash(reason) {
   landingResolved = true;
+  Sounds.rocket?.stop();
   Sounds.crash?.play();
-  // TODO: trigger explosion particle system
+  if (thrusterParticles) thrusterParticles.emitting = false;
+  explosionParticles?.emit();
+  // Hide the wreck so the explosion reads as "the lander is gone". A fresh
+  // lander mesh is built when the next life enter()s.
+  lander.visible = false;
   updateState(s => { s.hasLanded = false; }, 'crashed');
   setCenterMessage(reason);
   onCrashedCallback({ reason });
+}
+
+function updateCameraZoom(altitude) {
+  // Below the threshold, snap to a higher zoom and follow the lander; above,
+  // restore the wide ortho framing so the player can plan their descent.
+  if (altitude < CAMERA_ZOOM_ALTITUDE) {
+    if (camera.zoom !== CAMERA_ZOOM_FACTOR) {
+      camera.zoom = CAMERA_ZOOM_FACTOR;
+      camera.updateProjectionMatrix();
+    }
+    camera.position.x = lander.position.x;
+    camera.position.y = lander.position.y;
+  } else if (camera.zoom !== 1) {
+    camera.zoom = 1;
+    camera.position.set(0, 0, 100);
+    camera.updateProjectionMatrix();
+  }
 }
 
 function computeAltitude(x, y) {

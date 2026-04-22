@@ -78,10 +78,48 @@ export const CONE_PS_PER_SEC_MIN       = 250;
 export const CONE_PS_PER_SEC_MAX       = 350;
 export const CONE_PS_LIFETIME_MIN      = 0.3;
 export const CONE_PS_LIFETIME_MAX      = 0.8;
+// Geometry / kinematics of the thruster cone
+export const CONE_PS_HALF_ANGLE        = 0.30;   // radians off the thrust axis
+export const CONE_PS_SPAWN_WIDTH       = LANDER_SCALE * 0.35; // rectangular spawn
+export const CONE_PS_SPAWN_OFFSET      = LANDER_SCALE * 0.5;  // distance from lander origin along -fwd
+export const CONE_PS_SPEED_MIN         = 80;
+export const CONE_PS_SPEED_MAX         = 140;
+export const CONE_PS_DRAG              = 1.4;    // exponential velocity falloff
+export const CONE_PS_GRAVITY_FACTOR    = 0.35;   // particles fall a bit
+// Visual lerp endpoints (yellow → red, fade out, slight grow)
+export const CONE_PS_COLOR_START       = 0xfff2a8;
+export const CONE_PS_COLOR_END         = 0xff3a14;
+export const CONE_PS_OPACITY_START     = 0.95;
+export const CONE_PS_OPACITY_END       = 0.0;
+export const CONE_PS_SCALE_START       = 1.4;
+export const CONE_PS_SCALE_END         = 0.4;
+export const CONE_PS_PARTICLE_SIZE     = 1.6;    // base plane edge length
 
 export const EXPLOSION_PS_MAX_PARTICLES = 350;
 export const EXPLOSION_PS_LIFETIME_MIN  = 0.8;
 export const EXPLOSION_PS_LIFETIME_MAX  = 5;
+export const EXPLOSION_PS_SPEED_MIN     = 40;
+export const EXPLOSION_PS_SPEED_MAX     = 160;
+export const EXPLOSION_PS_DRAG          = 0.8;
+export const EXPLOSION_PS_GRAVITY_FACTOR = 0.8;
+export const EXPLOSION_PS_COLOR_START   = 0xffd07a;
+export const EXPLOSION_PS_COLOR_END     = 0x401004;
+export const EXPLOSION_PS_OPACITY_START = 1.0;
+export const EXPLOSION_PS_OPACITY_END   = 0.0;
+export const EXPLOSION_PS_SCALE_START   = 2.4;
+export const EXPLOSION_PS_SCALE_END     = 0.6;
+export const EXPLOSION_PS_PARTICLE_SIZE = 2.0;
+
+// ---------- Camera zoom near ground ----------
+// When altitude drops below this threshold, the ortho camera zooms in and
+// follows the lander for a tense final-approach view.
+export const CAMERA_ZOOM_ALTITUDE = 100;
+export const CAMERA_ZOOM_FACTOR   = 4;
+
+// ---------- Audio timers ----------
+export const FUEL_ALERT_INTERVAL_MS = 4000;        // beep cadence while low-fuel alert is active
+export const COMMS_INTERVAL_MIN_MS  = 20000;       // morse chatter cadence
+export const COMMS_INTERVAL_MAX_MS  = 40000;
 
 // ---------- Mode identifiers ----------
 // Use strings so console logs and save files are human-readable.
