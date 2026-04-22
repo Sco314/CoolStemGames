@@ -1,0 +1,45 @@
+/* main.css — v0.1.0
+ * Minimal retro HUD styling. DOM HUD overlays the Three.js canvas. */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-family: "Courier New", Courier, monospace;
+}
+
+canvas { display: block; }
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none; /* clicks pass through to canvas */
+  z-index: 10;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+#hud-left  { position: absolute; top: 16px; left: 16px;  }
+#hud-right { position: absolute; top: 16px; right: 16px; text-align: right; }
+
+#hud-left .row,
+#hud-right .row { display: flex; gap: 12px; line-height: 1.5em; }
+#hud-right .row { justify-content: flex-end; }
+
+.label { opacity: 0.8; min-width: 70px; }
+
+.alert { color: #ff5050; animation: blink 0.8s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.3; } }
+
+#hud-center {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-size: 22px;
+  line-height: 1.6em;
+  white-space: pre-line;
+}
