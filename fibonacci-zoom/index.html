@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- v2.0 — Tier 1: Boosts + Engine + Offline -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -515,6 +516,47 @@ html, body {
   100% { opacity: 0; transform: translateY(-45px) scale(0.8); }
 }
 
+/* ── Boosts / Engine cards (v2.0 Tier 1) ─────────────── */
+.boost-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(51,65,85,0.4);
+  cursor: pointer;
+  transition: background .15s;
+}
+.boost-row:last-child { border-bottom: none; }
+.boost-row:hover:not(.boost-locked):not(.boost-owned) { background: rgba(245,166,35,0.08); }
+.boost-row.boost-owned { opacity: 0.6; cursor: default; }
+.boost-row.boost-owned .boost-cost::after { content: ' ✓'; color: var(--teal); }
+.boost-row.boost-locked { opacity: 0.35; cursor: not-allowed; }
+.boost-row.boost-unaffordable { cursor: not-allowed; }
+.boost-row.boost-unaffordable .boost-cost { color: var(--red); }
+.boost-name {
+  font-size: 12px; color: var(--txt);
+  font-weight: 600;
+}
+.boost-desc {
+  font-size: 10px; color: var(--txt3);
+  font-family: 'JetBrains Mono', monospace;
+}
+.boost-cost {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--amber);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.boost-locked .boost-cost::before { content: '🔒 '; }
+.engine-status {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--amber);
+  padding: 6px 0;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.engine-status label {
+  font-size: 10px; color: var(--txt3);
+  display: flex; align-items: center; gap: 4px;
+}
+
 /* smiley power-ups */
 .power-smiley {
   position: absolute;
@@ -725,6 +767,19 @@ html, body {
         </div>
       </div>
 
+      <!-- Boosts card (v2.0 Tier 1) -->
+      <div class="card" id="boostsCard">
+        <div class="card-title">⚡ Boosts · <span id="tokenBalance">0</span> 🪙</div>
+        <div id="boostsList"><div class="lb-empty">Reach F(3) to earn tokens</div></div>
+      </div>
+
+      <!-- Golden Ratio Engine card (v2.0 Tier 1) -->
+      <div class="card" id="engineCard" style="display:none;">
+        <div class="card-title">⚙️ Golden Ratio Engine</div>
+        <div id="engineStatus"></div>
+        <div id="engineUpgrades"></div>
+      </div>
+
       <!-- Leaderboard card -->
       <div class="card">
         <div class="card-title">🏆 Leaderboard</div>
@@ -767,11 +822,35 @@ html, body {
         <button class="signout-btn" id="mobileSignOutBtn" style="display:none">sign out</button>
       </div>
     </div>
+    <div class="card" id="mobileBoostsCard">
+      <div class="card-title">⚡ Boosts · <span id="mobileTokenBalance">0</span> 🪙</div>
+      <div id="mobileBoostsList"><div class="lb-empty">Reach F(3) to earn tokens</div></div>
+    </div>
+    <div class="card" id="mobileEngineCard" style="display:none;">
+      <div class="card-title">⚙️ Golden Ratio Engine</div>
+      <div id="mobileEngineStatus"></div>
+      <div id="mobileEngineUpgrades"></div>
+    </div>
     <div class="card">
       <div class="card-title">🏆 Leaderboard</div>
       <div id="mobileLbList"><div class="lb-empty">Loading…</div></div>
       <div class="lb-status" id="mobileLbStatus"></div>
     </div>
+  </div>
+</div>
+
+<!-- Offline progress modal (v2.0 Tier 1) -->
+<div class="overlay-backdrop" id="offlineModal">
+  <div class="overlay-panel">
+    <div class="overlay-title">🐚 The Nautilus Sleeps</div>
+    <p style="color:var(--txt2);font-size:13px;line-height:1.5;margin-bottom:16px;">
+      While you were away, the Golden Ratio Engine kept spiraling.
+    </p>
+    <div style="text-align:center;padding:20px;background:var(--bg2);border-radius:10px;margin-bottom:16px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:var(--amber);font-weight:600;" id="offlineTicks">0</div>
+      <div style="font-size:11px;color:var(--txt3);margin-top:4px;" id="offlineDuration">away for 0s</div>
+    </div>
+    <button class="btn btn-primary" id="collectOfflineBtn" style="width:100%;padding:12px;">Collect</button>
   </div>
 </div>
 
@@ -861,7 +940,43 @@ const state = {
 
   // Rotation: accumulates π/2 per committed square (both modes)
   rotation: 0,  _sw: 0, _sh: 0, _nlw: 0, _nlh: 0,
+
+  // ── v2.0 Tier 1: Boosts ──────────────────────────────────────────
+  boostTokens:         0,       // spendable token balance
+  boostTokensLifetime: 0,       // total ever earned
+  boostUpgrades:       {},      // { id: true } owned flags
+  clickCounter:        0,       // lifetime clicks for periodic bonuses (Fingers/Touch)
+
+  // ── v2.0 Tier 1: Golden Ratio Engine (auto-clicker) ─────────────
+  engine: {
+    owned:       false,
+    upgrades:    {},            // { id: true }
+    accumulator: 0,             // fractional ticks waiting to commit
+    lastTick:    0,             // performance.now() anchor
+    enabled:     true,
+  },
 };
+
+// ─── Boost + Engine catalogs (v2.0 Tier 1) ───────────────────────
+const BOOST_UPGRADES = [
+  { id: 'x2',           name: '×2 Click',           cost: 10,    tickMult: 2,    unlock: 3,  desc: 'Each click = 2 ticks' },
+  { id: 'x3',           name: '×3 Click',           cost: 50,    tickMult: 1.5,  unlock: 5,  desc: 'Stacks to ×3 total' },
+  { id: 'fingers',      name: 'Fibonacci Fingers',  cost: 100,   tickMult: 1.66, unlock: 8,  desc: 'Every 5th click: +F(5)=5 ticks' },
+  { id: 'touch',        name: 'Golden Touch',       cost: 500,   tickMult: 2,    unlock: 13, desc: 'Every 13th click: +F(13)=233 ticks' },
+  { id: 'phi',          name: 'The Phi Multiplier', cost: 2000,  tickMult: PHI,  unlock: 21, desc: 'All clicks ×φ (≈1.618)' },
+  { id: 'fermat',       name: "Fermat's Flourish",  cost: 5000,  tickMult: 1.5,  unlock: 34, desc: 'Permanent ×1.5 on all output' },
+  { id: 'golden_ratio', name: 'Ratio Resonance',    cost: 13000, tickMult: PHI,  unlock: 55, desc: 'Another ×φ layer' },
+];
+
+const ENGINE_COST = 1000;
+const ENGINE_UPGRADES = [
+  { id: 'gears',      name: 'Golden Gears',      cost: 500,   unlock: 13, desc: '+1 flat tick/sec' },
+  { id: 'servos',     name: 'Spiral Servos',     cost: 2000,  unlock: 14, desc: 'Engine upgrades cost 50% less' },
+  { id: 'interest',   name: 'Compound Interest', cost: 8000,  unlock: 21, desc: 'Engine ticks earn 0.01 🪙 each' },
+  { id: 'resonance',  name: 'Resonance Chamber', cost: 34000, unlock: 34, desc: 'Rate grows φ² per milestone' },
+];
+const ENGINE_MILESTONES = [13, 14, 15, 16, 17, 18, 19, 20, 21, 34, 55, 89, 144, 233];
+const OFFLINE_CAP_SECONDS = 8 * 3600;
 
 // ─── Colors ──────────────────────────────────────────────────────
 const COLORS = [
@@ -1572,13 +1687,68 @@ function stepsForN(targetN) {
   return Math.max(1, Number(fibPos(Math.abs(targetN))));
 }
 
+// ── v2.0 Tier 1: click multiplier from owned boost upgrades ────────
+// Periodic bonuses (fingers/touch) are NOT applied here — they trigger
+// separately inside tickInput based on state.clickCounter.
+function clickMultiplier() {
+  let mult = 1;
+  for (const up of BOOST_UPGRADES) {
+    if (!state.boostUpgrades[up.id]) continue;
+    if (up.id === 'fingers' || up.id === 'touch') continue;
+    mult *= up.tickMult;
+  }
+  return mult;
+}
+
+// ── v2.0 Tier 1: canonical entry for mass tick application ─────────
+// Crosses level boundaries if `amount` exceeds remaining sub-steps.
+// Called from tickInput, bulkTick, engine loop, and offline collection.
+function applyTicks(amount) {
+  if (celebrationAF) return;
+  const SAFETY_CAP = 1000;
+  let crossed = 0;
+  while (amount > 0 && crossed < SAFETY_CAP) {
+    const targetN   = state.n + state.stepDir;
+    const needed    = stepsForN(targetN);
+    const remaining = needed - state.subStep;
+    if (amount >= remaining) {
+      amount -= remaining;
+      state.subStep = 0;
+      commitN(targetN);
+      crossed++;
+    } else {
+      state.subStep += Math.floor(amount);
+      amount = 0;
+      const progress = state.subStep / needed;
+      const fromX = state._nlw / 2 - state.n * NL_CELL - NL_CELL / 2;
+      const toX   = state._nlw / 2 - targetN * NL_CELL - NL_CELL / 2;
+      state.nlWorldX = fromX + (toX - fromX) * progress;
+      requestDrawSpiral();
+      requestDrawNumberLine();
+      debouncedSaveProgress();
+    }
+  }
+  if (crossed >= SAFETY_CAP) {
+    console.warn('⚠️  applyTicks hit safety cap — check multipliers');
+  }
+}
+
 // Bulk-apply `count` ticks in one frame. Power-ups (flower=5, smiley air=55,
-// smiley landed=1..34) previously called `tickInput` in a synchronous loop,
-// which triggered up to 55 full spiral+number-line redraws per click. On weak
-// Chromebook GPUs this would spike memory and crash the renderer.
+// smiley landed=1..34) pass their design-time Fibonacci reward unaltered —
+// click multipliers do NOT apply (the reward is already the Fibonacci value
+// chosen for that power-up).
 function bulkTick(dir, count) {
   if (celebrationAF) return;
-  for (let i = 0; i < count; i++) tickInput(dir);
+  if (state.mode === 'standard') {
+    for (let i = 0; i < count; i++) commitN(state.n + dir);
+    return;
+  }
+  if (dir !== state.stepDir) {
+    state.stepDir = dir;
+    state.subStep = 0;
+  }
+  applyTicks(count);
+  updateModeInfo();
 }
 
 // Single entry point for ALL directional inputs
@@ -1589,6 +1759,7 @@ function tickInput(dir) {
   // Flash indicator on number line
   state.nlIndSign  = dir;
   state.nlIndAlpha = 1.0;
+  state.clickCounter++;
 
   if (state.mode === 'standard') {
     commitN(state.n + dir);
@@ -1602,24 +1773,23 @@ function tickInput(dir) {
     state.subStep = 0;
   }
 
-  const targetN     = state.n + state.stepDir;
-  const needed      = stepsForN(targetN);
-  state.subStep++;
+  // v2.0 Tier 1 — compute ticks for this click from multipliers
+  let ticksThisClick = clickMultiplier();
 
-  if (state.subStep >= needed) {
-    // Threshold reached — advance n
-    state.subStep = 0;
-    commitN(targetN);
-  } else {
-    // Still building up — scroll number line proportionally toward target
-    const progress = state.subStep / needed;
-    const fromX = state._nlw / 2 - state.n * NL_CELL - NL_CELL / 2;
-    const toX   = state._nlw / 2 - targetN * NL_CELL - NL_CELL / 2;
-    state.nlWorldX = fromX + (toX - fromX) * progress;
-    requestDrawSpiral();
-    requestDrawNumberLine();
-    debouncedSaveProgress();
+  // Periodic bonuses: Fibonacci Fingers (F(5)=5 every 5th click)
+  if (state.boostUpgrades.fingers && state.clickCounter % 5 === 0) {
+    ticksThisClick += 5;
+    const boxRect = cc.getBoundingClientRect();
+    showPointsAnimation(lastInputX - boxRect.left, lastInputY - boxRect.top - 10, 'F(5)');
   }
+  // Golden Touch (F(13)=233 every 13th click)
+  if (state.boostUpgrades.touch && state.clickCounter % 13 === 0) {
+    ticksThisClick += 233;
+    const boxRect = cc.getBoundingClientRect();
+    showPointsAnimation(lastInputX - boxRect.left, lastInputY - boxRect.top - 10, 'F(13)');
+  }
+
+  applyTicks(ticksThisClick);
 
   // Update mode-info card to show progress toward next n
   updateModeInfo();
@@ -1651,7 +1821,14 @@ function commitN(newN) {
   state.subStep = 0;
   // Track legitimate high-water mark for NL drag boundary
   const isNewHigh = Math.abs(newN) > oldHighest;
-  if (isNewHigh) state.highestAbsN = Math.abs(newN);
+  if (isNewHigh) {
+    state.highestAbsN = Math.abs(newN);
+    // v2.0 Tier 1 — award Boost Tokens on every new high
+    awardBoostTokens(Math.abs(newN));
+    // Re-render boosts/engine in case this unlocks something
+    renderBoosts();
+    renderEngine();
+  }
   animateNlToN(newN);
   requestDrawSpiral();
   requestDrawNumberLine();
@@ -1736,6 +1913,264 @@ function playCelebration(targetN) {
     }
   }
   celebrationAF = requestAnimationFrame(celebFrame);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ═══  v2.0 Tier 1: Boosts + Golden Ratio Engine + Offline  ═══════
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Token awards ─────────────────────────────────────────────────
+function awardBoostTokens(absN) {
+  if (absN < 3) return;
+  const base = Math.max(1, Math.floor(Math.log(absN) / Math.log(PHI)));
+  const milestones = { 8: 5, 13: 8, 21: 13, 34: 21, 55: 34, 89: 55, 144: 89 };
+  const bonus = milestones[absN] || 0;
+  const total = base + bonus;
+  state.boostTokens         += total;
+  state.boostTokensLifetime += total;
+  updateTokenDisplay();
+  if (total > 0) {
+    // Token popup near top-right of canvas
+    const boxRect = cc.getBoundingClientRect();
+    showPointsAnimation(boxRect.width - 60, 40, `${total} 🪙`);
+  }
+  console.log(`✅ Earned ${total} Boost Tokens (base ${base} + bonus ${bonus})`);
+}
+
+function updateTokenDisplay() {
+  const bal = Math.floor(state.boostTokens);
+  const el  = document.getElementById('tokenBalance');
+  const mel = document.getElementById('mobileTokenBalance');
+  if (el)  el.textContent  = bal;
+  if (mel) mel.textContent = bal;
+  renderBoosts();
+  renderEngine();
+}
+
+// ── Boosts UI render ─────────────────────────────────────────────
+function boostsHtml() {
+  if (state.highestAbsN < 3) {
+    return '<div class="lb-empty">Reach F(3) to earn tokens</div>';
+  }
+  return BOOST_UPGRADES.map(up => {
+    const owned  = !!state.boostUpgrades[up.id];
+    const locked = state.highestAbsN < up.unlock;
+    const afford = state.boostTokens >= up.cost;
+    let cls = 'boost-row';
+    if (owned) cls += ' boost-owned';
+    else if (locked) cls += ' boost-locked';
+    else if (!afford) cls += ' boost-unaffordable';
+    const descText = locked ? `Unlocks at F(${up.unlock})` : up.desc;
+    return `
+      <div class="${cls}" data-boost="${up.id}">
+        <div style="flex:1;min-width:0;">
+          <div class="boost-name">${up.name}</div>
+          <div class="boost-desc">${descText}</div>
+        </div>
+        <div class="boost-cost">${up.cost} 🪙</div>
+      </div>`;
+  }).join('');
+}
+
+function renderBoosts() {
+  const html = boostsHtml();
+  const desk = document.getElementById('boostsList');
+  const mobi = document.getElementById('mobileBoostsList');
+  if (desk) {
+    desk.innerHTML = html;
+    desk.querySelectorAll('.boost-row').forEach(row => {
+      row.addEventListener('click', () => buyBoost(row.dataset.boost));
+    });
+  }
+  if (mobi) {
+    mobi.innerHTML = html;
+    mobi.querySelectorAll('.boost-row').forEach(row => {
+      row.addEventListener('click', () => buyBoost(row.dataset.boost));
+    });
+  }
+}
+
+function buyBoost(id) {
+  const up = BOOST_UPGRADES.find(u => u.id === id);
+  if (!up) return;
+  if (state.boostUpgrades[id]) return;
+  if (state.highestAbsN < up.unlock) { console.warn('⚠️  Boost locked:', id); return; }
+  if (state.boostTokens < up.cost)   { console.warn('⚠️  Cannot afford:', id); return; }
+  state.boostTokens -= up.cost;
+  state.boostUpgrades[id] = true;
+  console.log(`✅ Bought boost: ${up.name}`);
+  updateTokenDisplay();
+  debouncedSaveProgress();
+  if (currentUser && fbDb) {
+    fbDb.collection('scores').doc(currentUser.uid).set({
+      boostTokens:         state.boostTokens,
+      boostUpgrades:       state.boostUpgrades,
+      boostTokensLifetime: state.boostTokensLifetime,
+    }, { merge: true }).catch(err => console.error('❌ Boost save error:', err.message));
+  }
+}
+
+// ── Golden Ratio Engine ──────────────────────────────────────────
+function computeEngineRate() {
+  if (!state.engine.owned) return 0;
+  const levelsCrossed = ENGINE_MILESTONES.filter(m => state.highestAbsN >= m).length;
+  const base = state.engine.upgrades.resonance ? PHI * PHI : PHI;
+  let rate = Math.pow(base, levelsCrossed);
+  if (state.engine.upgrades.gears) rate += 1;
+  return rate;
+}
+
+function engineUpgradeCost(up) {
+  return state.engine.upgrades.servos && up.id !== 'servos'
+    ? Math.ceil(up.cost * 0.5)
+    : up.cost;
+}
+
+function engineUpgradesHtml() {
+  return ENGINE_UPGRADES.map(up => {
+    const owned  = !!state.engine.upgrades[up.id];
+    const locked = state.highestAbsN < up.unlock;
+    const cost   = engineUpgradeCost(up);
+    const afford = state.boostTokens >= cost;
+    let cls = 'boost-row';
+    if (owned) cls += ' boost-owned';
+    else if (locked) cls += ' boost-locked';
+    else if (!afford) cls += ' boost-unaffordable';
+    const descText = locked ? `Unlocks at F(${up.unlock})` : up.desc;
+    return `
+      <div class="${cls}" data-engine-up="${up.id}">
+        <div style="flex:1;min-width:0;">
+          <div class="boost-name">${up.name}</div>
+          <div class="boost-desc">${descText}</div>
+        </div>
+        <div class="boost-cost">${cost} 🪙</div>
+      </div>`;
+  }).join('');
+}
+
+function renderEngine() {
+  const unlocked = state.highestAbsN >= 13;
+  const deskCard = document.getElementById('engineCard');
+  const mobiCard = document.getElementById('mobileEngineCard');
+  if (deskCard) deskCard.style.display = unlocked ? '' : 'none';
+  if (mobiCard) mobiCard.style.display = unlocked ? '' : 'none';
+  if (!unlocked) return;
+
+  const statusHtml = state.engine.owned
+    ? `<div class="engine-status">
+         <span>${computeEngineRate().toFixed(2)} ticks/sec</span>
+         <label><input type="checkbox" class="engineToggle" ${state.engine.enabled?'checked':''}> on</label>
+       </div>`
+    : `<div class="boost-row engineBuyBtn ${state.boostTokens >= ENGINE_COST ? '' : 'boost-unaffordable'}">
+         <div style="flex:1;min-width:0;">
+           <div class="boost-name">Unlock the Engine</div>
+           <div class="boost-desc">Auto-ticks while you play or idle</div>
+         </div>
+         <div class="boost-cost">${ENGINE_COST} 🪙</div>
+       </div>`;
+  const upgradesHtml = state.engine.owned ? engineUpgradesHtml() : '';
+
+  const desk = { status: document.getElementById('engineStatus'), up: document.getElementById('engineUpgrades') };
+  const mobi = { status: document.getElementById('mobileEngineStatus'), up: document.getElementById('mobileEngineUpgrades') };
+  for (const pair of [desk, mobi]) {
+    if (!pair.status || !pair.up) continue;
+    pair.status.innerHTML = statusHtml;
+    pair.up.innerHTML     = upgradesHtml;
+    pair.status.querySelectorAll('.engineBuyBtn').forEach(el => el.addEventListener('click', buyEngine));
+    pair.status.querySelectorAll('.engineToggle').forEach(el => el.addEventListener('change', e => {
+      state.engine.enabled = e.target.checked;
+      if (state.engine.enabled) state.engine.lastTick = performance.now();
+      debouncedSaveProgress();
+      renderEngine();
+    }));
+    pair.up.querySelectorAll('[data-engine-up]').forEach(row => {
+      row.addEventListener('click', () => buyEngineUpgrade(row.dataset.engineUp));
+    });
+  }
+}
+
+function buyEngine() {
+  if (state.engine.owned) return;
+  if (state.boostTokens < ENGINE_COST) { console.warn('⚠️  Not enough tokens for engine'); return; }
+  state.boostTokens  -= ENGINE_COST;
+  state.engine.owned  = true;
+  state.engine.lastTick = performance.now();
+  console.log('✅ Golden Ratio Engine unlocked');
+  updateTokenDisplay();
+  startEngineLoop();
+  debouncedSaveProgress();
+}
+
+function buyEngineUpgrade(id) {
+  const up = ENGINE_UPGRADES.find(u => u.id === id);
+  if (!up) return;
+  if (state.engine.upgrades[id]) return;
+  if (state.highestAbsN < up.unlock) { console.warn('⚠️  Engine upgrade locked:', id); return; }
+  const cost = engineUpgradeCost(up);
+  if (state.boostTokens < cost)      { console.warn('⚠️  Cannot afford engine upgrade:', id); return; }
+  state.boostTokens -= cost;
+  state.engine.upgrades[id] = true;
+  console.log(`✅ Bought engine upgrade: ${up.name}`);
+  updateTokenDisplay();
+  debouncedSaveProgress();
+}
+
+let engineAF = null;
+function startEngineLoop() {
+  if (engineAF) return;
+  state.engine.lastTick = performance.now();
+  function tick(now) {
+    if (!state.engine.owned) { engineAF = null; return; }
+    if (!state.engine.enabled || celebrationAF) {
+      state.engine.lastTick = now;
+      engineAF = requestAnimationFrame(tick);
+      return;
+    }
+    const dt = (now - state.engine.lastTick) / 1000;
+    state.engine.lastTick = now;
+    const rate = computeEngineRate();
+    state.engine.accumulator += rate * dt;
+    const whole = Math.floor(state.engine.accumulator);
+    if (whole > 0) {
+      state.engine.accumulator -= whole;
+      if (state.mode === 'standard') {
+        // In standard mode each tick = 1 commit (not F(|n|) ticks)
+        for (let i = 0; i < whole; i++) commitN(state.n + 1);
+      } else {
+        if (state.stepDir !== 1) { state.stepDir = 1; state.subStep = 0; }
+        applyTicks(whole);
+      }
+      updateModeInfo();
+      if (state.engine.upgrades.interest) {
+        const prev = Math.floor(state.boostTokens);
+        state.boostTokens += whole * 0.01;
+        if (Math.floor(state.boostTokens) !== prev) updateTokenDisplay();
+      }
+    }
+    engineAF = requestAnimationFrame(tick);
+  }
+  engineAF = requestAnimationFrame(tick);
+}
+
+// ── Offline progress ─────────────────────────────────────────────
+function showOfflineWelcomeModal(ticks, cappedSec, wasCapped) {
+  document.getElementById('offlineTicks').textContent = ticks.toLocaleString() + ' ticks';
+  const hrs = Math.floor(cappedSec / 3600);
+  const min = Math.floor((cappedSec % 3600) / 60);
+  const sec = Math.floor(cappedSec % 60);
+  const durText = hrs > 0 ? `${hrs}h ${min}m` : (min > 0 ? `${min}m` : `${sec}s`);
+  const capNote = wasCapped ? ' (capped at 8h)' : '';
+  document.getElementById('offlineDuration').textContent = `away for ${durText}${capNote}`;
+  document.getElementById('offlineModal').classList.add('open');
+  document.getElementById('collectOfflineBtn').onclick = () => {
+    document.getElementById('offlineModal').classList.remove('open');
+    if (state.mode !== 'standard' && state.stepDir !== 1) {
+      state.stepDir = 1; state.subStep = 0;
+    }
+    applyTicks(ticks);
+    updateModeInfo();
+    console.log(`✅ Collected ${ticks} offline ticks`);
+  };
 }
 
 function updateModeInfo() {
@@ -2109,11 +2544,19 @@ const ro = new ResizeObserver(() => {
 ro.observe(document.querySelector('.canvas-box'));
 ro.observe(document.querySelector('.nl-wrapper'));
 
+// ─── v2.0 Tier 1: flush progress on tab hide (offline anchor) ────
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && currentUser) {
+    saveProgress();
+  }
+});
+
 // ─── Boot ────────────────────────────────────────────────────────
 resizeCanvases();
 drawSpiral();
 drawNumberLine();
 updateModeInfo();
+updateTokenDisplay();   // v2.0 Tier 1 — paints boost + engine cards
 </script>
 
 <!-- Firebase SDKs (compat v9 — works as plain script tags, no bundler needed) -->
@@ -2361,6 +2804,16 @@ async function onSignIn(user) {
       const data = doc.data();
       userBestAbsN = data.absN || 0;
 
+      // v2.0 Tier 1 — restore boost tokens, upgrades, and engine state
+      state.boostTokens         = data.boostTokens         ?? 0;
+      state.boostTokensLifetime = data.boostTokensLifetime ?? 0;
+      state.boostUpgrades       = data.boostUpgrades       ?? {};
+      if (data.engine) {
+        state.engine.owned    = !!data.engine.owned;
+        state.engine.upgrades = data.engine.upgrades ?? {};
+        state.engine.enabled  = data.engine.enabled !== false;
+      }
+
       // Keep whichever is further: guest progress or saved progress
       if (guestAbsN > userBestAbsN) {
         // Guest got further than saved — keep current position and save it
@@ -2382,6 +2835,22 @@ async function onSignIn(user) {
           console.log(`✅ Restored n=${restoreN} subStep=${state.subStep} for ${user.displayName}`);
         }
       }
+
+      // v2.0 Tier 1 — compute offline progress (engine must be owned)
+      const rate    = data.offlineRateSnapshot ?? 0;
+      const sinceTs = data.offlineSinceTs;
+      if (state.engine.owned && rate > 0 && sinceTs && typeof sinceTs.toMillis === 'function') {
+        const elapsedSec = Math.max(0, (Date.now() - sinceTs.toMillis()) / 1000);
+        const cappedSec  = Math.min(elapsedSec, OFFLINE_CAP_SECONDS);
+        const ticks      = Math.floor(rate * cappedSec);
+        if (ticks > 0) {
+          showOfflineWelcomeModal(ticks, cappedSec, elapsedSec >= OFFLINE_CAP_SECONDS);
+        }
+      }
+
+      // Boot the engine loop if owned
+      if (state.engine.owned) startEngineLoop();
+      updateTokenDisplay();
     } else {
       // Anonymous user with no saved data — sign them out to start fresh
       // (this handles stale anonymous sessions persisted by Firebase IndexedDB)
@@ -2444,11 +2913,20 @@ async function maybeSaveScore(n) {
       currentN:       state.n,
       currentSubStep: state.subStep,
       currentStepDir: state.stepDir,
+      // v2.0 Tier 1 fields
+      boostTokens:         state.boostTokens,
+      boostTokensLifetime: state.boostTokensLifetime,
+      boostUpgrades:       state.boostUpgrades,
+      engine: {
+        owned:    state.engine.owned,
+        upgrades: state.engine.upgrades,
+        enabled:  state.engine.enabled,
+      },
       displayName: currentUser.displayName || currentUser.email || 'Guest',
       photoURL:    currentUser.photoURL    || '',
       uid:         currentUser.uid,
       updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
-    });
+    }, { merge: true });
     console.log(`✅ Score saved: n=${n}, F(n)=${fmt(fib(n))}`);
   } catch (err) {
     console.error('❌ Error saving score:', err.message);
@@ -2466,10 +2944,24 @@ function debouncedSaveProgress() {
 async function saveProgress() {
   if (!currentUser || !fbDb) return;
   try {
+    // v2.0 Tier 1 — anchor for offline-progress computation on next sign-in
+    const offlineRate = state.engine.owned && state.engine.enabled ? computeEngineRate() : 0;
     await fbDb.collection('scores').doc(currentUser.uid).set({
       currentN:       state.n,
       currentSubStep: state.subStep,
       currentStepDir: state.stepDir,
+      // v2.0 Tier 1 fields
+      boostTokens:         state.boostTokens,
+      boostTokensLifetime: state.boostTokensLifetime,
+      boostUpgrades:       state.boostUpgrades,
+      engine: {
+        owned:    state.engine.owned,
+        upgrades: state.engine.upgrades,
+        enabled:  state.engine.enabled,
+      },
+      offlineRateSnapshot: offlineRate,
+      offlineSinceTs:      firebase.firestore.FieldValue.serverTimestamp(),
+      // Identity
       displayName: currentUser.displayName || currentUser.email || 'Guest',
       photoURL:    currentUser.photoURL    || '',
       uid:         currentUser.uid,
