@@ -1120,11 +1120,10 @@ html, body {
 </style>
 </head>
 <body>
-<!-- Hidden Mona Lisa face crop for n=12 easter egg -->
-<!-- Mona Lisa for n=12 easter egg — drawn on canvas if loaded -->
-<img id="monaLisa" style="display:none"
-     src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/200px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg"
-     onerror="this.src=''" alt="">
+<!-- v3.2 crash-fix: removed the pre-Tier-3 hidden Mona Lisa easter-egg
+     <img>. The Tier 3 Gallery now owns that entry (F(12) → Mona Lisa).
+     Leaving the orphan <img> behind wasted an external image fetch on
+     every boot and kept the pre-Tier-3 canvas overlay code path reachable. -->
 
 <div class="shell">
 
@@ -1258,6 +1257,20 @@ html, body {
             </button>
           </div>
           <div id="challengeActivePanel" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- v3.2 crash-fix: Memory diagnostic panel (admin only).
+           Live heap + rAF + particle + DOM stats; updates every 2 s while
+           the Settings overlay is open. Use this to verify the crash-fix
+           relief and catch any new leak that sneaks in. -->
+      <div data-admin="true">
+        <div class="overlay-section" style="margin-top:16px;">
+          Memory <span class="admin-badge" style="margin-left:6px;">ADMIN</span>
+        </div>
+        <div id="memPanel" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--txt2);line-height:1.6;background:var(--bg2);border-radius:6px;padding:10px 12px;">
+          <div id="memPanelBody">Open the panel to start metrics…</div>
+          <button class="btn btn-secondary" id="memStressBtn" style="margin-top:8px;width:100%;font-size:11px;padding:6px;">Stress test: 300 clicks over 3 s</button>
         </div>
       </div>
 
@@ -1710,6 +1723,7 @@ const state = {
   activeSkin:       'classic',
   _canvasBg:        '#0a0e1a',     // canvas clear color (overridden by skins)
   _spiralStrokeCol: '#f1f5f9',     // spiral arc stroke for positive n (skin-overridden)
+  _negStrokeCol:    '#e05c5c',     // v3.2 cache: skin.palette.red, avoids per-frame getComputedStyle
 
   // ── v3.0 Tier 3: Combo (session-only; not persisted) ─────────────
   combo: {
@@ -2041,7 +2055,16 @@ const cctx  = cc.getContext('2d');
 
 // Cap devicePixelRatio to limit canvas backing-store memory on high-DPI
 // Chromebooks (dpr 2.0 otherwise gives 4× backing store per canvas).
-const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+// v3.2 crash-fix: drop to 1.0 on low-memory / low-core machines (typical
+// classroom Chromebooks have deviceMemory ≤ 4 and hardwareConcurrency ≤ 4).
+// This roughly halves the GPU backing-store footprint across our three
+// canvases and is the single biggest relief on crash-prone devices.
+const LOW_MEM_DEVICE =
+  (typeof navigator !== 'undefined') && (
+    (navigator.deviceMemory && navigator.deviceMemory <= 4) ||
+    (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4)
+  );
+const DPR = Math.min(window.devicePixelRatio || 1, LOW_MEM_DEVICE ? 1.0 : 1.5);
 
 // rAF-coalesced draw scheduler. Bulk input handlers (flower/smiley combo ticks,
 // drag handlers, resize observer) can request many redraws per frame; this
@@ -2064,11 +2087,18 @@ let lastInputX = 0, lastInputY = 0;
 let lastInputSource = 'key'; // 'mouse' | 'touch' | 'key'
 
 // ─── Confetti particle system ────────────────────────────────────
+// v3.2 crash-fix: hard global cap (was per-click cap only; spam-clicking at
+// n=9 used to push thousands into the array since dead particles weren't
+// compacted out until every last one had faded). Dead entries are now
+// compacted every frame and new spawns over the cap are dropped.
+const CONFETTI_GLOBAL_CAP = 300;
 let confettiParticles = [];
 let confettiAnimating = false;
 
 function launchConfetti(x, y, count) {
-  const actual = Math.min(count, 150);
+  const perClickCap = Math.min(count, 150);
+  const headroom    = Math.max(0, CONFETTI_GLOBAL_CAP - confettiParticles.length);
+  const actual      = Math.min(perClickCap, headroom);
   for (let i = 0; i < actual; i++) {
     const [r,g,b] = COLORS[Math.floor(Math.random() * COLORS.length)];
     confettiParticles.push({
@@ -2093,14 +2123,16 @@ function launchConfetti(x, y, count) {
 function animateConfetti() {
   const W = state._sw, H = state._sh;
   cctx.clearRect(0, 0, W, H);
-  let alive = false;
+  // v3.2 crash-fix: compact dead particles out on every frame so the
+  // array doesn't grow unboundedly while the user is still spawning.
+  const live = [];
   for (const p of confettiParticles) {
     p.x += p.vx; p.y += p.vy;
     p.vy += 0.25;
     p.rotation += p.rv;
     p.alpha -= 0.005;
     if (p.alpha <= 0) continue;
-    alive = true;
+    live.push(p);
     cctx.save();
     cctx.globalAlpha = p.alpha;
     cctx.translate(p.x, p.y);
@@ -2109,10 +2141,10 @@ function animateConfetti() {
     cctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
     cctx.restore();
   }
-  if (alive) {
+  confettiParticles = live;
+  if (live.length > 0) {
     requestAnimationFrame(animateConfetti);
   } else {
-    confettiParticles = [];
     confettiAnimating = false;
     cctx.clearRect(0, 0, W, H);
   }
@@ -2610,7 +2642,7 @@ function drawSpiral() {
   // ── Fibonacci spiral arcs (committed) ────────────────────────────
   if (state.showFibSpiral) {
     ctx.strokeStyle = isNeg
-      ? (getComputedStyle(document.documentElement).getPropertyValue('--red').trim() || '#e05c5c')
+      ? (state._negStrokeCol    || '#e05c5c')
       : (state._spiralStrokeCol || '#f1f5f9');
     ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.setLineDash([]);
     squares.forEach((sq, i) => {
@@ -2644,25 +2676,10 @@ function drawSpiral() {
     });
   }
 
-  // ── Mona Lisa easter egg on k=12 square ──────────────────────────
-  if (absN >= 12) {
-    const mlImg = document.getElementById('monaLisa');
-    if (mlImg && mlImg.complete && mlImg.naturalWidth > 0) {
-      const sq12 = squares.find(sq => sq.k === 12);
-      if (sq12 && sq12.size > 8) {
-        const cx = sq12.x + sq12.size / 2;
-        const cy = sq12.y + sq12.size / 2;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(-rotAngle);
-        const drawSz = sq12.size * 0.9;
-        ctx.globalAlpha = 0.85;
-        ctx.drawImage(mlImg, -drawSz/2, -drawSz/2, drawSz, drawSz);
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      }
-    }
-  }
+  // v3.2 crash-fix: the pre-Tier-3 Mona Lisa easter-egg drawImage call
+  // was removed — the Tier 3 Gallery covers this (F(12) entry with the
+  // full painting + the "Did you know?" fact). Skipping this block on
+  // every draw frame saves a getElementById + getContextualAttribute read.
 
   ctx.restore();
   updateFooter();
@@ -3188,11 +3205,19 @@ function buyEngineUpgrade(id) {
 }
 
 let engineAF = null;
+function stopEngineLoop() {
+  // v3.2 crash-fix: explicit teardown so state.engine.enabled=false,
+  // tab-hide, or sign-out fully stops the loop rather than leaving a
+  // zombie rAF chain that re-runs its early-return every frame.
+  if (engineAF) { cancelAnimationFrame(engineAF); engineAF = null; }
+}
 function startEngineLoop() {
   if (engineAF) return;
+  if (!state.engine.owned) return;
   state.engine.lastTick = performance.now();
   function tick(now) {
-    if (!state.engine.owned) { engineAF = null; return; }
+    if (!state.engine.owned)          { engineAF = null; return; }
+    if (document.hidden)              { engineAF = null; return; } // v3.2 pause on hidden tab
     if (!state.engine.enabled || celebrationAF) {
       state.engine.lastTick = now;
       engineAF = requestAnimationFrame(tick);
@@ -3475,11 +3500,20 @@ function checkAchievements() {
   }
 }
 
-// UX polish: achievement toasts now carry the "Did you know?" fact inline
-// so the teaching moment lands at the instant of unlock, not only if the
-// user remembers to open the gallery. Dwell time bumped to ~12 s and the
-// toast pauses on hover; ✕ dismisses immediately; click-body still jumps
-// to the achievement card.
+// v3.2 crash-fix: hard-cap live toasts at 3. Rapid bursts (e.g. reaching
+// F(13) which simultaneously unlocks Nautilus + Golden Touch boost +
+// Sunflower skin + gallery entry + level fact + streak claim) used to
+// stack 5–6 toast nodes for 12 s each. The oldest gets dropped immediately
+// on the 4th spawn so DOM doesn't balloon during milestone crossings.
+const TOAST_MAX = 3;
+function appendCappedToast(container, toast) {
+  if (!container) return;
+  while (container.children.length >= TOAST_MAX) {
+    container.firstElementChild.remove();
+  }
+  container.appendChild(toast);
+}
+
 function showAchievementToast(achievementId) {
   const ach = ACHIEVEMENTS.find(a => a.id === achievementId);
   if (!ach) return;
@@ -3501,7 +3535,7 @@ function showAchievementToast(achievementId) {
     toast.remove();
     openAchievementsModal(achievementId);
   });
-  container.appendChild(toast);
+  appendCappedToast(container, toast);  // v3.2 crash-fix: drop oldest if >3 live
   setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
   console.log(`✅ Achievement unlocked: ${ach.title}`);
 }
@@ -3596,6 +3630,9 @@ function applySkin(skinId) {
   state.activeSkin       = skinId;
   state._canvasBg        = skin.palette.canvasBg;
   state._spiralStrokeCol = skin.palette.spiralColor;
+  // v3.2 crash-fix: cache the skin's red so drawSpiral doesn't call
+  // getComputedStyle('--red') every frame during celebration / smooth zoom.
+  state._negStrokeCol    = skin.palette.red || '#e05c5c';
   requestDrawSpiral();
   requestDrawNumberLine();
   console.log(`✅ Skin applied: ${skin.name}`);
@@ -3649,7 +3686,7 @@ function showSkinUnlockToast(skin) {
       if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }, 100);
   });
-  container.appendChild(toast);
+  appendCappedToast(container, toast);  // v3.2 crash-fix
   setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
 }
 
@@ -3965,7 +4002,7 @@ function showGalleryUnlockToast(item) {
     openGalleryModal();
     setTimeout(() => openGalleryItem(item.at), 200);
   });
-  container.appendChild(toast);
+  appendCappedToast(container, toast);  // v3.2 crash-fix
   setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
 }
 
@@ -4071,7 +4108,7 @@ function showChampionToast(badge) {
     </div>`;
   const closeBtn = toast.querySelector('.toast-close');
   if (closeBtn) closeBtn.addEventListener('click', () => toast.remove());
-  container.appendChild(toast);
+  appendCappedToast(container, toast);  // v3.2 crash-fix
   setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
 }
 
@@ -4810,8 +4847,93 @@ document.getElementById('settingsBtn').addEventListener('click', () => {
   renderSkins();  // v2.5 Tier 2 — refresh skin lock/active state on open
   renderAdminChallengePanel(); // v4.0 Tier 4 — show create form or active-panel
   openOverlay('settingsOverlay');
+  startMemPanelTicker();       // v3.2 crash-fix: begin diagnostic updates while visible
 });
-document.getElementById('settingsClose').addEventListener('click', () => closeOverlay('settingsOverlay'));
+document.getElementById('settingsClose').addEventListener('click', () => {
+  closeOverlay('settingsOverlay');
+  stopMemPanelTicker();        // v3.2 crash-fix: stop ticker when panel hidden
+});
+
+// ─── v3.2 crash-fix: Memory diagnostic panel ────────────────────
+// Admin-only live readouts so we can see heap growth and catch any
+// accidental leak. Ticks at 2 s cadence only while the Settings
+// overlay is open — zero cost otherwise. Also ships a stress-test
+// button that fires 300 synthetic +1 ticks over ~3 s to confirm the
+// DPR clamp + toast cap + confetti cap + engine-loop guards hold.
+let memPanelTimer = null;
+function renderMemPanel() {
+  const body = document.getElementById('memPanelBody');
+  if (!body) return;
+  const heap = (performance.memory && performance.memory.usedJSHeapSize)
+    ? (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MB'
+    : 'n/a';
+  const heapCap = (performance.memory && performance.memory.jsHeapSizeLimit)
+    ? (performance.memory.jsHeapSizeLimit / 1048576).toFixed(0) + ' MB'
+    : 'n/a';
+  const nodeCount = document.getElementsByTagName('*').length;
+  const flowerEls = document.querySelectorAll('#flowerLayer > *').length;
+  const toastEls  = document.querySelectorAll('#achievementToasts > *').length;
+  const confettiN = confettiParticles.length;
+  const canvasBytes = (() => {
+    const cs = [sc, cc, nl];
+    let total = 0;
+    for (const c of cs) {
+      if (c && c.width && c.height) total += c.width * c.height * 4;
+    }
+    return (total / 1048576).toFixed(1) + ' MB';
+  })();
+  const rAFs = [
+    engineAF        != null ? 'engine'      : null,
+    celebrationAF   != null ? 'celebration' : null,
+    state.nlAF      != null ? 'nlDrag'      : null,
+    frenzyBannerAF  != null ? 'frenzy'      : null,
+    (typeof challengeCountdownTimer !== 'undefined' && challengeCountdownTimer != null) ? 'challenge' : null,
+  ].filter(Boolean).join(', ') || '—';
+  body.innerHTML = `
+    <div>Heap:        <b>${heap}</b> / ${heapCap}</div>
+    <div>DOM nodes:   <b>${nodeCount}</b></div>
+    <div>Canvas mem:  <b>${canvasBytes}</b> · DPR ${DPR}${LOW_MEM_DEVICE ? ' (low-mem)' : ''}</div>
+    <div>Confetti:    <b>${confettiN}</b> / ${CONFETTI_GLOBAL_CAP}</div>
+    <div>Flowers/smileys/golden:  <b>${flowerEls}</b></div>
+    <div>Toasts live: <b>${toastEls}</b> / ${TOAST_MAX}</div>
+    <div>rAF loops:   <b>${rAFs}</b></div>
+    <div>n=<b>${state.n}</b>  highest=<b>${state.highestAbsN}</b>  tokens=<b>${Math.floor(state.boostTokens)}</b></div>
+  `;
+}
+function startMemPanelTicker() {
+  if (memPanelTimer) return;
+  renderMemPanel();
+  memPanelTimer = setInterval(renderMemPanel, 2000);
+}
+function stopMemPanelTicker() {
+  if (memPanelTimer) { clearInterval(memPanelTimer); memPanelTimer = null; }
+}
+
+// Stress-test button: fires 300 synthetic +1 ticks over ~3 s and
+// renders a before/after heap delta in the panel.
+document.addEventListener('click', e => {
+  if (e.target && e.target.id === 'memStressBtn') {
+    const body = document.getElementById('memPanelBody');
+    const before = (performance.memory && performance.memory.usedJSHeapSize) || 0;
+    let fired = 0;
+    const iv = setInterval(() => {
+      if (fired >= 300) {
+        clearInterval(iv);
+        // Two GC-friendly frames so the reading settles, then render delta
+        setTimeout(() => {
+          const after = (performance.memory && performance.memory.usedJSHeapSize) || 0;
+          const delta = ((after - before) / 1048576).toFixed(1);
+          renderMemPanel();
+          if (body) body.insertAdjacentHTML('beforeend',
+            `<div style="color:var(--amber);margin-top:6px;">Stress test · Δ heap: <b>${delta} MB</b></div>`);
+        }, 400);
+        return;
+      }
+      tickInput(1);
+      fired++;
+    }, 10);
+  }
+});
 
 // ─── Tier 4: Level-fact + Classroom Challenge wiring ─────────────
 document.getElementById('factCardClose').addEventListener('click', () => {
@@ -5037,9 +5159,14 @@ ro.observe(document.querySelector('.canvas-box'));
 ro.observe(document.querySelector('.nl-wrapper'));
 
 // ─── v2.0 Tier 1: flush progress on tab hide (offline anchor) ────
+// v3.2 crash-fix: also stop/restart the engine rAF loop so a backgrounded
+// tab never sits in a throttled-but-still-running animation frame chain.
 window.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden' && currentUser) {
-    saveProgress();
+  if (document.visibilityState === 'hidden') {
+    if (currentUser) saveProgress();
+    if (typeof stopEngineLoop === 'function') stopEngineLoop();
+  } else {
+    if (state.engine && state.engine.owned) startEngineLoop();
   }
 });
 
