@@ -136,7 +136,7 @@ html, body {
 
 /* ── Sidebar ─────────────────────────────── */
 .sidebar {
-  width: 240px;
+  width: 260px;          /* UX polish: +20px to fit compact Achievements + Gallery panels */
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -146,6 +146,95 @@ html, body {
 
 .sidebar::-webkit-scrollbar { width: 4px; }
 .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+
+/* UX polish: compact scroll-hint card so it doesn't dominate the sidebar */
+.card-hint { padding: 10px 12px; flex-shrink: 0; }
+
+/* UX polish: compact Achievements panel (left sidebar, always visible desktop) */
+.sidebar-ach-card { flex-shrink: 0; }
+.card-title-count {
+  margin-left: auto;
+  font-size: 10px; color: var(--txt3);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+.sidebar-ach-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.sidebar-ach-emblem {
+  aspect-ratio: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; line-height: 1;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+}
+.sidebar-ach-emblem.locked {
+  opacity: 0.25;
+  filter: grayscale(1);
+  cursor: default;
+}
+.sidebar-ach-emblem:hover:not(.locked) {
+  border-color: var(--amber);
+  transform: translateY(-1px);
+}
+.sidebar-ach-emblem.new::after {
+  content: '';
+  position: absolute; top: 3px; right: 3px;
+  width: 7px; height: 7px; background: var(--amber);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--amber);
+}
+
+/* UX polish: compact Found in Nature panel (left sidebar, always visible desktop) */
+.sidebar-gallery-card { flex-shrink: 0; }
+.sidebar-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.sidebar-gallery-tile {
+  aspect-ratio: 4 / 3;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.sidebar-gallery-tile.locked {
+  opacity: 0.3;
+  cursor: default;
+}
+.sidebar-gallery-tile:hover:not(.locked) {
+  border-color: var(--amber);
+  transform: translateY(-1px);
+}
+.sidebar-gallery-tile img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sidebar-gallery-tile .emblem-placeholder {
+  font-size: 28px;
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+.sidebar-gallery-tile.new::after {
+  content: '';
+  position: absolute; top: 4px; right: 4px;
+  width: 8px; height: 8px; background: var(--amber);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--amber);
+  z-index: 1;
+}
 
 .card {
   background: var(--card);
@@ -254,6 +343,12 @@ html, body {
   .mobile-account-btn { display: none !important; }
   .mobile-info-row { display: none !important; }
   .mobile-sheet-backdrop { display: none !important; }
+}
+/* UX polish: on desktop (>=900px) Achievements + Gallery live in the left
+   sidebar full-time, so the top-bar icon buttons become redundant. Keep
+   them on tablet (641–899px) since the left sidebar is hidden there. */
+@media (min-width: 900px) {
+  #achievementsBtn, #galleryBtn { display: none !important; }
 }
 /* tablet: hide left sidebar, keep right sidebar */
 @media (min-width: 641px) and (max-width: 900px) {
@@ -525,27 +620,42 @@ html, body {
   transition: background .15s;
 }
 .boost-row:last-child { border-bottom: none; }
-.boost-row:hover:not(.boost-locked):not(.boost-owned) { background: rgba(245,166,35,0.08); }
+.boost-row:hover:not(.boost-locked):not(.boost-owned) { background: rgba(245,166,35,0.12); }
 .boost-row.boost-owned { opacity: 0.6; cursor: default; }
 .boost-row.boost-owned .boost-cost::after { content: ' ✓'; color: var(--teal); }
 .boost-row.boost-locked { opacity: 0.35; cursor: not-allowed; }
 .boost-row.boost-unaffordable { cursor: not-allowed; }
 .boost-row.boost-unaffordable .boost-cost { color: var(--red); }
+/* UX polish: boosts more prominent — larger titles, bigger tap targets */
+#boostsCard .card-title { font-size: 16px; }
+#boostsCard .card-title #tokenBalance {
+  color: var(--amber); font-weight: 800; font-size: 18px;
+}
+.boost-row { padding: 10px 4px; }
 .boost-name {
-  font-size: 12px; color: var(--txt);
-  font-weight: 600;
+  font-size: 14px; color: var(--txt);
+  font-weight: 700;
+  margin-bottom: 2px;
 }
 .boost-desc {
-  font-size: 10px; color: var(--txt3);
+  font-size: 11px; color: var(--txt2);
   font-family: 'JetBrains Mono', monospace;
+  line-height: 1.35;
 }
 .boost-cost {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; color: var(--amber);
-  font-weight: 600;
+  font-size: 13px; color: var(--amber);
+  font-weight: 700;
   flex-shrink: 0;
+  padding: 4px 10px;
+  background: rgba(245,166,35,0.08);
+  border-radius: 6px;
 }
+.boost-row.boost-unaffordable .boost-cost { background: rgba(224,92,92,0.08); }
+.boost-row.boost-owned .boost-cost { background: transparent; color: var(--teal); }
 .boost-locked .boost-cost::before { content: '🔒 '; }
+/* Pulse the Boosts-card border amber when affordable upgrades exist */
+.card.boosts-ready { border-color: var(--amber); box-shadow: 0 0 20px rgba(245,166,35,0.15); }
 .engine-status {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px; color: var(--amber);
@@ -601,34 +711,58 @@ html, body {
   .streak-badge { font-size: 11px; padding: 4px 8px; }
 }
 
-/* ── Tier 2: Achievement toasts ───────────────────────── */
+/* ── Tier 2: Achievement toasts (UX polish: larger + 12s dwell + fact body) ── */
 #achievementToasts {
   position: fixed; top: 80px; right: 20px; z-index: 200;
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: 10px;
   pointer-events: none;
+  max-width: calc(100vw - 40px);
 }
 .achievement-toast {
   background: #111827;
   border: 1px solid var(--amber);
-  border-radius: 10px;
-  padding: 12px 16px;
-  display: flex; align-items: center; gap: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  animation: toastSlide 5s ease-in-out forwards;
-  min-width: 240px; max-width: 320px;
+  border-radius: 12px;
+  padding: 14px 40px 14px 16px;    /* extra right for close button */
+  display: flex; align-items: flex-start; gap: 14px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.55), 0 0 24px rgba(245,166,35,0.18);
+  animation: toastSlide 12s ease-in-out forwards;
+  min-width: 280px; max-width: 360px;
   pointer-events: auto; cursor: pointer;
+  position: relative;
 }
-.achievement-toast .emblem { font-size: 28px; line-height: 1; flex-shrink: 0; }
-.achievement-toast .ach-title { font-size: 13px; color: var(--txt); font-weight: 600; }
+.achievement-toast:hover { animation-play-state: paused; }
+.achievement-toast .emblem {
+  font-size: 34px; line-height: 1; flex-shrink: 0;
+  margin-top: 2px;
+}
+.achievement-toast .ach-body { flex: 1; min-width: 0; }
 .achievement-toast .ach-label {
   font-size: 10px; color: var(--amber);
   font-family: 'JetBrains Mono', monospace;
   letter-spacing: .1em; text-transform: uppercase;
+  margin-bottom: 2px;
 }
+.achievement-toast .ach-title {
+  font-size: 15px; color: var(--txt); font-weight: 700;
+  margin-bottom: 6px;
+  font-family: 'Cormorant Garamond', serif;
+}
+.achievement-toast .ach-fact {
+  font-size: 12px; color: var(--txt2); line-height: 1.45;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+}
+.achievement-toast .toast-close {
+  position: absolute; top: 6px; right: 10px;
+  background: none; border: none; color: var(--txt3);
+  font-size: 14px; line-height: 1; cursor: pointer;
+  padding: 4px;
+}
+.achievement-toast .toast-close:hover { color: var(--txt); }
 @keyframes toastSlide {
   0%   { transform: translateX(120%); opacity: 0; }
-  10%  { transform: translateX(0);     opacity: 1; }
-  85%  { transform: translateX(0);     opacity: 1; }
+  4%   { transform: translateX(0);     opacity: 1; }
+  94%  { transform: translateX(0);     opacity: 1; }
   100% { transform: translateX(120%); opacity: 0; }
 }
 
@@ -821,55 +955,65 @@ html, body {
   letter-spacing: 2px;
 }
 
-/* ── Tier 3: Gallery ─────────────────────────────────── */
+/* ── Tier 3: Gallery (UX polish: larger tiles + readable captions) ── */
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
 }
 .gallery-card {
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   cursor: pointer;
   transition: all .2s;
-  aspect-ratio: 1;
   position: relative;
+  display: flex; flex-direction: column;
 }
 .gallery-card:hover:not(.gallery-locked) {
   border-color: var(--amber);
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+}
+.gallery-card .img-wrap {
+  width: 100%; aspect-ratio: 4 / 3;
+  background: var(--bg);
+  overflow: hidden;
+  position: relative;
 }
 .gallery-card img {
-  width: 100%; height: 70%;
+  width: 100%; height: 100%;
   object-fit: cover;
   display: block;
 }
 .gallery-card .caption {
-  padding: 6px 8px;
-  font-size: 11px; color: var(--txt);
-  font-weight: 600; text-align: center;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 10px 10px 12px;
+  font-size: 13px; color: var(--txt);
+  font-weight: 700; text-align: center;
+  font-family: 'Cormorant Garamond', serif;
+  line-height: 1.3;
+  min-height: 42px;
+  display: flex; align-items: center; justify-content: center;
 }
 .gallery-card.gallery-locked { cursor: default; }
 .gallery-card.gallery-locked .img-placeholder {
-  width: 100%; height: 70%;
+  width: 100%; height: 100%;
   background: var(--bg); display: flex;
   align-items: center; justify-content: center;
-  font-size: 38px; opacity: 0.2; filter: grayscale(1);
+  font-size: 54px; opacity: 0.28; filter: grayscale(1);
 }
 .gallery-card.gallery-locked .caption {
   color: var(--txt3);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px; font-weight: 600;
 }
 .gallery-card .new-dot {
-  position: absolute; top: 6px; right: 6px;
-  width: 10px; height: 10px; background: var(--amber);
+  position: absolute; top: 8px; right: 8px;
+  width: 12px; height: 12px; background: var(--amber);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--amber);
+  box-shadow: 0 0 10px var(--amber);
+  z-index: 1;
 }
 
 /* ── Tier 4: Level-up fact card ──────────────────────── */
@@ -1159,8 +1303,27 @@ html, body {
     <!-- Sidebar -->
     <div class="sidebar">
 
-      <div class="card">
+      <div class="card card-hint">
         <div class="scroll-hint">Click to find the next<br>Fibonacci number</div>
+      </div>
+
+      <!-- UX polish: Always-visible Achievements panel on desktop (icon button
+           is hidden on desktop — clicking any emblem opens the fact card). -->
+      <div class="card sidebar-ach-card" id="sidebarAchCard">
+        <div class="card-title">
+          🏆 Achievements
+          <span class="card-title-count" id="sidebarAchCount">0 / 0</span>
+        </div>
+        <div id="sidebarAchGrid" class="sidebar-ach-grid"></div>
+      </div>
+
+      <!-- UX polish: Always-visible Found in Nature panel on desktop. -->
+      <div class="card sidebar-gallery-card" id="sidebarGalleryCard">
+        <div class="card-title">
+          🖼️ Found in Nature
+          <span class="card-title-count" id="sidebarGalleryCount">0 / 0</span>
+        </div>
+        <div id="sidebarGalleryGrid" class="sidebar-gallery-grid"></div>
       </div>
 
     </div><!-- /sidebar -->
@@ -1308,6 +1471,25 @@ html, body {
       <div id="mobileEngineStatus"></div>
       <div id="mobileEngineUpgrades"></div>
     </div>
+
+    <!-- UX polish: mobile always-visible Achievements panel in bottom sheet -->
+    <div class="card" id="mobileAchCard">
+      <div class="card-title">
+        🏆 Achievements
+        <span class="card-title-count" id="mobileAchCount">0 / 0</span>
+      </div>
+      <div id="mobileAchGrid" class="sidebar-ach-grid"></div>
+    </div>
+
+    <!-- UX polish: mobile always-visible Found in Nature panel in bottom sheet -->
+    <div class="card" id="mobileGalleryCard">
+      <div class="card-title">
+        🖼️ Found in Nature
+        <span class="card-title-count" id="mobileGalleryCount">0 / 0</span>
+      </div>
+      <div id="mobileGalleryGrid" class="sidebar-gallery-grid"></div>
+    </div>
+
     <div class="card">
       <div class="card-title">🏆 Leaderboard</div>
       <div id="mobileLbList"><div class="lb-empty">Loading…</div></div>
@@ -1399,7 +1581,10 @@ html, body {
     <div style="padding:20px;">
       <div id="galleryItemTitle" style="font-size:20px;font-weight:700;color:var(--amber);margin-bottom:10px;font-family:'Cormorant Garamond',serif;"></div>
       <div id="galleryItemFact" style="font-size:14px;color:var(--txt);line-height:1.6;font-family:'Cormorant Garamond',serif;"></div>
-      <div id="galleryItemUnlock" style="font-size:10px;color:var(--txt3);margin-top:14px;font-family:'JetBrains Mono',monospace;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap;">
+        <div id="galleryItemUnlock" style="font-size:10px;color:var(--txt3);font-family:'JetBrains Mono',monospace;"></div>
+        <a id="galleryItemWiki" href="#" target="_blank" rel="noopener" class="fact-link" style="display:none;">Read more on Wikipedia →</a>
+      </div>
     </div>
   </div>
 </div>
@@ -1643,45 +1828,57 @@ const ACHIEVEMENTS = [
 ];
 
 // ─── Tier 3: Gallery ("Found in Nature") catalog ──────────────────
+// UX polish: URLs use Wikipedia's Special:FilePath which follows file
+// renames automatically. `wiki` slug links the full article for further reading.
 const GALLERY = [
   { at: 3,  emblem: '🐚',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/NautilusCutawayLogarithmicSpiral.jpg/480px-NautilusCutawayLogarithmicSpiral.jpg',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/NautilusCutawayLogarithmicSpiral.jpg?width=640',
+    wiki: 'Nautilus',
     title: 'Nautilus Shell',
     fact: 'The chambered nautilus grows each new section about φ times larger than the last. Cutting the shell in half reveals this perfect logarithmic spiral.' },
   { at: 6,  emblem: '🌻',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Helianthus_whorl.jpg/480px-Helianthus_whorl.jpg',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Helianthus_whorl.JPG?width=640',
+    wiki: 'Fibonacci_sequence#Nature',
     title: 'Sunflower Seed Head',
     fact: 'Sunflower florets pack into two opposing spirals — typically 21 clockwise and 34 counter-clockwise, or 34/55, or 55/89. Always consecutive Fibonacci numbers.' },
   { at: 9,  emblem: '🌀',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Hurricane_Isabel_from_ISS.jpg/480px-Hurricane_Isabel_from_ISS.jpg',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Hurricane_Isabel_from_ISS.jpg?width=640',
+    wiki: 'Hurricane_Isabel',
     title: 'Hurricane Isabel',
     fact: 'Seen from the International Space Station, hurricane arms trace a near-perfect logarithmic spiral — the limiting shape of the Fibonacci spiral.' },
   { at: 12, emblem: '🖼️',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/480px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg?width=640',
+    wiki: 'Mona_Lisa',
     title: 'Mona Lisa',
     fact: "Leonardo da Vinci studied φ obsessively. The Mona Lisa's composition contains multiple golden-ratio rectangles — her face, the horizon line, the spiral of her hair." },
   { at: 15, emblem: '🌌',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/50/Messier_74_by_HST.jpg/480px-Messier_74_by_HST.jpg',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Messier_74_by_HST.jpg?width=640',
+    wiki: 'Messier_74',
     title: 'Messier 74 Galaxy',
     fact: 'M74, a "grand design" spiral galaxy, displays two prominent arms that follow a logarithmic curve — the same mathematics that shapes your spiral right now.' },
   { at: 18, emblem: '🌿',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Fractal_Broccoli.jpg/480px-Fractal_Broccoli.jpg',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Fractal_Broccoli.jpg?width=640',
+    wiki: 'Romanesco_broccoli',
     title: 'Romanesco Broccoli',
     fact: 'Each bud on a Romanesco is itself composed of smaller buds in the same pattern — a natural fractal. Its spirals follow Fibonacci counts.' },
   { at: 21, emblem: '🌲',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Pineconespiral.jpg/480px-Pineconespiral.jpg',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Pineconespiral.jpg?width=640',
+    wiki: 'Conifer_cone',
     title: 'Pinecone Spirals',
     fact: 'Pinecones have two families of spirals: typically 8 going one way and 13 going the other. Sometimes 5/8 on smaller cones. Always Fibonacci.' },
   { at: 24, emblem: '🍍',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Pineapple_%284006%29.JPG/480px-Pineapple_%284006%29.JPG',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Pineapple_(4006).JPG?width=640',
+    wiki: 'Pineapple',
     title: 'Pineapple',
     fact: 'The hexagonal "eyes" of a pineapple form three spirals: 5, 8, and 13. Count them next time you eat one.' },
   { at: 27, emblem: '🐌',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Helix_aspersa_shell.jpg/480px-Helix_aspersa_shell.jpg',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Helix_aspersa_shell.jpg?width=640',
+    wiki: 'Cornu_aspersum',
     title: 'Snail Shell',
     fact: "Land snails grow by adding new chambers that are φ times larger. The shell is a record of the snail's entire life — each turn representing a growth phase." },
   { at: 30, emblem: '🧬',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/DNA_orbit_animated.gif/240px-DNA_orbit_animated.gif',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/DNA_orbit_animated.gif?width=320',
+    wiki: 'DNA',
     title: 'DNA Double Helix',
     fact: 'The B-form DNA molecule is 21 Å wide and 34 Å per complete turn — F(8) and F(9). The ratio is φ. Life itself is Fibonacci.' },
 ];
@@ -2657,6 +2854,8 @@ function commitN(newN) {
     GALLERY.forEach(g => {
       if (state.highestAbsN === g.at) showGalleryUnlockToast(g);
     });
+    // UX polish: refresh the always-visible sidebar gallery panel.
+    renderSidebarGallery();
     // v3.0 Tier 3 — kick off Golden Moments at F(5)
     if (state.highestAbsN === 5 && typeof goldenTimer !== 'undefined' && !goldenTimer) {
       initGoldenMoment();
@@ -2806,6 +3005,16 @@ function updateTokenDisplay() {
   if (mel) mel.textContent = bal;
   renderBoosts();
   renderEngine();
+  // UX polish: pulse the Boosts card when an unlocked upgrade is affordable
+  const card = document.getElementById('boostsCard');
+  if (card) {
+    const ready = BOOST_UPGRADES.some(up =>
+      !state.boostUpgrades[up.id] &&
+      state.highestAbsN >= up.unlock &&
+      state.boostTokens >= up.cost
+    );
+    card.classList.toggle('boosts-ready', ready);
+  }
 }
 
 // ── Boosts UI render ─────────────────────────────────────────────
@@ -3256,7 +3465,9 @@ function checkAchievements() {
 
   unlocks.forEach(id => showAchievementToast(id));
   if (unlocks.length > 0) {
-    // Refresh grid if the achievements overlay is open
+    // UX polish: always refresh the always-visible sidebar panel on desktop.
+    renderSidebarAchievements();
+    // Refresh modal grid if it's open.
     if (document.getElementById('achievementsOverlay').classList.contains('open')) {
       renderAchievementsGrid();
     }
@@ -3264,6 +3475,11 @@ function checkAchievements() {
   }
 }
 
+// UX polish: achievement toasts now carry the "Did you know?" fact inline
+// so the teaching moment lands at the instant of unlock, not only if the
+// user remembers to open the gallery. Dwell time bumped to ~12 s and the
+// toast pauses on hover; ✕ dismisses immediately; click-body still jumps
+// to the achievement card.
 function showAchievementToast(achievementId) {
   const ach = ACHIEVEMENTS.find(a => a.id === achievementId);
   if (!ach) return;
@@ -3272,17 +3488,21 @@ function showAchievementToast(achievementId) {
   const toast = document.createElement('div');
   toast.className = 'achievement-toast';
   toast.innerHTML = `
+    <button class="toast-close" aria-label="Dismiss">✕</button>
     <div class="emblem">${ach.emblem}</div>
-    <div>
+    <div class="ach-body">
       <div class="ach-label">Achievement unlocked</div>
-      <div class="ach-title">${ach.title}</div>
+      <div class="ach-title">${escHtml(ach.title)}</div>
+      <div class="ach-fact">${escHtml(ach.fact || '')}</div>
     </div>`;
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) closeBtn.addEventListener('click', e => { e.stopPropagation(); toast.remove(); });
   toast.addEventListener('click', () => {
     toast.remove();
     openAchievementsModal(achievementId);
   });
   container.appendChild(toast);
-  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5100);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
   console.log(`✅ Achievement unlocked: ${ach.title}`);
 }
 
@@ -3317,6 +3537,30 @@ function renderAchievementsGrid() {
   grid.querySelectorAll('.ach-card:not(.ach-locked)').forEach(card => {
     card.addEventListener('click', () => showAchievementFact(card.dataset.id));
   });
+}
+
+// UX polish: compact Achievements grid — rendered in both the desktop left
+// sidebar and the mobile bottom sheet so the content is always visible.
+// Emblems only; clicking an unlocked emblem opens the full fact card.
+function renderSidebarAchievements() {
+  const owned = ACHIEVEMENTS.filter(a => state.achievements[a.id]).length;
+  const countText = `${owned} / ${ACHIEVEMENTS.length}`;
+  const html = ACHIEVEMENTS.map(a => {
+    const unlocked = !!state.achievements[a.id];
+    const cls = unlocked ? 'sidebar-ach-emblem' : 'sidebar-ach-emblem locked';
+    const tip = unlocked ? `${a.title} — click for the fact` : `??? · ${a.unlock}`;
+    return `<div class="${cls}" data-id="${a.id}" title="${escHtml(tip)}">${a.emblem}</div>`;
+  }).join('');
+  for (const [gridId, countId] of [['sidebarAchGrid', 'sidebarAchCount'], ['mobileAchGrid', 'mobileAchCount']]) {
+    const grid  = document.getElementById(gridId);
+    const count = document.getElementById(countId);
+    if (!grid || !count) continue;
+    count.textContent = countText;
+    grid.innerHTML = html;
+    grid.querySelectorAll('.sidebar-ach-emblem:not(.locked)').forEach(el => {
+      el.addEventListener('click', () => showAchievementFact(el.dataset.id));
+    });
+  }
 }
 
 function showAchievementFact(id) {
@@ -3388,11 +3632,15 @@ function showSkinUnlockToast(skin) {
   const toast = document.createElement('div');
   toast.className = 'achievement-toast';
   toast.innerHTML = `
+    <button class="toast-close" aria-label="Dismiss">✕</button>
     <div class="emblem">${skin.preview}</div>
-    <div>
+    <div class="ach-body">
       <div class="ach-label">New skin unlocked</div>
-      <div class="ach-title">${skin.name}</div>
+      <div class="ach-title">${escHtml(skin.name)}</div>
+      <div class="ach-fact">Open Settings to try it on.</div>
     </div>`;
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) closeBtn.addEventListener('click', e => { e.stopPropagation(); toast.remove(); });
   toast.addEventListener('click', () => {
     toast.remove();
     openOverlay('settingsOverlay');
@@ -3402,7 +3650,7 @@ function showSkinUnlockToast(skin) {
     }, 100);
   });
   container.appendChild(toast);
-  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5100);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -3616,13 +3864,16 @@ function renderGalleryGrid() {
     const isNew  = !locked && !state.galleryViewed[g.at];
     let cls = 'gallery-card';
     if (locked) cls += ' gallery-locked';
+    // UX polish: wrap image in .img-wrap (fixed 4:3 area) so broken images
+    // fall back to a full-size emblem rather than collapsing the card.
+    const imgHtml = locked
+      ? `<div class="img-placeholder">${g.emblem}</div>`
+      : `<img src="${g.src}" alt="${escHtml(g.title)}" loading="lazy" onerror="this.outerHTML='<div class=\\'img-placeholder\\'>${g.emblem}</div>'">`;
     return `
       <div class="${cls}" data-at="${g.at}">
         ${isNew ? '<div class="new-dot"></div>' : ''}
-        ${locked
-          ? `<div class="img-placeholder">${g.emblem}</div>`
-          : `<img src="${g.src}" alt="${g.title}" loading="lazy" onerror="this.outerHTML='<div class=\\'img-placeholder\\'>${g.emblem}</div>'">`}
-        <div class="caption">${locked ? `F(${g.at})` : g.title}</div>
+        <div class="img-wrap">${imgHtml}</div>
+        <div class="caption">${locked ? `F(${g.at})` : escHtml(g.title)}</div>
       </div>`;
   }).join('') + '</div>';
 
@@ -3631,20 +3882,67 @@ function renderGalleryGrid() {
   });
 }
 
+// UX polish: compact "Found in Nature" grid — rendered in both the desktop
+// left sidebar and the mobile bottom sheet so the content is always visible.
+// Clicking opens the full gallery-item modal with fact + "Read more on
+// Wikipedia" link.
+function renderSidebarGallery() {
+  const unlocked = GALLERY.filter(g => state.highestAbsN >= g.at).length;
+  const countText = `${unlocked} / ${GALLERY.length}`;
+  const html = GALLERY.map(g => {
+    const locked = state.highestAbsN < g.at;
+    const isNew  = !locked && !state.galleryViewed[g.at];
+    let cls = 'sidebar-gallery-tile';
+    if (locked) cls += ' locked';
+    if (isNew)  cls += ' new';
+    const body = locked
+      ? `<div class="emblem-placeholder">${g.emblem}</div>`
+      : `<img src="${g.src}" alt="${escHtml(g.title)}" loading="lazy" onerror="this.outerHTML='<div class=\\'emblem-placeholder\\'>${g.emblem}</div>'">`;
+    const tip = locked ? `Unlocks at F(${g.at})` : g.title;
+    return `<div class="${cls}" data-at="${g.at}" title="${escHtml(tip)}">${body}</div>`;
+  }).join('');
+  for (const [gridId, countId] of [['sidebarGalleryGrid', 'sidebarGalleryCount'], ['mobileGalleryGrid', 'mobileGalleryCount']]) {
+    const grid  = document.getElementById(gridId);
+    const count = document.getElementById(countId);
+    if (!grid || !count) continue;
+    count.textContent = countText;
+    grid.innerHTML = html;
+    grid.querySelectorAll('.sidebar-gallery-tile:not(.locked)').forEach(tile => {
+      tile.addEventListener('click', () => openGalleryItem(parseInt(tile.dataset.at, 10)));
+    });
+  }
+}
+
 function openGalleryItem(atN) {
   const item = GALLERY.find(g => g.at === atN);
   if (!item) return;
-  document.getElementById('galleryItemImg').src   = item.src;
-  document.getElementById('galleryItemImg').alt   = item.title;
+  const img = document.getElementById('galleryItemImg');
+  img.src   = item.src;
+  img.alt   = item.title;
+  // UX polish: if the Wikipedia thumb fails, hide the broken <img>
+  // so the modal still looks clean (the fact + wiki link carry the value).
+  img.onerror = () => { img.style.display = 'none'; };
+  img.onload  = () => { img.style.display = ''; };
+  img.style.display = '';
   document.getElementById('galleryItemTitle').textContent  = item.title;
   document.getElementById('galleryItemFact').textContent   = item.fact;
   document.getElementById('galleryItemUnlock').textContent =
     `Unlocked at F(${item.at}) = ${fmt(fib(item.at))}`;
+  const wikiLink = document.getElementById('galleryItemWiki');
+  if (wikiLink) {
+    if (item.wiki) {
+      wikiLink.href = `https://en.wikipedia.org/wiki/${item.wiki}`;
+      wikiLink.style.display = '';
+    } else {
+      wikiLink.style.display = 'none';
+    }
+  }
   document.getElementById('galleryItemOverlay').classList.add('open');
   // Mark viewed + clear NEW dot
   state.galleryViewed[atN] = true;
   if (currentUser && fbDb) debouncedSaveProgress();
   renderGalleryGrid();
+  renderSidebarGallery();   // UX polish: also clear dot in the always-visible sidebar panel
 }
 
 function showGalleryUnlockToast(item) {
@@ -3653,18 +3951,22 @@ function showGalleryUnlockToast(item) {
   const toast = document.createElement('div');
   toast.className = 'achievement-toast';
   toast.innerHTML = `
+    <button class="toast-close" aria-label="Dismiss">✕</button>
     <div class="emblem">${item.emblem}</div>
-    <div>
-      <div class="ach-label">Gallery: new image</div>
-      <div class="ach-title">${item.title}</div>
+    <div class="ach-body">
+      <div class="ach-label">Found in Nature</div>
+      <div class="ach-title">${escHtml(item.title)}</div>
+      <div class="ach-fact">${escHtml(item.fact || '')}</div>
     </div>`;
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) closeBtn.addEventListener('click', e => { e.stopPropagation(); toast.remove(); });
   toast.addEventListener('click', () => {
     toast.remove();
     openGalleryModal();
     setTimeout(() => openGalleryItem(item.at), 200);
   });
   container.appendChild(toast);
-  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5100);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
 }
 
 // ── Feature 7: Weekly Class Challenge ────────────────────────────
@@ -3760,13 +4062,17 @@ function showChampionToast(badge) {
   const toast = document.createElement('div');
   toast.className = 'achievement-toast';
   toast.innerHTML = `
+    <button class="toast-close" aria-label="Dismiss">✕</button>
     <div class="emblem">${medals[badge.rank - 1] || '🏅'}</div>
-    <div>
+    <div class="ach-body">
       <div class="ach-label">Weekly Champion</div>
       <div class="ach-title">${badge.weekId} · Rank ${badge.rank}</div>
+      <div class="ach-fact">Your medal is pinned to your Account card.</div>
     </div>`;
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => toast.remove());
   container.appendChild(toast);
-  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 6000);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
 }
 
 function renderChampionBadges() {
@@ -4745,6 +5051,9 @@ updateModeInfo();
 updateTokenDisplay();   // v2.0 Tier 1 — paints boost + engine cards
 renderSkins();          // v2.5 Tier 2 — initial skin grid (Classic only unlocked)
 updateStreakBadge();    // v2.5 Tier 2 — seed streak badge
+// UX polish: seed always-visible Achievements + Gallery panels
+renderSidebarAchievements();
+renderSidebarGallery();
 // v3.0 Tier 3 — seed weekly ID so Weekly tab works before Firebase signs in
 if (!state.weekly.currentWeekId) {
   state.weekly.currentWeekId       = isoWeekStr();
@@ -5085,6 +5394,9 @@ async function onSignIn(user) {
       renderChampionBadges();
       if (activeLbTab === 'weekly') renderChallengeHeader();
       if (state.highestAbsN >= 5 && !goldenTimer) initGoldenMoment();
+      // UX polish: refresh always-visible sidebar panels after restore
+      renderSidebarAchievements();
+      renderSidebarGallery();
       // v4.0 Tier 4 — auto-resume an in-progress Classroom Challenge
       resumeActiveChallenge();
     } else {
@@ -5112,6 +5424,9 @@ async function onSignIn(user) {
       renderChampionBadges();
       if (activeLbTab === 'weekly') renderChallengeHeader();
       if (state.highestAbsN >= 5 && !goldenTimer) initGoldenMoment();
+      // UX polish: refresh always-visible sidebar panels after restore
+      renderSidebarAchievements();
+      renderSidebarGallery();
       // v4.0 Tier 4 — auto-resume an in-progress Classroom Challenge
       resumeActiveChallenge();
     }
