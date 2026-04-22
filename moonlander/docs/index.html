@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moonlander (2D↔3D)</title>
+  <link rel="stylesheet" href="css/main.css">
+
+  <!--
+    NOTE: We use an importmap so that 'three' and 'three/addons/...' resolve
+    exactly the same way in our code as in the official Three.js examples.
+    This lets us copy-paste addon snippets (PointerLockControls, GLTFLoader,
+    etc.) without path rewrites. Requires a modern browser.
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three":          "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/":  "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- The HUD overlay lives in the DOM, NOT in a Three.js scene.
+       Cheaper than a second scene/camera, easier to style, and it survives
+       mode switches untouched. The Three.js canvas is appended by Main.js. -->
+  <div id="hud">
+    <div id="hud-left">
+      <div class="row"><span class="label">SCORE</span><span id="hud-score">0000</span></div>
+      <div class="row"><span class="label">TIME</span><span id="hud-time">0:00</span></div>
+      <div class="row"><span class="label">FUEL</span><span id="hud-fuel">1000</span></div>
+      <div class="row alert" id="hud-alert" hidden>LOW ON FUEL</div>
+    </div>
+    <div id="hud-right">
+      <div class="row"><span class="label">ALTITUDE</span><span id="hud-alt">0000</span></div>
+      <div class="row"><span class="label">H-SPEED</span><span id="hud-hspeed">0.0</span></div>
+      <div class="row"><span class="label">V-SPEED</span><span id="hud-vspeed">0.0</span></div>
+      <div class="row"><span class="label">ANGLE</span><span id="hud-angle">0.0</span></div>
+    </div>
+    <div id="hud-center" class="center-msg"></div>
+  </div>
+
+  <script type="module" src="js/Main.js"></script>
+</body>
+</html>
