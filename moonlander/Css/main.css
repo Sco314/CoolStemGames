@@ -43,3 +43,57 @@ canvas { display: block; }
   line-height: 1.6em;
   white-space: pre-line;
 }
+
+/* Rows that only matter during walk mode — JS toggles display via body class */
+.walk-only { display: none; }
+body.mode-walk .walk-only { display: flex; }
+body.mode-walk #hud-objectives.walk-only { display: block; }
+
+/* Objective tracker — bottom-right, unobtrusive */
+#hud-objectives {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  font-size: 14px;
+  line-height: 1.5em;
+  text-align: right;
+  opacity: 0.9;
+}
+#hud-objectives .obj-title {
+  letter-spacing: 2px;
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+#hud-objectives ul { list-style: none; margin: 0; padding: 0; }
+#hud-objectives li::before {
+  content: "[ ] ";
+  color: #ffee66;
+  margin-right: 4px;
+}
+#hud-objectives li.done {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+#hud-objectives li.done::before {
+  content: "[x] ";
+  color: #66ff88;
+}
+
+/* Comms overlay — mission-control radio blip, fades in and out */
+#hud-comms {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  background: rgba(10, 15, 25, 0.75);
+  border: 1px solid rgba(255, 238, 120, 0.5);
+  color: #ffee88;
+  font-size: 16px;
+  letter-spacing: 1px;
+  text-align: center;
+  max-width: 80vw;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+#hud-comms.show { opacity: 1; }

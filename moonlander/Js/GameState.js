@@ -7,7 +7,7 @@
 // landing coordinates — never camera positions, mesh references, or particle
 // pools. Those belong to whichever mode owns them and get disposed on exit.
 
-import { STARTING_FUEL, MODE } from './Constants.js';
+import { STARTING_FUEL, MODE, OBJECTIVES } from './Constants.js';
 
 export const GameState = {
   // ----- Mission state -----
@@ -20,8 +20,8 @@ export const GameState = {
     capacity: STARTING_FUEL
   },
   supplies: {
-    repairKits: 0,
-    oxygenCanisters: 0
+    repairKits:     0,
+    scienceSamples: 0
   },
 
   // ----- Scoring -----
@@ -43,8 +43,38 @@ export const GameState = {
   hasLanded: false,
   hasFuel: true,
   isAlerted: false,              // low-fuel alert currently showing
-  debug: false
+  debug: false,
+
+  // ----- Mission flags (Phase 4) -----
+  // Free-form bag of booleans the objective predicates and dialog triggers
+  // read from. Keep keys lowercase-camel for consistency.
+  flags: {
+    probeRepaired: false
+  },
+
+  // ----- Objective tracker -----
+  // Mirrors Constants.OBJECTIVES, one entry per id, { id, label, done }.
+  // Kept in state so saves round-trip mid-run progress.
+  objectives: OBJECTIVES.map(o => ({ id: o.id, label: o.label, done: false }))
 };
+
+/**
+ * Re-evaluates every objective predicate against the current state. Call
+ * after any fact-changing mutation. Returns the ids that flipped done on
+ * this call so callers can fire congratulations, comms blips, etc.
+ */
+export function refreshObjectives() {
+  const justCompleted = [];
+  for (const def of OBJECTIVES) {
+    const entry = GameState.objectives.find(o => o.id === def.id);
+    if (!entry || entry.done) continue;
+    if (def.predicate(GameState)) {
+      entry.done = true;
+      justCompleted.push(def.id);
+    }
+  }
+  return justCompleted;
+}
 
 // ----- Tiny event bus so the HUD (or anything else) can react to changes
 // without polling. Not reactive-framework-fancy; just enough to be useful. -----
@@ -70,7 +100,11 @@ export function update(fn, changeKey = '*') {
 // ----- Save/load -----
 // Because GameState is a plain object of semantic values, serialization is trivial.
 // Version the save format so future-you can migrate old saves.
-const SAVE_KEY = 'moonlander.save.v1';
+// v1 → v2 (Phase 4): supplies.oxygenCanisters removed, supplies.scienceSamples
+// added, flags/objectives introduced. Old saves are ignored rather than
+// migrated field-by-field; the shape difference is small and a fresh start
+// is preferable to guessing at mid-run objective progress.
+const SAVE_KEY = 'moonlander.save.v2';
 
 export function save() {
   try {

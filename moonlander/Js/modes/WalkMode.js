@@ -1,21 +1,15 @@
-// modes/WalkMode.js — v0.2.0
+// modes/WalkMode.js — v0.3.0
 // Third-person 3D walking scene. The astronaut spawns next to the parked
 // lander at the landing site, can walk around a small moon-surface patch, and
-// interact with the fuel cart or the lander. Pressing E next to the lander
-// hands control back to Main.js, which cinematic-swaps to LanderMode.
+// interact with scattered loot (fuel drums, supply crates, science samples,
+// damaged probes). Pressing E next to the lander hands control back to
+// Main.js, which cinematic-swaps to LanderMode.
 //
-// Phase 3 changes:
-//   - Procedural humanoid astronaut (helmet / torso / pack / arms / legs)
-//     with a sin-driven walk cycle, replacing the capsule placeholder.
-//   - Displaced moon surface via a deterministic sin-sum heightmap; the
-//     astronaut's y locks to the ground via the same heightmap lookup.
-//   - Crater ring decals scattered across the playable radius.
-//   - Parked lander rendered with the same textures/lander.png sprite used
-//     in LanderMode, for visual continuity.
-//   - Strict chase camera: mouse X rotates the astronaut (and camera with
-//     it); mouse Y orbits the camera's pitch around the astronaut. No more
-//     hybrid snap-vs-orbit awkwardness.
-//   - Playable-area clamp: x/z bounded by WALK_PLAY_RADIUS.
+// Phase 3 added: procedural astronaut + walk cycle, displaced moon surface,
+//   crater decals, textured parked-lander sprite, strict chase cam, xz clamp.
+// Phase 4 added: four distinct interactable types seeded by landing segment
+//   (see Constants.LANDING_SITE_LOOT), proper inventory effects, a comms
+//   blip on every pickup, and objective progression via refreshObjectives().
 
 import * as THREE from 'three';
 import {
@@ -25,11 +19,12 @@ import {
   WALK_PLAY_RADIUS, WALK_MOUSE_SENSITIVITY,
   WALK_PITCH_MIN, WALK_PITCH_MAX,
   WALK_GROUND_AMPLITUDE, WALK_CRATER_COUNT,
+  INTERACTABLE_TYPES, LANDING_SITE_LOOT, DEFAULT_LOOT,
   MODE
 } from '../Constants.js';
-import { GameState, notify } from '../GameState.js';
+import { GameState, update as updateState, notify, refreshObjectives } from '../GameState.js';
 import { Input } from '../Input.js';
-import { setCenterMessage } from '../HUD.js';
+import { setCenterMessage, showComms } from '../HUD.js';
 
 let scene = null;
 let camera = null;
@@ -37,7 +32,7 @@ let canvasEl = null;
 let astronaut = null;
 let astronautParts = null;     // references to animated bones
 let landerModel = null;
-let interactable = null;
+let interactables = [];        // Phase-4 loot: [{ type, object3d, used, ... }]
 let disposables = [];
 let onReturnToLanderCallback = null;
 
@@ -70,7 +65,7 @@ export const WalkMode = {
     buildCraters();
     buildAstronaut();
     buildParkedLander();
-    buildFuelCart();
+    spawnInteractables();
 
     // Spawn next to the parked lander, facing away from it.
     astronaut.position.set(6, 0, 6);
@@ -106,7 +101,7 @@ export const WalkMode = {
     astronaut = null;
     astronautParts = null;
     landerModel = null;
-    interactable = null;
+    interactables = [];
     pointerLocked = false;
   },
 
@@ -152,16 +147,24 @@ export const WalkMode = {
     // --- strict chase camera around the astronaut's chest ---
     updateChaseCamera();
 
-    // --- interaction prompts ---
-    const distToCart = astronaut.position.distanceTo(interactable.position);
-    if (distToCart < WALK_INTERACT_RADIUS) {
-      setCenterMessage('PRESS E TO LOAD FUEL');
-      if (Input.wasPressed('e') || Input.wasPressed('E')) loadFuelFromCart();
+    // --- loot idle animation (sample spin, etc.) ---
+    for (const it of interactables) {
+      if (it.used || !it.object3d.visible) continue;
+      if (it.spin) it.object3d.rotation.y += it.spin * dt;
+    }
+
+    // --- interaction: pick the closest in-range interactable, fall back to
+    // the parked lander if none is near. Prompts and E-key are handled here. ---
+    const ePressed = Input.wasPressed('e') || Input.wasPressed('E');
+    const closest = pickClosestInteractable();
+    if (closest) {
+      setCenterMessage(promptFor(closest));
+      if (ePressed) performInteraction(closest);
     } else {
       const distToLander = astronaut.position.distanceTo(landerModel.position);
       if (distToLander < WALK_INTERACT_RADIUS) {
         setCenterMessage('PRESS E TO BOARD LANDER');
-        if (Input.wasPressed('e') || Input.wasPressed('E')) onReturnToLanderCallback();
+        if (ePressed) onReturnToLanderCallback();
       } else {
         setCenterMessage('');
       }
@@ -396,24 +399,223 @@ function buildParkedLander() {
   disposables.push({ material: mat, texture: tex });
 }
 
-function buildFuelCart() {
-  const geom = new THREE.BoxGeometry(4, 2, 2);
-  const mat  = new THREE.MeshLambertMaterial({ color: 0xffaa00 });
-  interactable = new THREE.Mesh(geom, mat);
-  const cx = 20, cz = 10;
-  interactable.position.set(cx, groundHeight(cx, cz) + 1, cz);
-  scene.add(interactable);
-  disposables.push({ geometry: geom, material: mat });
+// ---------- Phase-4 interactable system ----------
+
+/**
+ * Walk scene loot is seeded by the landing segment index stashed on
+ * GameState.lastLanding. Unknown or crashed segments (-1) fall through to
+ * DEFAULT_LOOT so there's always something to do.
+ */
+function spawnInteractables() {
+  const segIdx = GameState.lastLanding.terrainSegmentIndex;
+  const spawns = LANDING_SITE_LOOT[segIdx] || DEFAULT_LOOT;
+  for (const [type, x, z] of spawns) {
+    const it = buildInteractable(type, x, z);
+    if (it) interactables.push(it);
+  }
+  console.log(`ℹ️ Spawned ${interactables.length} interactables for segment ${segIdx}`);
 }
 
-function loadFuelFromCart() {
-  const gained = 250;
-  const cap = GameState.fuel.capacity - GameState.fuel.current;
-  const actual = Math.min(gained, cap);
-  GameState.fuel.current += actual;
-  notify('fuel');
-  setCenterMessage(`+${actual.toFixed(0)} FUEL LOADED`);
-  console.log(`✅ Walk interaction: +${actual} fuel. Total: ${GameState.fuel.current}`);
-  // Move the cart out of play so the user can't spam it.
-  interactable.position.set(1000, 1000, 1000);
+function buildInteractable(type, x, z) {
+  const spec = INTERACTABLE_TYPES[type];
+  if (!spec) { console.warn(`Unknown interactable type: ${type}`); return null; }
+
+  const group = new THREE.Group();
+  group.position.set(x, groundHeight(x, z), z);
+
+  let spin = 0;
+  switch (type) {
+    case 'fuel':    buildFuelDrum(group, spec);    break;
+    case 'repair':  buildRepairCrate(group, spec); break;
+    case 'sample':  buildSample(group, spec);      spin = 1.2; break;
+    case 'damaged': buildDamagedProbe(group, spec); break;
+  }
+
+  scene.add(group);
+  return { type, object3d: group, used: false, spin };
+}
+
+function buildFuelDrum(group, spec) {
+  const bodyGeom = new THREE.CylinderGeometry(0.85, 0.85, 2.2, 18);
+  const bodyMat  = new THREE.MeshLambertMaterial({ color: spec.color });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.position.y = 1.1;
+  group.add(body);
+  disposables.push({ geometry: bodyGeom, material: bodyMat });
+
+  const capGeom = new THREE.CylinderGeometry(0.9, 0.9, 0.12, 18);
+  const capMat  = new THREE.MeshLambertMaterial({ color: 0x3a3a3f });
+  disposables.push({ geometry: capGeom, material: capMat });
+  const top = new THREE.Mesh(capGeom, capMat);    top.position.y = 2.25;
+  const bot = new THREE.Mesh(capGeom, capMat);    bot.position.y = 0.06;
+  group.add(top, bot);
+
+  const stripeGeom = new THREE.BoxGeometry(1.72, 0.18, 0.05);
+  const stripeMat  = new THREE.MeshLambertMaterial({ color: 0x222226 });
+  disposables.push({ geometry: stripeGeom, material: stripeMat });
+  const s1 = new THREE.Mesh(stripeGeom, stripeMat); s1.position.set(0, 1.7, 0.86);
+  const s2 = new THREE.Mesh(stripeGeom, stripeMat); s2.position.set(0, 0.5, 0.86);
+  group.add(s1, s2);
+}
+
+function buildRepairCrate(group, spec) {
+  const bodyGeom = new THREE.BoxGeometry(1.8, 1.3, 1.8);
+  const bodyMat  = new THREE.MeshLambertMaterial({ color: spec.color });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.position.y = 0.65;
+  group.add(body);
+  disposables.push({ geometry: bodyGeom, material: bodyMat });
+
+  // Red cross on top
+  const crossMat = new THREE.MeshLambertMaterial({ color: 0xd43a2a });
+  const crossH = new THREE.BoxGeometry(1.2, 0.1, 0.3);
+  const crossV = new THREE.BoxGeometry(0.3, 0.1, 1.2);
+  disposables.push({ material: crossMat });
+  disposables.push({ geometry: crossH });
+  disposables.push({ geometry: crossV });
+  const ch = new THREE.Mesh(crossH, crossMat); ch.position.y = 1.36;
+  const cv = new THREE.Mesh(crossV, crossMat); cv.position.y = 1.36;
+  group.add(ch, cv);
+}
+
+function buildSample(group, spec) {
+  const geom = new THREE.IcosahedronGeometry(0.65, 0);
+  const mat = new THREE.MeshLambertMaterial({
+    color: spec.color, emissive: 0x1a4060, emissiveIntensity: 0.6
+  });
+  const crystal = new THREE.Mesh(geom, mat);
+  crystal.position.y = 1.2;
+  group.add(crystal);
+  disposables.push({ geometry: geom, material: mat });
+
+  // Small pedestal so the sample reads as "placed", not "floating debris"
+  const padGeom = new THREE.CylinderGeometry(0.7, 0.7, 0.15, 14);
+  const padMat  = new THREE.MeshLambertMaterial({ color: 0x555560 });
+  const pad = new THREE.Mesh(padGeom, padMat);
+  pad.position.y = 0.08;
+  group.add(pad);
+  disposables.push({ geometry: padGeom, material: padMat });
+}
+
+function buildDamagedProbe(group, spec) {
+  const bodyGeom = new THREE.BoxGeometry(2.2, 1.5, 2.2);
+  const bodyMat  = new THREE.MeshLambertMaterial({ color: spec.color });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.position.y = 0.75;
+  group.add(body);
+  // Tag for color-swap on repair
+  body.userData.role = 'hull';
+  disposables.push({ geometry: bodyGeom, material: bodyMat });
+
+  // Hazard stripes — two thin yellow bands wrapped around the hull
+  const stripeMat = new THREE.MeshLambertMaterial({ color: 0xffd736 });
+  disposables.push({ material: stripeMat });
+  const stripeGeom = new THREE.BoxGeometry(2.26, 0.18, 2.26);
+  disposables.push({ geometry: stripeGeom });
+  const s1 = new THREE.Mesh(stripeGeom, stripeMat); s1.position.y = 1.15;
+  const s2 = new THREE.Mesh(stripeGeom, stripeMat); s2.position.y = 0.35;
+  group.add(s1, s2);
+
+  // Broken antenna — tilted cylinder
+  const antGeom = new THREE.CylinderGeometry(0.06, 0.06, 1.8, 8);
+  const antMat  = new THREE.MeshLambertMaterial({ color: 0x2a2a30 });
+  disposables.push({ geometry: antGeom, material: antMat });
+  const ant = new THREE.Mesh(antGeom, antMat);
+  ant.position.set(0.7, 2.0, 0);
+  ant.rotation.z = -0.5;
+  group.add(ant);
+}
+
+function pickClosestInteractable() {
+  let best = null;
+  let bestDist = WALK_INTERACT_RADIUS;
+  for (const it of interactables) {
+    if (it.used && it.type !== 'damaged') continue;
+    const d = astronaut.position.distanceTo(it.object3d.position);
+    if (d < bestDist) { best = it; bestDist = d; }
+  }
+  return best;
+}
+
+function promptFor(it) {
+  const spec = INTERACTABLE_TYPES[it.type];
+  if (it.type === 'damaged') {
+    if (it.used) return '';  // already repaired, no prompt
+    return GameState.supplies.repairKits >= spec.costKits
+      ? spec.promptReady
+      : spec.promptBlocked;
+  }
+  return spec.prompt;
+}
+
+function performInteraction(it) {
+  const spec = INTERACTABLE_TYPES[it.type];
+  let justDone = [];
+
+  switch (it.type) {
+    case 'fuel': {
+      const room = GameState.fuel.capacity - GameState.fuel.current;
+      const gained = Math.min(spec.amount, room);
+      updateState(s => {
+        s.fuel.current += gained;
+        if (s.isAlerted && s.fuel.current >= s.fuel.capacity * 0.3) s.isAlerted = false;
+        justDone = refreshObjectives();
+      }, 'pickup-fuel');
+      showComms(`+${gained | 0} FUEL — TANKS TOPPED UP`);
+      break;
+    }
+    case 'repair': {
+      updateState(s => {
+        s.supplies.repairKits += spec.amount;
+        justDone = refreshObjectives();
+      }, 'pickup-repair');
+      showComms('REPAIR KIT STOWED');
+      break;
+    }
+    case 'sample': {
+      updateState(s => {
+        s.supplies.scienceSamples += 1;
+        s.score += spec.score;
+        justDone = refreshObjectives();
+      }, 'pickup-sample');
+      showComms(`SAMPLE LOGGED (+${spec.score})`);
+      break;
+    }
+    case 'damaged': {
+      // Blocked path — surface the reason but don't consume anything.
+      if (GameState.supplies.repairKits < spec.costKits) {
+        showComms('PROBE NEEDS A REPAIR KIT');
+        return;
+      }
+      updateState(s => {
+        s.supplies.repairKits -= spec.costKits;
+        s.score += spec.score;
+        s.flags.probeRepaired = true;
+        justDone = refreshObjectives();
+      }, 'probe-repair');
+      showComms(`PROBE RECOVERED (+${spec.score})`);
+      // Recolor the hull so the repaired state reads visually.
+      it.object3d.traverse(child => {
+        if (child.isMesh && child.userData.role === 'hull') {
+          child.material.color.set(0x3ec46c);
+        }
+      });
+      break;
+    }
+  }
+
+  it.used = true;
+  // Consumables disappear; the repaired probe stays visible but inert.
+  if (it.type !== 'damaged') it.object3d.visible = false;
+
+  // Congratulate the player on each newly-completed objective. Offset the
+  // second blip so it doesn't stomp the pickup comms.
+  if (justDone.length) {
+    setTimeout(() => showComms(`OBJECTIVE COMPLETE: ${firstObjectiveLabel(justDone[0])}`), 1100);
+  }
+}
+
+function firstObjectiveLabel(id) {
+  const o = GameState.objectives.find(x => x.id === id);
+  return o ? o.label.toUpperCase() : id;
 }

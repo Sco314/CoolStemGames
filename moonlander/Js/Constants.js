@@ -127,6 +127,78 @@ export const FUEL_ALERT_INTERVAL_MS = 4000;        // beep cadence while low-fue
 export const COMMS_INTERVAL_MIN_MS  = 20000;       // morse chatter cadence
 export const COMMS_INTERVAL_MAX_MS  = 40000;
 
+// ---------- Walk-mode interactables (Phase 4) ----------
+// Each interactable type has a tuning record consumed by WalkMode to build
+// the mesh and decide how to apply the interaction. The numeric payloads
+// (fuel units, score, etc.) live here so the balance is easy to tune without
+// touching WalkMode code.
+export const INTERACTABLE_TYPES = Object.freeze({
+  fuel: {
+    label:  'FUEL DRUM',
+    prompt: 'PRESS E FOR FUEL',
+    color:  0xffb020,
+    amount: 200       // units of fuel added on pickup
+  },
+  repair: {
+    label:  'SUPPLY CRATE',
+    prompt: 'PRESS E FOR REPAIR KIT',
+    color:  0xd0d0d5,
+    amount: 1         // repair kits added
+  },
+  sample: {
+    label:  'SCIENCE SAMPLE',
+    prompt: 'PRESS E TO COLLECT SAMPLE',
+    color:  0x5ec3ff,
+    score:  50
+  },
+  damaged: {
+    label:        'DAMAGED EQUIPMENT',
+    promptReady:  'PRESS E TO REPAIR',
+    promptBlocked:'NEED A REPAIR KIT',
+    color:        0xaa3030,
+    costKits:     1,
+    score:        500
+  }
+});
+
+// Landing-site → spawn list. Keys are terrain segment indices; values are
+// [type, localX, localZ] tuples placed relative to the walk scene origin
+// (where the parked lander sits). Unknown landing sites fall back to
+// DEFAULT_LOOT so every walk scene has something to do.
+export const LANDING_SITE_LOOT = {
+  5:  [['fuel',   10, 10], ['sample', 15,   0]],
+  12: [['sample',-15, 10], ['sample',  0, -20], ['repair', 20,  5]],
+  18: [['repair',  5,  5], ['sample', 20,  20], ['sample',-10, 15], ['damaged', 0, -15]],
+  25: [['fuel', -10,-10], ['fuel',   10, -10], ['sample',  0, 18]],
+  33: [['damaged', 0, 20], ['repair', 12,  5], ['repair',-12,  5]]
+};
+export const DEFAULT_LOOT = [
+  ['fuel',   20, 10],
+  ['sample',-15, 12],
+  ['repair', 10,-14]
+];
+
+// ---------- Mission objectives (Phase 4) ----------
+// The predicate is evaluated against GameState after every notify(); the HUD
+// pulls the current done/not-done state from GameState.objectives.
+export const OBJECTIVES = [
+  {
+    id: 'collect-samples',
+    label: 'Collect 3 science samples',
+    predicate: s => s.supplies.scienceSamples >= 3
+  },
+  {
+    id: 'refuel-80',
+    label: 'Refuel to 80% capacity',
+    predicate: s => s.fuel.current >= s.fuel.capacity * 0.8
+  },
+  {
+    id: 'repair-probe',
+    label: 'Recover a damaged probe',
+    predicate: s => s.flags.probeRepaired === true
+  }
+];
+
 // ---------- Mode identifiers ----------
 // Use strings so console logs and save files are human-readable.
 export const MODE = Object.freeze({
