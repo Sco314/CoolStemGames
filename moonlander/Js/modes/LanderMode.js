@@ -5,8 +5,6 @@
 // whose position/rotation we can hand off seamlessly to the walk mode.
 //
 // STUBBED AREAS (marked with TODO) are left as clean insertion points:
-//   - Terrain mesh generation from TerrainData points
-//   - 3-circle collision approximation (see tblazevic for algorithm)
 //   - Particle systems (reuse Particles.js stubs)
 //   - Starfield background
 //
@@ -20,6 +18,9 @@ import {
   ACCEL_FALLOFF_MULT, ANGULAR_VELOCITY, HORIZONTAL_DRAG_COEF,
   FUEL_CONSUMPTION_MIN, FUEL_CONSUMPTION_MAX, FUEL_ALERT_THRESHOLD,
   LANDING_ANGLE_TOLERANCE, LANDING_VELOCITY_TOLERANCE,
+  MAIN_COLLIDER_SCALE, SMALL_COLLIDER_SCALE,
+  FOOT_COLLIDER_OFFSET_X, FOOT_COLLIDER_OFFSET_Y,
+  LANDING_EDGE_MARGIN_FRAC, PAD_MULTIPLIER_WEIGHTS, SCORE_PER_LANDING,
   ORTHO_NEAR, ORTHO_FAR, MODE
 } from '../Constants.js';
 import { GameState, update as updateState, notify } from '../GameState.js';
@@ -32,8 +33,16 @@ import { Sounds } from '../Sound.js';
 let scene = null;
 let camera = null;
 let lander = null;               // THREE.Group — the visible craft
-let terrainSegments = [];        // [{ left: Vec2, right: Vec2, slope: number }]
-let disposables = [];            // geometries/materials to dispose on exit
+let mainCollider = null;         // child Object3D at body center
+let footColliderLeft = null;     // child Object3D at left foot
+let footColliderRight = null;    // child Object3D at right foot
+let terrainSegments = [];        // [{ left: Vec2, right: Vec2, slope: number, multiplier: number }]
+let disposables = [];            // geometries/materials/textures to dispose on exit
+
+// Scratch vectors reused each frame — avoids per-frame allocations.
+const _mainWorld  = new THREE.Vector3();
+const _leftWorld  = new THREE.Vector3();
+const _rightWorld = new THREE.Vector3();
 
 // physics state
 let velX = 0, velY = 0;
@@ -84,14 +93,14 @@ export const LanderMode = {
     console.log('◀ LanderMode.exit');
     Sounds.rocket?.stop();
 
-    // Dispose every geometry and material we created.
-    // Textures are disposed here too if added later.
+    // Dispose every geometry, material, and texture we created.
     for (const d of disposables) {
       if (d.geometry) d.geometry.dispose();
       if (d.material) {
         if (Array.isArray(d.material)) d.material.forEach(m => m.dispose());
         else d.material.dispose();
       }
+      if (d.texture) d.texture.dispose();
     }
     disposables = [];
     terrainSegments = [];
@@ -102,6 +111,9 @@ export const LanderMode = {
     scene = null;
     camera = null;
     lander = null;
+    mainCollider = null;
+    footColliderLeft = null;
+    footColliderRight = null;
   },
 
   update(dt) {
@@ -174,8 +186,9 @@ export const LanderMode = {
 // ---------- helpers ----------
 
 function buildTerrain() {
-  // Convert tblazevic's top-left-origin points into centered world coords,
-  // build a single line-strip geometry, and cache segment data for collision.
+  // Convert tblazevic's points (y-up from the screen bottom) into centered
+  // world coords, build a single line-strip geometry, and cache segment data
+  // for collision and pad-multiplier bookkeeping.
   const positions = [];
   for (let i = 0; i < terrainPoints.length; i++) {
     const [px, py] = terrainPoints[i];
@@ -185,12 +198,16 @@ function buildTerrain() {
     if (i > 0) {
       const [prevPx, prevPy] = terrainPoints[i - 1];
       const lx = prevPx - HALF_WIDTH, ly = prevPy - HALF_HEIGHT;
-      terrainSegments.push({
+      const slope = Math.abs(wy - ly);
+      const seg = {
         left:  new THREE.Vector2(lx, ly),
         right: new THREE.Vector2(wx, wy),
         // Slope ~0 means this is a valid landing pad (matches tblazevic).
-        slope: Math.abs(wy - ly)
-      });
+        slope,
+        multiplier: 1
+      };
+      if (slope < 0.001) seg.multiplier = rollMultiplier();
+      terrainSegments.push(seg);
     }
   }
   const geom = new THREE.BufferGeometry();
@@ -200,22 +217,80 @@ function buildTerrain() {
   scene.add(line);
   disposables.push({ geometry: geom, material: mat });
 
-  // TODO: also add invisible colliders / mark bonus pads with x2/x5 labels
+  // Bonus-pad labels: a small X2/X3/X5 sprite floating above each flat pad
+  // whose rolled multiplier is > 1.
+  for (const seg of terrainSegments) {
+    if (seg.multiplier > 1) spawnMultiplierLabel(seg);
+  }
+}
+
+function rollMultiplier() {
+  const total = PAD_MULTIPLIER_WEIGHTS.reduce((s, e) => s + e.weight, 0);
+  let r = Math.random() * total;
+  for (const entry of PAD_MULTIPLIER_WEIGHTS) {
+    r -= entry.weight;
+    if (r <= 0) return entry.value;
+  }
+  return 1;
+}
+
+function spawnMultiplierLabel(seg) {
+  const text = 'X' + seg.multiplier;
+  // Bigger multipliers get hotter colors so they pop against the terrain.
+  const color = seg.multiplier >= 5 ? '#ff5a3d'
+              : seg.multiplier >= 3 ? '#ffb84d'
+                                    : '#ffee66';
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = 'bold 44px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+  ctx.fillStyle = color;
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.LinearFilter;
+  const smat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+  const sprite = new THREE.Sprite(smat);
+  sprite.scale.set(24, 12, 1);
+  const cx = (seg.left.x + seg.right.x) / 2;
+  const cy = (seg.left.y + seg.right.y) / 2;
+  sprite.position.set(cx, cy + 14, 1);
+  scene.add(sprite);
+  disposables.push({ material: smat, texture: tex });
 }
 
 function buildLander() {
-  // Stub lander: white triangle-ish quad so you see something before you wire
-  // textures. Replace with a textured plane or a GLTF model as desired.
   lander = new THREE.Group();
+
+  // Textured sprite: crisp/retro pixel look via NearestFilter.
+  const tex = new THREE.TextureLoader().load('textures/lander.png');
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
   const geom = new THREE.PlaneGeometry(LANDER_SCALE, LANDER_SCALE);
-  const mat  = new THREE.MeshBasicMaterial({ color: 0xcccccc });
+  const mat  = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
   const mesh = new THREE.Mesh(geom, mat);
   lander.add(mesh);
-  scene.add(lander);
-  disposables.push({ geometry: geom, material: mat });
+  disposables.push({ geometry: geom, material: mat, texture: tex });
 
-  // TODO: replace with textured mesh using textures/lander.png
-  // TODO: add 3-circle colliders as child Object3Ds (mainScale, smallScale*2)
+  // Invisible collider anchors. Their world positions (which include the
+  // lander's rotation) are what we test against terrain segments.
+  mainCollider = new THREE.Object3D();
+  footColliderLeft = new THREE.Object3D();
+  footColliderRight = new THREE.Object3D();
+  footColliderLeft.position.set(-FOOT_COLLIDER_OFFSET_X, FOOT_COLLIDER_OFFSET_Y, 0);
+  footColliderRight.position.set( FOOT_COLLIDER_OFFSET_X, FOOT_COLLIDER_OFFSET_Y, 0);
+  lander.add(mainCollider, footColliderLeft, footColliderRight);
+
+  scene.add(lander);
 }
 
 function respawn() {
@@ -238,31 +313,82 @@ function checkCollisions() {
     resolveCrash('OUT OF BOUNDS');
     return;
   }
-  // TODO: 3-circle vs segment check from tblazevic (Main.js:terrainCheck).
-  //       For now, naive segment-vs-point check so the skeleton runs.
+
+  // 3-circle collision. Foot colliders are children of the lander Group, so
+  // their world positions reflect the lander's current rotation. The body
+  // collider sits at the lander's origin.
+  mainCollider.getWorldPosition(_mainWorld);
+  footColliderLeft.getWorldPosition(_leftWorld);
+  footColliderRight.getWorldPosition(_rightWorld);
+
+  let bodyHit = false;
+  let leftHitIdx = -1;
+  let rightHitIdx = -1;
+
   for (let i = 0; i < terrainSegments.length; i++) {
     const seg = terrainSegments[i];
-    if (lander.position.x < seg.left.x || lander.position.x > seg.right.x) continue;
-    const t = (lander.position.x - seg.left.x) / (seg.right.x - seg.left.x);
-    const groundY = seg.left.y + t * (seg.right.y - seg.left.y);
-    if (lander.position.y - LANDER_SCALE/2 <= groundY) {
-      evaluateLanding(seg, i);
-      return;
+    if (!bodyHit && circleHitsSegment(_mainWorld, MAIN_COLLIDER_SCALE, seg)) {
+      bodyHit = true;
     }
+    if (leftHitIdx < 0 && circleHitsSegment(_leftWorld, SMALL_COLLIDER_SCALE, seg)) {
+      leftHitIdx = i;
+    }
+    if (rightHitIdx < 0 && circleHitsSegment(_rightWorld, SMALL_COLLIDER_SCALE, seg)) {
+      rightHitIdx = i;
+    }
+  }
+
+  // Body-circle contact is always a crash — the hull has hit terrain.
+  if (bodyHit) {
+    resolveCrash('CRASHED ON UNEVEN TERRAIN');
+    return;
+  }
+
+  // Feet-first contact: evaluate as a landing attempt.
+  if (leftHitIdx >= 0 || rightHitIdx >= 0) {
+    const contactIdx = leftHitIdx >= 0 ? leftHitIdx : rightHitIdx;
+    const contactSeg = terrainSegments[contactIdx];
+    const bothFeetOnSamePad =
+      leftHitIdx >= 0 && rightHitIdx >= 0 && leftHitIdx === rightHitIdx;
+    evaluateLanding(contactSeg, contactIdx, bothFeetOnSamePad);
   }
 }
 
-function evaluateLanding(segment, segmentIndex) {
-  const speed2 = velX*velX + velY*velY;
-  const tooFast = speed2 > LANDING_VELOCITY_TOLERANCE * LANDING_VELOCITY_TOLERANCE;
-  const tooTilted = Math.abs(lander.rotation.z) > LANDING_ANGLE_TOLERANCE;
-  const unevenPad = segment.slope > 0.001;
+function circleHitsSegment(pt, radius, seg) {
+  // Closest point on segment [left→right] to pt, then squared-distance check.
+  const ax = seg.left.x,  ay = seg.left.y;
+  const bx = seg.right.x, by = seg.right.y;
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  let t = 0;
+  if (lenSq > 0) {
+    t = ((pt.x - ax) * dx + (pt.y - ay) * dy) / lenSq;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+  }
+  const cx = ax + t * dx, cy = ay + t * dy;
+  const ex = pt.x - cx, ey = pt.y - cy;
+  return (ex * ex + ey * ey) <= radius * radius;
+}
 
-  if (tooFast || tooTilted || unevenPad) {
+function evaluateLanding(segment, segmentIndex, bothFeetOnSamePad) {
+  const speed2 = velX * velX + velY * velY;
+  const tooFast    = speed2 > LANDING_VELOCITY_TOLERANCE * LANDING_VELOCITY_TOLERANCE;
+  const tooTilted  = Math.abs(lander.rotation.z) > LANDING_ANGLE_TOLERANCE;
+  const unevenPad  = segment.slope > 0.001;
+
+  // Too close to either edge of the landing pad — counts as a crash even when
+  // the lander is otherwise stable. Prevents half-on/half-off landings.
+  const edgeMargin = LANDER_SCALE * LANDING_EDGE_MARGIN_FRAC;
+  const tooCloseToEdge =
+    lander.position.x < segment.left.x  + edgeMargin ||
+    lander.position.x > segment.right.x - edgeMargin;
+
+  if (tooFast || tooTilted || unevenPad || !bothFeetOnSamePad || tooCloseToEdge) {
     const reason =
       tooFast   ? 'LANDING VELOCITY WAS TOO HIGH' :
       tooTilted ? 'LANDING ANGLE WAS TOO HIGH'    :
-                  'CRASHED ON UNEVEN TERRAIN';
+      unevenPad ? 'CRASHED ON UNEVEN TERRAIN'     :
+                  'TOO CLOSE TO EDGE OF TERRAIN';
     resolveCrash(reason);
   } else {
     resolveLanding(segment, segmentIndex);
@@ -271,15 +397,19 @@ function evaluateLanding(segment, segmentIndex) {
 
 function resolveLanding(segment, segmentIndex) {
   landingResolved = true;
+  const multiplier = segment.multiplier || 1;
+  const earned = SCORE_PER_LANDING * multiplier;
   updateState(s => {
     s.hasLanded = true;
     s.landingsCompleted += 1;
+    s.score += earned;
     s.lastLanding.x = lander.position.x;
     s.lastLanding.terrainSegmentIndex = segmentIndex;
     s.lastLanding.surfaceNormal = new THREE.Vector2(0, 1); // flat pad
   }, 'landed');
-  setCenterMessage('SUCCESSFULLY LANDED');
-  onLandedCallback({ segment, segmentIndex });
+  const suffix = multiplier > 1 ? `  X${multiplier} +${earned}` : '';
+  setCenterMessage('SUCCESSFULLY LANDED' + suffix);
+  onLandedCallback({ segment, segmentIndex, multiplier, earned });
 }
 
 function resolveCrash(reason) {

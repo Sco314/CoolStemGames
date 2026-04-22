@@ -21,8 +21,17 @@ export const ANGULAR_VELOCITY      = 90 * (Math.PI / 180);
 export const HORIZONTAL_DRAG_COEF  = 0.04;
 
 // ---------- Collision shapes (3-circle approximation) ----------
-export const MAIN_COLLIDER_SCALE  = LANDER_SCALE / 2;
-export const SMALL_COLLIDER_SCALE = LANDER_SCALE / 8;
+// The lander is approximated by three circles: one at the body center, and one
+// at each foot. The foot circles are offset from the lander origin so they
+// rotate with the craft; see LanderMode.buildLander().
+export const MAIN_COLLIDER_SCALE   = LANDER_SCALE / 2;
+export const SMALL_COLLIDER_SCALE  = LANDER_SCALE / 8;
+export const FOOT_COLLIDER_OFFSET_X = LANDER_SCALE * 0.45;  // outward from center
+export const FOOT_COLLIDER_OFFSET_Y = -LANDER_SCALE * 0.45; // below center
+
+// If the lander x is within this fraction of the lander scale of either
+// landing-pad edge, the landing is rejected as "TOO CLOSE TO EDGE".
+export const LANDING_EDGE_MARGIN_FRAC = 0.38;
 
 // ---------- Fuel / scoring ----------
 export const STARTING_FUEL          = 1000;
@@ -32,6 +41,16 @@ export const FUEL_ALERT_THRESHOLD   = 300;
 export const LANDING_ANGLE_TOLERANCE    = 6.7 * (Math.PI / 180);
 export const LANDING_VELOCITY_TOLERANCE = 5.0;
 export const SCORE_PER_LANDING = 100;
+
+// ---------- Bonus pad multipliers ----------
+// Weighted random outcomes rolled per flat pad at buildTerrain() time.
+// Higher weight = more common. Most pads stay at 1x.
+export const PAD_MULTIPLIER_WEIGHTS = [
+  { value: 1, weight: 70 },
+  { value: 2, weight: 18 },
+  { value: 3, weight: 8 },
+  { value: 5, weight: 4 }
+];
 
 // ---------- Camera / mode-switch ----------
 // In 2D mode we use an OrthographicCamera sized to the game area.
