@@ -1187,9 +1187,6 @@ Classroom-test feedback pass on Tier 1/2/3 feel. No new systems; everything is p
 - **CSS additions** — `.card-hint`, `.card-title-count`, `.sidebar-ach-grid`/`.sidebar-ach-emblem`, `.sidebar-gallery-grid`/`.sidebar-gallery-tile`, `.gallery-card .img-wrap`, `.toast-close`, `.boosts-ready`.
 - **JS additions** — `renderSidebarAchievements()` and `renderSidebarGallery()` render the same content into both desktop and mobile IDs. Hooked into `checkAchievements`, `commitN` (after gallery unlock), `openGalleryItem` (to clear NEW dots), boot, and both `onSignIn` success branches.
 
-### Future tiers (not in this release)
-
-See `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md` for the next-up features. Tiers 1 / 2 / 3 establish the mechanical loop (Tier 1), the identity loop (Tier 2), and the community + surprise loops (Tier 3); Tier 4 is planned for the educational / classroom layer (level-fact pop-ups + classroom challenge mode).
 ### v4.0 — Tier 4 (Level Facts + Classroom Challenge)
 
 - **Added** "Why Does This Matter?" level-up fact card (`#factCard`) with 25-entry `LEVEL_FACTS` catalog covering F(3)–F(21) plus F(34), F(55), F(89), F(144). "Learn more" link opens the Tier 3 Gallery to the matching entry when available.
@@ -1200,6 +1197,29 @@ See `fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md` for the next-up feat
 - **Hooks wired in:** `commitN` → `showLevelFact(Math.abs(newN))` on new high; `commitN` → `reportChallengeProgress(newN)` when `state.challenge.activeCode`; `onSignIn` → `resumeActiveChallenge()` in both the data-exists and first-time-sign-in branches.
 - **UI:** top-bar challenge banner, desktop + mobile 🏫 Join Challenge buttons in the Account card, admin-badged Classroom Challenge section in Settings with `data-admin="true"` gating.
 - **CSS:** `.fact-card` + `@keyframes factSlide` + `.fact-link`/`.fact-level`/`.fact-text` + mobile-bottom-full-width variant; `.challenge-banner` + `.ch-banner-main`/`.ch-banner-title`/`.ch-banner-code`/`.ch-banner-rank`/`.ch-banner-end`/`.ch-banner-leave` + mobile sizing.
+
+### v4.1 — Memory + crash-fix pass (Chromebook stability)
+
+Classroom-report: the tab was crashing on low-RAM Chromebooks after a few minutes of active play. This pass is Pass A (instrument) + minimal Pass B (mechanical fixes with the biggest expected relief) from the crash-fix plan. No gameplay changes — purely memory / GC / rAF hygiene.
+
+- **DPR clamp on low-memory devices.** Detects `navigator.deviceMemory ≤ 4` or `navigator.hardwareConcurrency ≤ 4` (typical classroom Chromebook) via a new `LOW_MEM_DEVICE` flag and caps `DPR` at **1.0** instead of 1.5. Across our three canvases this roughly halves the GPU backing-store footprint — the single biggest expected win.
+- **Skin-red stroke cached.** `applySkin()` now sets `state._negStrokeCol` once per skin apply. `drawSpiral` used to call `getComputedStyle(document.documentElement).getPropertyValue('--red')` every frame during celebration / smooth zoom (60×/s during a 5 s celebration at high n). The computed-style object is now bypassed entirely in the hot path.
+- **Orphan Mona Lisa `<img>` removed.** Tier 3 shipped the gallery entry for F(12) but left behind the pre-Tier-3 hidden `<img id="monaLisa">` at the top of `<body>` plus the `drawSpiral` block that drew it. That's gone now: one fewer external image fetch on boot, one fewer `getElementById` + alpha swap per paint at n ≥ 12.
+- **Toast overflow cap.** `TOAST_MAX = 3`; a new `appendCappedToast(container, toast)` helper drops the oldest live toast if a 4th fires. Before: reaching F(13) could stack 5–6 toasts (achievement + skin + gallery + level-fact + streak + boost) for 12 s each; that DOM balloon is gone.
+- **Confetti global cap + per-frame compaction.** `CONFETTI_GLOBAL_CAP = 300`; `launchConfetti` honors remaining headroom, and `animateConfetti` compacts dead particles out of the array every frame (they used to sit until ALL particles faded, so rapid n=9 clicks caused `confettiParticles` to grow without bound during active play).
+- **Engine rAF tear-down.** New `stopEngineLoop()`. The single `visibilitychange` listener now cancels the engine rAF on tab-hide and restarts it on show (plus still flushes `saveProgress`). A backgrounded tab no longer holds a throttled-but-alive rAF chain running the engine loop's early-returns forever.
+- **Memory diagnostic panel (admin only)** — new "Memory" section in the Settings overlay. Live readouts at 2 s cadence **only while the panel is open** (zero cost otherwise):
+  - `performance.memory.usedJSHeapSize` / `jsHeapSizeLimit` (Chrome-only)
+  - Total DOM node count
+  - Canvas backing-store bytes + DPR (shows `(low-mem)` when the clamp kicked in)
+  - Live `confettiParticles.length` / cap
+  - Live `#flowerLayer` children (flowers + smileys + golden moments)
+  - Live `#achievementToasts` children / `TOAST_MAX`
+  - Active rAF loops (`engine`, `celebration`, `nlDrag`, `frenzy`, `challenge`)
+  - Current `n` / `highestAbsN` / token balance
+- **Stress-test button** — fires 300 synthetic `tickInput(+1)` calls over ~3 s, then reports a before/after `Δ heap` below the live readouts. Use this to verify the clamp + caps are holding and to catch regressions in future PRs.
+
+No state shape changes; fully backward-compatible. No Firestore schema changes.
 
 ### Future tiers (not in this release)
 
