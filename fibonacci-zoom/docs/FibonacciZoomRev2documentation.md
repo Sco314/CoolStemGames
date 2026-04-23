@@ -1252,6 +1252,23 @@ After running this on the live site (signed in as the affected user), the next `
 `generatedName` continues to be write-once at first anonymous sign-in. The reporting user's stray `generatedName: "BrodyScott"` (introduced when they edited the Firebase Console) is harmless — the field never surfaces in UI; it's a permanent pseudonym record.
 
 No Firestore schema changes. No security-rules changes. Backward-compatible with all existing user documents.
+### v4.2 — Login-harden pass
+
+Classroom report after the move from the prior repo to `coolstemgames.com`: Google sign-in not working. Root cause was two-fold and both pieces are addressed in this release.
+
+**Root cause A (operator): Firebase Authorized Domains.** When a Firebase-backed app moves to a new host, the new hostnames must be added to the Firebase Auth "Authorized Domains" list before OAuth popups/redirects are accepted. Without this, the popup/redirect silently fails with `auth/unauthorized-domain`. **Operator checklist — do this once per environment:** Firebase Console → Authentication → Settings → Authorized domains → add `coolstemgames.com`, `www.coolstemgames.com`, and `coolstemgames.pages.dev`. Keep the default `localhost` and `fibonacci-zoom.firebaseapp.com` on the list. No redeploy required.
+
+**Root cause B (code): `signInWithPopup` silently fails on school Chromebooks.** Chrome's increasingly strict third-party cookie policy — combined with Google Workspace for Education's popup-blocker enterprise policies — means the popup opens, the user picks an account, the popup closes, and the `Promise` returned by `signInWithPopup` never resolves. To the classroom user it looks like "Sign in with Google does nothing." The pre-v4.2 code routed Android and iOS to `signInWithRedirect` but kept popup for everything else, which meant Chromebooks (our primary audience) got the broken path.
+
+**Fix: `signInWithRedirect`-first on every browser.**
+
+- `doSignIn()` now calls `currentUser.linkWithRedirect(provider)` (for anonymous users upgrading to Google) or `fbAuth.signInWithRedirect(provider)` (for sign-out-then-sign-in) unconditionally. The UA sniff (`isMobile`) is gone.
+- `getRedirectResult()` at init already existed; it now also routes `auth/credential-already-in-use` errors through the existing `handleLinkError` helper so the "this Google account is already attached to a different UID" case still transparently falls back to `fbAuth.signInWithCredential(cred)`. Pre-v4.2 that error arrived synchronously via `linkWithPopup`'s `.catch`; with redirect it arrives on the return visit via `getRedirectResult`.
+- Nothing else changes: `onAuthStateChanged`, `doSignOut`, `ADMIN_EMAILS`, the `FIREBASE_CONFIG.authDomain = 'fibonacci-zoom.firebaseapp.com'` value, and the `_headers` file are all unchanged.
+
+**What we verified and did NOT change.** `_headers` was audited for a `Content-Security-Policy` — there is none, so CSP is not blocking Firebase. `FIREBASE_CONFIG.authDomain` must stay as `fibonacci-zoom.firebaseapp.com`; that is the OAuth handler host, not the app host, and swapping it to `coolstemgames.com` would break the flow rather than fix it.
+
+**UX note.** Redirect-first replaces the popup with a full-page nav to Google and back. Mobile users (iOS/Android) already had this behavior; it is new for desktop. In exchange, the flow completes reliably on every classroom device.
 
 ### Future tiers (not in this release)
 
