@@ -5049,8 +5049,10 @@ function syncMobileAuth() {
     // Show/hide elements for anon vs Google
     document.getElementById('mobileSignInBtn').style.display     = isAnon ? '' : 'none';
     document.getElementById('mobileSignOutBtn').style.display     = isAnon ? 'none' : '';
-    document.getElementById('mobileGuestNameInput').style.display = isAnon ? '' : 'none';
-    if (isAnon) document.getElementById('mobileGuestNameInput').value = name;
+    // v4.3: show name-edit input for every signed-in user (mirrors the
+    // desktop change in onSignIn — Google-linked users had no rename UI).
+    document.getElementById('mobileGuestNameInput').style.display = '';
+    document.getElementById('mobileGuestNameInput').value = name;
   } else {
     document.getElementById('mobileSignedOut').style.display  = 'block';
     document.getElementById('mobileSignedIn').style.display   = 'none';
@@ -5356,15 +5358,28 @@ function initFirebase() {
       const input = document.getElementById(inputId);
       if (!input) return;
       input.addEventListener('change', async () => {
-        if (!currentUser || !currentUser.isAnonymous) return;
+        // v4.3: was anonymous-only — Google-linked users had no in-app
+        // way to rename, which forced one user into editing Firestore by
+        // hand. Now any signed-in user can edit.
+        if (!currentUser) return;
         const name = input.value.trim() || 'Guest' + generateAnimalName();
         await currentUser.updateProfile({ displayName: name });
+        // v4.3: write displayName directly to Firestore. Used to
+        // piggyback on debouncedSaveProgress(), which made displayName
+        // part of the progress-save payload — that payload kept
+        // overwriting Firestore from Firebase Auth on every 2 s tick
+        // and clobbered out-of-band edits.
+        try {
+          await fbDb.collection('scores').doc(currentUser.uid)
+            .set({ displayName: name }, { merge: true });
+        } catch (err) {
+          console.error('❌ Error saving display name:', err.message);
+        }
         // Sync display
         document.getElementById('userName').textContent = name;
         document.getElementById('mobileUserName').textContent = name;
         updateMobileAccountBtn();
-        debouncedSaveProgress();
-        console.log('✅ Guest name set:', name);
+        console.log('✅ Display name set:', name);
       });
     }
     setupGuestNameInput('guestNameInput');
@@ -5405,6 +5420,16 @@ async function onSignIn(user) {
   if (!isAnon && user.displayName && user.displayName.startsWith('Guest') && user.displayName.length > 5) {
     const stripped = user.displayName.slice(5);
     await user.updateProfile({ displayName: stripped });
+    // v4.3: also propagate the stripped name to Firestore so the
+    // leaderboard reflects it immediately. Pre-v4.3 this used to
+    // happen on the next progress-save tick (which always wrote
+    // displayName from Auth); now identity writes are dedicated.
+    try {
+      await fbDb.collection('scores').doc(user.uid)
+        .set({ displayName: stripped }, { merge: true });
+    } catch (err) {
+      console.error('❌ Error propagating stripped name:', err.message);
+    }
     console.log('✅ Upgraded name: Guest' + stripped + ' → ' + stripped);
   }
 
@@ -5415,8 +5440,11 @@ async function onSignIn(user) {
   // Show/hide elements based on anonymous vs Google
   document.getElementById('signInBtn').style.display     = isAnon ? '' : 'none';
   document.getElementById('signOutBtn').style.display     = isAnon ? 'none' : '';
-  document.getElementById('guestNameInput').style.display = isAnon ? '' : 'none';
-  if (isAnon) document.getElementById('guestNameInput').value = displayName;
+  // v4.3: show name-edit input for every signed-in user (used to be
+  // anonymous-only, leaving Google-linked users with no in-app rename
+  // path). Pre-fill with whatever displayName resolved to above.
+  document.getElementById('guestNameInput').style.display = '';
+  document.getElementById('guestNameInput').value = displayName;
 
   // Admin check (anonymous users never admin)
   isAdmin = !isAnon && ADMIN_EMAILS.includes((user.email || '').toLowerCase());
@@ -5433,6 +5461,27 @@ async function onSignIn(user) {
     if (doc.exists) {
       const data = doc.data();
       userBestAbsN = data.absN || 0;
+
+      // v4.3: Firestore is the durable source of truth for the user's
+      // chosen displayName (Firebase Auth's displayName can drift — Auth
+      // is per-device session state). If Firestore has a different name,
+      // push it back into Auth and update every UI surface so the user
+      // sees their saved name immediately on every device.
+      if (data.displayName && data.displayName !== user.displayName) {
+        try {
+          await user.updateProfile({ displayName: data.displayName });
+          document.getElementById('userName').textContent = data.displayName;
+          const mn = document.getElementById('mobileUserName');
+          if (mn) mn.textContent = data.displayName;
+          const gi = document.getElementById('guestNameInput');
+          if (gi) gi.value = data.displayName;
+          const mgi = document.getElementById('mobileGuestNameInput');
+          if (mgi) mgi.value = data.displayName;
+          console.log('✅ Hydrated displayName from Firestore:', data.displayName);
+        } catch (err) {
+          console.error('❌ Error hydrating displayName:', err.message);
+        }
+      }
 
       // v2.0 Tier 1 — restore boost tokens, upgrades, and engine state
       state.boostTokens         = data.boostTokens         ?? 0;
@@ -5637,7 +5686,10 @@ async function maybeSaveScore(n) {
       // v4.0 Tier 4 fields
       factsShown:    state.factsShown    || {},
       suppressFacts: !!state.suppressFacts,
-      displayName: currentUser.displayName || currentUser.email || 'Guest',
+      // v4.3: displayName no longer written here — it's owned by the name-
+      // edit handler (setupGuestNameInput) and onSignIn hydration. Writing
+      // it on every score save was the mechanism that clobbered out-of-
+      // band displayName edits within ~2 seconds of play.
       photoURL:    currentUser.photoURL    || '',
       uid:         currentUser.uid,
       updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
@@ -5701,8 +5753,12 @@ async function saveProgress() {
       // v4.0 Tier 4 fields
       factsShown:    state.factsShown    || {},
       suppressFacts: !!state.suppressFacts,
-      // Identity
-      displayName: currentUser.displayName || currentUser.email || 'Guest',
+      // v4.3: displayName removed from the progress-save payload. It used
+      // to be re-pushed to Firestore from Firebase Auth on every ~2 s
+      // debounced tick, which silently clobbered any direct Firestore
+      // edit (e.g. via the Firebase Console) within seconds. Identity is
+      // now owned by setupGuestNameInput (user-initiated edits) and by
+      // onSignIn hydration (sign-in time).
       photoURL:    currentUser.photoURL    || '',
       uid:         currentUser.uid,
       updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),

@@ -1221,6 +1221,38 @@ Classroom-report: the tab was crashing on low-RAM Chromebooks after a few minute
 
 No state shape changes; fully backward-compatible. No Firestore schema changes.
 
+### v4.3 — `displayName` persistence fix
+
+Classroom report: a user tried to rename their account to "BrodyScott" by editing the `scores/{uid}` document directly in the Firebase Console. After every save, the field reverted to their previous AnimalNoun# pseudonym ("CosmicCobra98") within seconds. They tried clearing Chrome browsing data on the Chromebook and re-editing — same result.
+
+**Root cause.** `displayName` lives in two places: Firebase Auth (`currentUser.displayName`) and the Firestore `scores/{uid}` document. Pre-v4.3, both `saveProgress()` (debounced ~2 s during play) and `maybeSaveScore()` (on each new high) wrote `displayName: currentUser.displayName || ...` with `{ merge: true }`. Editing Firestore directly never touched Firebase Auth, so the next debounced tick re-pushed Auth's stale value back into Firestore — silently clobbering the edit.
+
+A second issue surfaced in the same investigation: the in-app rename input was anonymous-only. The handler in `setupGuestNameInput` had `if (!currentUser.isAnonymous) return;` and `onSignIn` toggled the input to `display:none` for non-anonymous users. Once a user linked their anonymous account to Google (the Guest-prefix-stripping path), they had no in-app way to change their name — which is exactly what pushed the reporting user to edit Firestore by hand in the first place.
+
+**Fix — four parts in `fibonacci-zoom/index.html`.**
+
+- **Part A.** Removed `displayName` from the payload of `saveProgress()` and `maybeSaveScore()`. Score and progress saves no longer touch identity fields. `photoURL` and `uid` writes stay (those follow Auth cleanly — no in-app edit path).
+
+- **Part B.** `setupGuestNameInput` now writes `displayName` directly to Firestore via `fbDb.collection('scores').doc(currentUser.uid).set({ displayName: name }, { merge: true })`, in addition to the existing `currentUser.updateProfile({ displayName: name })`. The previous design relied on `debouncedSaveProgress()` to back-propagate the name into Firestore through the progress-save payload — that coupling is gone.
+
+- **Part C.** Dropped the `isAnonymous` guard in `setupGuestNameInput` and removed the input-hiding toggles in `onSignIn` (desktop sidebar) and `syncMobileAuth` (mobile sheet). Every signed-in user — anonymous or Google-linked — now sees a working name-edit input pre-filled with their current name.
+
+- **Part D.** `onSignIn` now hydrates Firestore's `displayName` back into Firebase Auth on every sign-in: if the loaded `data.displayName` differs from `user.displayName`, it calls `updateProfile()` to push the Firestore value into Auth and refreshes every UI surface (`#userName`, `#mobileUserName`, `#guestNameInput`, `#mobileGuestNameInput`). This makes Firestore the durable source of truth for user-edited names, so a rename on Device A is reflected on Device B at next sign-in. Additionally, the Guest-prefix-strip path (anonymous → Google upgrade) now writes the stripped name to Firestore immediately, instead of waiting for the next progress tick to propagate it.
+
+**Operator one-shot fix for users hit by the pre-v4.3 bug.** Anyone whose Firestore `displayName` got reset can recover with one DevTools console line, no admin tooling required:
+
+```js
+await firebase.auth().currentUser.updateProfile({ displayName: "DesiredName" });
+```
+
+After running this on the live site (signed in as the affected user), the next `saveProgress` tick will sync Firestore to the new value via the user-edit handler. With v4.3 deployed, simply typing the desired name into the Account card field on the live site is sufficient — the explicit Firestore write in `setupGuestNameInput` lands the change durably.
+
+**What was audited and NOT changed.** Two other collections also write `displayName` (`weeklyScores/{week}/entries/{uid}` for the weekly leaderboard, and `challenges/{code}/participants/{uid}` for classroom challenge participants). Both are denormalized leaderboard caches that read from `currentUser.displayName` (Firebase Auth). With Auth now reliably reflecting the user's chosen name (via Part D hydration), these writes propagate correct values without any change to those code paths.
+
+`generatedName` continues to be write-once at first anonymous sign-in. The reporting user's stray `generatedName: "BrodyScott"` (introduced when they edited the Firebase Console) is harmless — the field never surfaces in UI; it's a permanent pseudonym record.
+
+No Firestore schema changes. No security-rules changes. Backward-compatible with all existing user documents.
+
 ### Future tiers (not in this release)
 
 The Tier 4 source plan (`fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md`) closes out the planned four-tier revision arc. Tiers 1/2/3/4 together deliver:
