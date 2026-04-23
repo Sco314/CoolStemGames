@@ -58,8 +58,12 @@ body.in-transition #letterbox-bottom {
 
 .label { opacity: 0.8; min-width: 70px; }
 
-.alert { color: #ff5050; animation: blink 0.8s steps(2) infinite; }
-@keyframes blink { 50% { opacity: 0.3; } }
+/* Fuel alert. Uses both a color and a leading glyph so the warning reads on
+ * colorblind-unsafe palettes (red/green confusion), satisfying the Phase-7
+ * accessibility pass. */
+.alert { color: #ffb84d; animation: blink 0.8s steps(2) infinite; }
+.alert::before { content: "⚠ "; margin-right: 2px; }
+@keyframes blink { 50% { opacity: 0.35; } }
 
 #hud-center {
   position: absolute;
@@ -241,4 +245,117 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 .toast .toast-desc {
   font-size: 13px;
   opacity: 0.75;
+}
+
+/* ---- Preload overlay (Phase 7) ---- */
+#preload[hidden] { display: none !important; }
+#preload {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #04060e;
+  color: #ffee88;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Courier New", Courier, monospace;
+  letter-spacing: 4px;
+}
+.preload-inner { text-align: center; min-width: 280px; }
+.preload-title { font-size: 36px; letter-spacing: 8px; margin-bottom: 24px; }
+.preload-bar-wrap {
+  height: 8px;
+  background: rgba(255, 238, 136, 0.18);
+  border: 1px solid rgba(255, 238, 136, 0.5);
+  overflow: hidden;
+  margin: 0 auto;
+  width: 280px;
+}
+#preload-bar {
+  height: 100%;
+  width: 0%;
+  background: #ffee88;
+  transition: width 0.18s ease;
+}
+.preload-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 10px;
+  width: 280px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---- Mobile touch controls (Phase 7) ----
+ * Hidden by default. Touch.js adds body.touch on touch-capable devices;
+ * the body.mode-* classes (set by HUD.js) pick which overlay shows. */
+.touch-controls {
+  position: fixed;
+  bottom: 20px;
+  z-index: 45;
+  display: none;
+  pointer-events: none;       /* children opt in */
+}
+body.touch.mode-lander #touch-lander { display: flex; left: 0; right: 0; justify-content: space-between; padding: 0 24px; }
+body.touch.mode-walk   #touch-walk   { display: flex; left: 0; right: 0; justify-content: space-between; padding: 0 24px; align-items: flex-end; }
+
+.touch-btn {
+  pointer-events: auto;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 238, 136, 0.7);
+  background: rgba(10, 15, 25, 0.6);
+  color: #ffee88;
+  font-family: inherit;
+  font-size: 22px;
+  letter-spacing: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.touch-btn.thrust {
+  width: 96px;
+  height: 96px;
+  font-size: 28px;
+  border-color: rgba(255, 150, 60, 0.9);
+  color: #ffcc88;
+}
+.touch-btn.pressed { background: rgba(255, 238, 136, 0.25); }
+
+/* Walk-mode joystick */
+#touch-pad {
+  pointer-events: auto;
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 238, 136, 0.55);
+  background: rgba(10, 15, 25, 0.5);
+  touch-action: none;
+}
+#touch-thumb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin-left: -28px;
+  margin-top: -28px;
+  border-radius: 50%;
+  background: rgba(255, 238, 136, 0.45);
+  border: 2px solid rgba(255, 238, 136, 0.85);
+  transition: transform 0.05s linear;
+  pointer-events: none;
+}
+
+/* ---- Accessibility focus ring on overlay buttons ---- */
+.overlay button:focus-visible {
+  outline: 2px solid #66ff88;
+  outline-offset: 3px;
 }

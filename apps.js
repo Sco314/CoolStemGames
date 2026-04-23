@@ -14,6 +14,13 @@ window.COOL_STEM_APPS = [
     external: true,
   },
   {
+    title: "Moonlander",
+    sub: "Land soft, explore the moon",
+    href: "/moonlander/",
+    image: "/link-images/moonlander.svg",
+    bg: "radial-gradient(circle at 50% 40%, #1a2750 0%, #04060f 80%)",
+  },
+  {
     title: "Collatz Cascade",
     sub: "Explore the 3n+1 conjecture",
     href: "/collatz-cascade/",

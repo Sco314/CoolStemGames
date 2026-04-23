@@ -12,6 +12,7 @@
 // particles are hidden via mesh.visible = false.
 
 import * as THREE from 'three';
+import { getQualityFactor } from './Quality.js';
 import {
   GRAVITY,
   CONE_PS_MAX_PARTICLES, CONE_PS_PER_SEC_MIN, CONE_PS_PER_SEC_MAX,
@@ -97,9 +98,11 @@ export class ParticleSystemCone {
   }
 
   update(dt) {
-    // Spawn new particles based on emit rate (only while emitting).
+    // Spawn new particles based on emit rate (only while emitting). Adaptive
+    // quality scales the rate so low-FPS devices emit fewer per second.
     if (this.emitting) {
-      const rate = rand(CONE_PS_PER_SEC_MIN, CONE_PS_PER_SEC_MAX);
+      const qf = getQualityFactor();
+      const rate = rand(CONE_PS_PER_SEC_MIN, CONE_PS_PER_SEC_MAX) * qf;
       this._emitBacklog += rate * dt;
       const toSpawn = Math.floor(this._emitBacklog);
       this._emitBacklog -= toSpawn;

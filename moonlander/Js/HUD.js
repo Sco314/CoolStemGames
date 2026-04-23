@@ -160,6 +160,8 @@ export function showMainMenu({ onStart, onSettings }) {
   settingsCb = onSettings || (() => {});
   renderHighScores();
   overlay.mainMenu.hidden = false;
+  // Autofocus the primary action so Enter works without touching the mouse.
+  requestAnimationFrame(() => overlay.btnStart.focus());
 }
 export function hideMainMenu() { overlay.mainMenu.hidden = true; }
 
@@ -171,6 +173,7 @@ export function showGameOver({ score, level, landings, rank, onRestart, onMenu }
   restartCb = onRestart || (() => {});
   menuCb    = onMenu    || (() => {});
   overlay.gameOver.hidden = false;
+  requestAnimationFrame(() => overlay.btnRestart.focus());
 }
 export function hideGameOver() { overlay.gameOver.hidden = true; }
 
@@ -178,6 +181,7 @@ export function showSettings({ onClose } = {}) {
   closeSettingsCb = onClose || (() => { hideSettings(); });
   applySettings(GameState.settings);
   overlay.settings.hidden = false;
+  requestAnimationFrame(() => overlay.btnCloseSettings.focus());
 }
 export function hideSettings() { overlay.settings.hidden = true; }
 

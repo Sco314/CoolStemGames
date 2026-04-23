@@ -23,6 +23,19 @@ export const Input = {
   clearFrame() { /* reserved — call at end of frame if we add more edge state */ }
 };
 
+/**
+ * Inject a synthetic key state, used by the touch-controls module so mobile
+ * buttons flow through the same Input queries the desktop keyboard uses.
+ */
+export function setSyntheticKey(key, isDown) {
+  if (isDown) {
+    if (!down.has(key)) pressedThisFrame.add(key);
+    down.add(key);
+  } else {
+    down.delete(key);
+  }
+}
+
 export function initInput() {
   window.addEventListener('keydown', (e) => {
     if (!down.has(e.key)) pressedThisFrame.add(e.key);

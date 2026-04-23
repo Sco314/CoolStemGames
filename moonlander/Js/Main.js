@@ -35,6 +35,9 @@ import { LanderMode }     from './modes/LanderMode.js';
 import { WalkMode }       from './modes/WalkMode.js';
 import { TransitionMode } from './modes/TransitionMode.js';
 import { MainMenuMode }   from './modes/MainMenuMode.js';
+import { sampleFps }      from './Quality.js';
+import { preloadAssets }  from './Preload.js';
+import { initTouchControls } from './Touch.js';
 
 let renderer, canvas;
 let currentMode = null;
@@ -70,28 +73,67 @@ function init() {
   initSound();
   loadSave();
   initHUD();
+  initTouchControls();
 
-  // --- boot into the main menu. LanderMode starts when the user clicks START. ---
-  openMainMenu();
+  // --- preload → main menu ---
+  // Block the boot behind a progress bar until every texture/audio file has
+  // been prefetched. Missing assets still advance the bar so we never hang.
+  preloadAssets().then(() => {
+    const overlay = document.getElementById('preload');
+    if (overlay) overlay.hidden = true;
+    openMainMenu();
+  });
 }
 
 // ---------- frame loop ----------
+let recovering = false;
+
 function animate() {
   requestAnimationFrame(animate);
   const now = performance.now();
   const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
 
+  sampleFps(dt);
+
   if (GameState.mode !== MODE.PAUSED && currentMode) {
-    // Only advance gameplay time while actually playing (menu/game-over are
-    // their own modes and don't accumulate run time).
     if (GameState.mode === MODE.LANDER || GameState.mode === MODE.WALK || GameState.mode === MODE.TRANSITION) {
       GameState.timeElapsed += dt;
     }
-    currentMode.update(dt);
-    currentMode.render(renderer);
+    // Error boundary: if a mode's update/render throws, log it and drop back
+    // to the main menu instead of freezing the frame loop.
+    try {
+      currentMode.update(dt);
+      currentMode.render(renderer);
+    } catch (err) {
+      handleFrameError(err);
+    }
   }
-  renderHUDFrame();
+
+  try {
+    renderHUDFrame();
+  } catch (err) {
+    // A HUD error shouldn't kill the game; log and carry on.
+    console.error('[HUD error]', err);
+  }
+}
+
+function handleFrameError(err) {
+  console.error('[frame error]', err);
+  if (recovering) return;                 // avoid re-entering the recovery path
+  recovering = true;
+  try {
+    if (currentMode && currentMode !== MainMenuMode) {
+      // Best-effort cleanup of whatever mode was running.
+      try { currentMode.exit?.(); } catch (_) { /* swallow */ }
+    }
+    openMainMenu();
+  } catch (fatal) {
+    console.error('[fatal] main-menu recovery failed', fatal);
+  } finally {
+    // Let the next frame reset the guard after recovery completes.
+    setTimeout(() => { recovering = false; }, 200);
+  }
 }
 
 // ---------- mode switching ----------

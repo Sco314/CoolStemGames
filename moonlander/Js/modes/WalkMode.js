@@ -33,6 +33,7 @@ import { Input } from '../Input.js';
 import { setCenterMessage, showComms, showAchievementToast } from '../HUD.js';
 import { Sounds } from '../Sound.js';
 import { effectiveFuelGain } from '../Progression.js';
+import { getQuality, onQualityChange } from '../Quality.js';
 
 let scene = null;
 let camera = null;
@@ -59,6 +60,7 @@ let scripted = null;
 let onMouseMove = null;
 let onPointerLockChange = null;
 let onCanvasClick = null;
+let unsubQuality = null;
 
 export const WalkMode = {
   enter(context, callbacks = {}) {
@@ -68,7 +70,13 @@ export const WalkMode = {
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0a1a);
-    scene.fog = new THREE.Fog(0x0a0a1a, 60, 320);
+    // Fog is cosmetic but adds a depth-cue shader cost; the adaptive quality
+    // controller toggles it off when FPS tanks.
+    if (getQuality() !== 'low') scene.fog = new THREE.Fog(0x0a0a1a, 60, 320);
+    unsubQuality = onQualityChange(q => {
+      if (!scene) return;
+      scene.fog = (q === 'low') ? null : new THREE.Fog(0x0a0a1a, 60, 320);
+    });
 
     const aspect = window.innerWidth / window.innerHeight;
     camera = new THREE.PerspectiveCamera(PERSP_FOV, aspect, PERSP_NEAR, PERSP_FAR);
@@ -96,6 +104,7 @@ export const WalkMode = {
   exit() {
     console.log('◀ WalkMode.exit');
     unbindMouse();
+    if (unsubQuality) { unsubQuality(); unsubQuality = null; }
     if (document.pointerLockElement) document.exitPointerLock();
 
     for (const d of disposables) {
