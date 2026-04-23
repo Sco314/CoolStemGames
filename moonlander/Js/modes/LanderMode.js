@@ -5,7 +5,6 @@
 // whose position/rotation we can hand off seamlessly to the walk mode.
 //
 // STUBBED AREAS (marked with TODO) are left as clean insertion points:
-//   - Particle systems (reuse Particles.js stubs)
 //   - Starfield background
 //
 // The jerk-based thrust physics from tblazevic IS implemented below — that's
@@ -14,20 +13,27 @@
 import * as THREE from 'three';
 import {
   GAME_WIDTH, GAME_HEIGHT, HALF_WIDTH, HALF_HEIGHT,
-  LANDER_SCALE, GRAVITY, THRUSTER_ACCEL_MAX, THRUSTER_JERK,
+  LANDER_SCALE, THRUSTER_ACCEL_MAX, THRUSTER_JERK,
   ACCEL_FALLOFF_MULT, ANGULAR_VELOCITY, HORIZONTAL_DRAG_COEF,
   FUEL_CONSUMPTION_MIN, FUEL_CONSUMPTION_MAX, FUEL_ALERT_THRESHOLD,
-  LANDING_ANGLE_TOLERANCE, LANDING_VELOCITY_TOLERANCE,
+  LANDING_ANGLE_TOLERANCE,
   MAIN_COLLIDER_SCALE, SMALL_COLLIDER_SCALE,
   FOOT_COLLIDER_OFFSET_X, FOOT_COLLIDER_OFFSET_Y,
-  LANDING_EDGE_MARGIN_FRAC, PAD_MULTIPLIER_WEIGHTS, SCORE_PER_LANDING,
+  PAD_MULTIPLIER_WEIGHTS, SCORE_PER_LANDING,
+  CAMERA_ZOOM_ALTITUDE, CAMERA_ZOOM_FACTOR,
+  PERFECT_FUEL_FRAC, PERFECT_VELOCITY_MAX, PERFECT_CENTER_FRAC, PERFECT_ANGLE_MAX,
   ORTHO_NEAR, ORTHO_FAR, MODE
 } from '../Constants.js';
-import { GameState, update as updateState, notify } from '../GameState.js';
+import { GameState, update as updateState, notify, unlockAchievement } from '../GameState.js';
 import { Input } from '../Input.js';
-import { setLanderTelemetry, setCenterMessage } from '../HUD.js';
+import { setLanderTelemetry, setCenterMessage, showAchievementToast } from '../HUD.js';
 import { points as terrainPoints } from '../TerrainData.js';
 import { Sounds } from '../Sound.js';
+import { ParticleSystemCone, ParticleSystemExplosion } from '../Particles.js';
+import {
+  effectiveGravity, effectiveLandingVelocityTolerance, effectiveEdgeMarginFrac,
+  effectiveSpawnVelocity
+} from '../Progression.js';
 
 // ----- mode-local state (reset in enter(), cleared in exit()) -----
 let scene = null;
@@ -38,6 +44,8 @@ let footColliderLeft = null;     // child Object3D at left foot
 let footColliderRight = null;    // child Object3D at right foot
 let terrainSegments = [];        // [{ left: Vec2, right: Vec2, slope: number, multiplier: number }]
 let disposables = [];            // geometries/materials/textures to dispose on exit
+let thrusterParticles = null;    // ParticleSystemCone — exhaust trail
+let explosionParticles = null;   // ParticleSystemExplosion — crash burst
 
 // Scratch vectors reused each frame — avoids per-frame allocations.
 const _mainWorld  = new THREE.Vector3();
@@ -80,7 +88,17 @@ export const LanderMode = {
     buildTerrain();
     buildLander();
     // TODO: buildStarfield();  — port tblazevic createStars()
-    // TODO: initParticles();   — thruster cone + explosion (see Particles.js stub)
+
+    // Particle systems: exhaust cone tracks the lander, explosion fires on crash.
+    thrusterParticles  = new ParticleSystemCone(scene, lander);
+    explosionParticles = new ParticleSystemExplosion(scene, lander);
+    disposables.push({ dispose: () => thrusterParticles?.dispose() });
+    disposables.push({ dispose: () => explosionParticles?.dispose() });
+
+    // Reset zoom state in case a previous life left the camera zoomed in.
+    camera.zoom = 1;
+    camera.position.set(0, 0, 100);
+    camera.updateProjectionMatrix();
 
     // Initial spawn
     respawn();
@@ -93,7 +111,7 @@ export const LanderMode = {
     console.log('◀ LanderMode.exit');
     Sounds.rocket?.stop();
 
-    // Dispose every geometry, material, and texture we created.
+    // Dispose every geometry, material, texture, and pooled subsystem.
     for (const d of disposables) {
       if (d.geometry) d.geometry.dispose();
       if (d.material) {
@@ -101,9 +119,12 @@ export const LanderMode = {
         else d.material.dispose();
       }
       if (d.texture) d.texture.dispose();
+      if (typeof d.dispose === 'function') d.dispose();
     }
     disposables = [];
     terrainSegments = [];
+    thrusterParticles = null;
+    explosionParticles = null;
 
     // Detach lander from scene but DO NOT dispose its meshes — the transition
     // and walk mode may want to render the parked lander visually. Main.js
@@ -117,7 +138,14 @@ export const LanderMode = {
   },
 
   update(dt) {
-    if (landingResolved) return;
+    // Particles keep animating across landingResolved so the crash explosion
+    // and any in-flight exhaust can finish their lifetime visibly.
+    if (landingResolved) {
+      if (thrusterParticles) thrusterParticles.emitting = false;
+      thrusterParticles?.update(dt);
+      explosionParticles?.update(dt);
+      return;
+    }
 
     // --- rotation ---
     if (Input.isDown('ArrowLeft'))  lander.rotation.z += ANGULAR_VELOCITY * dt;
@@ -142,6 +170,8 @@ export const LanderMode = {
       currentAcceleration = Math.max(0, currentAcceleration - THRUSTER_JERK * ACCEL_FALLOFF_MULT * dt);
       Sounds.rocket?.stop();
     }
+    // Exhaust streams while the player is actively burning fuel.
+    if (thrusterParticles) thrusterParticles.emitting = wantThrust;
 
     // --- integrate ---
     // Forward vector points "up" from the lander, rotated by lander.rotation.z.
@@ -149,7 +179,7 @@ export const LanderMode = {
     const fwdX = -Math.sin(angle);
     const fwdY =  Math.cos(angle);
 
-    velY += -GRAVITY * dt;
+    velY += -effectiveGravity(GameState.level) * dt;
     velX += fwdX * currentAcceleration * dt;
     velY += fwdY * currentAcceleration * dt;
     velX += -velX * HORIZONTAL_DRAG_COEF * dt;
@@ -168,6 +198,13 @@ export const LanderMode = {
       vSpeed:  -velY,
       angleDeg: -angle * 180 / Math.PI
     });
+
+    // --- camera zoom near ground (final-approach drama) ---
+    updateCameraZoom(altitude);
+
+    // --- particle integration ---
+    thrusterParticles?.update(dt);
+    explosionParticles?.update(dt);
 
     // Notify subscribers for per-second-ish updates (score/fuel) less frequently.
     // For now, notify once per update — cheap enough at 60fps with small listeners.
@@ -294,7 +331,7 @@ function buildLander() {
 }
 
 function respawn() {
-  velX = (Math.random() - 0.5) * 60;
+  velX = (Math.random() - 0.5) * effectiveSpawnVelocity(GameState.level);
   velY = 0;
   currentAcceleration = 0;
   lander.position.set(
@@ -371,14 +408,16 @@ function circleHitsSegment(pt, radius, seg) {
 }
 
 function evaluateLanding(segment, segmentIndex, bothFeetOnSamePad) {
-  const speed2 = velX * velX + velY * velY;
-  const tooFast    = speed2 > LANDING_VELOCITY_TOLERANCE * LANDING_VELOCITY_TOLERANCE;
+  const level    = GameState.level;
+  const speedMax = effectiveLandingVelocityTolerance(level);
+  const speed2   = velX * velX + velY * velY;
+  const tooFast    = speed2 > speedMax * speedMax;
   const tooTilted  = Math.abs(lander.rotation.z) > LANDING_ANGLE_TOLERANCE;
   const unevenPad  = segment.slope > 0.001;
 
   // Too close to either edge of the landing pad — counts as a crash even when
   // the lander is otherwise stable. Prevents half-on/half-off landings.
-  const edgeMargin = LANDER_SCALE * LANDING_EDGE_MARGIN_FRAC;
+  const edgeMargin = LANDER_SCALE * effectiveEdgeMarginFrac(level);
   const tooCloseToEdge =
     lander.position.x < segment.left.x  + edgeMargin ||
     lander.position.x > segment.right.x - edgeMargin;
@@ -399,14 +438,36 @@ function resolveLanding(segment, segmentIndex) {
   landingResolved = true;
   const multiplier = segment.multiplier || 1;
   const earned = SCORE_PER_LANDING * multiplier;
+  // Snapshot fuel now — the hot-swap achievement compares it to post-refuel.
+  const fuelAtLanding = GameState.fuel.current;
+
+  // Perfect-landing check has to read the pre-mutation state to evaluate the
+  // "full fuel" condition sensibly.
+  const padCenter = (segment.left.x + segment.right.x) / 2;
+  const padHalf   = (segment.right.x - segment.left.x) / 2;
+  const perfect =
+    multiplier > 1 &&
+    fuelAtLanding >= GameState.fuel.capacity * PERFECT_FUEL_FRAC &&
+    (velX * velX + velY * velY) <= PERFECT_VELOCITY_MAX * PERFECT_VELOCITY_MAX &&
+    Math.abs(lander.position.x - padCenter) <= padHalf * PERFECT_CENTER_FRAC &&
+    Math.abs(lander.rotation.z) <= PERFECT_ANGLE_MAX;
+
   updateState(s => {
     s.hasLanded = true;
     s.landingsCompleted += 1;
+    s.level += 1;
     s.score += earned;
     s.lastLanding.x = lander.position.x;
     s.lastLanding.terrainSegmentIndex = segmentIndex;
-    s.lastLanding.surfaceNormal = new THREE.Vector2(0, 1); // flat pad
+    s.lastLanding.surfaceNormal = new THREE.Vector2(0, 1);
+    s.lastLanding.fuelAtLanding = fuelAtLanding;
   }, 'landed');
+
+  // Achievement triggers.
+  showAchievementToast(unlockAchievement('first-landing'));
+  if (perfect)                              showAchievementToast(unlockAchievement('perfect-landing'));
+  if (GameState.landingsCompleted >= 10)    showAchievementToast(unlockAchievement('marathon'));
+
   const suffix = multiplier > 1 ? `  X${multiplier} +${earned}` : '';
   setCenterMessage('SUCCESSFULLY LANDED' + suffix);
   onLandedCallback({ segment, segmentIndex, multiplier, earned });
@@ -414,11 +475,33 @@ function resolveLanding(segment, segmentIndex) {
 
 function resolveCrash(reason) {
   landingResolved = true;
+  Sounds.rocket?.stop();
   Sounds.crash?.play();
-  // TODO: trigger explosion particle system
+  if (thrusterParticles) thrusterParticles.emitting = false;
+  explosionParticles?.emit();
+  // Hide the wreck so the explosion reads as "the lander is gone". A fresh
+  // lander mesh is built when the next life enter()s.
+  lander.visible = false;
   updateState(s => { s.hasLanded = false; }, 'crashed');
   setCenterMessage(reason);
   onCrashedCallback({ reason });
+}
+
+function updateCameraZoom(altitude) {
+  // Below the threshold, snap to a higher zoom and follow the lander; above,
+  // restore the wide ortho framing so the player can plan their descent.
+  if (altitude < CAMERA_ZOOM_ALTITUDE) {
+    if (camera.zoom !== CAMERA_ZOOM_FACTOR) {
+      camera.zoom = CAMERA_ZOOM_FACTOR;
+      camera.updateProjectionMatrix();
+    }
+    camera.position.x = lander.position.x;
+    camera.position.y = lander.position.y;
+  } else if (camera.zoom !== 1) {
+    camera.zoom = 1;
+    camera.position.set(0, 0, 100);
+    camera.updateProjectionMatrix();
+  }
 }
 
 function computeAltitude(x, y) {

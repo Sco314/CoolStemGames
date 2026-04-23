@@ -1,109 +1,100 @@
-# Moonlander Skeleton (2D ↔ 3D)
+# Space Racer (2D ↔ 3D)
 
-A starting point for a lunar-lander game that transitions between a 2D-style
-side-view lander sequence and a 3D third-person walk sequence, **all in
-Three.js**. Architecture is inspired by [tblazevic/moonlander](https://github.com/tblazevic/moonlander)'s
-module layout, but everything here was written from scratch (no copied code)
-so there is no license taint.
+A lunar-lander game that transitions between a 2D-style side-view landing
+sequence and a 3D third-person walk sequence on the moon surface, **all in
+Three.js with zero build step**. Import maps pull Three directly from unpkg;
+the rest is plain ES modules.
 
-## What's here
+Live URL: https://coolstemgames.com/moonlander/ (the folder name is kept as
+`moonlander/` to avoid breaking existing links and cache; the player-facing
+name is Space Racer).
+
+## How to play
+
+**Lander (2D side view)**
+
+- `↑` thrust · `←` `→` rotate
+- Touch down softly on any flat pad with both feet on the pad
+- Bonus pads (`X2` / `X3` / `X5`) multiply the landing score
+- Hitting terrain at speed, at an angle, or half-off a pad — that's a crash
+
+**Walk (3D third-person)**
+
+- Click the canvas to engage pointer lock
+- Mouse turns the astronaut and orbits the camera pitch
+- `W` `S` walk forward / back · `A` `D` strafe · `E` interact
+- Pick up fuel drums, supply crates (repair kits), science samples; if you
+  have a kit, repair the damaged probe for a big score
+- Walk up to the parked lander and press `E` to return to lander mode
+
+**Menus / global**
+
+- `Esc` toggles the settings overlay (master volume, invert-Y, fullscreen)
+- Tab/Enter navigates menu buttons
+- Touch devices get on-screen controls automatically
+
+## Running locally
+
+Static files, but module scripts need HTTP, not `file://`. From the game's
+directory:
+
+```bash
+python3 -m http.server 8000
+# open http://localhost:8000
+```
+
+## Architecture at a glance
 
 | File | Role |
 |------|------|
-| `index.html` | Boot page. Loads Three.js via importmap, sets up the DOM HUD. |
-| `css/main.css` | Minimal retro HUD styling (Courier New, white-on-black). |
-| `js/Constants.js` | All tunables. Physics, cameras, transition timing, mode IDs. |
-| `js/GameState.js` | The shared **store** — fuel, score, landing position. Survives mode switches. Has save/load. |
-| `js/TerrainData.js` | Terrain polyline (ported point data from tblazevic). |
-| `js/Input.js` | Central keyboard state with edge detection. |
-| `js/Sound.js` | Audio wrapper with no-op fallback if files are missing. |
-| `js/HUD.js` | DOM-based HUD (no second Three.js scene needed). |
-| `js/Particles.js` | **Stub** — class shapes match tblazevic for future port. |
-| `js/modes/ModeInterface.js` | Docs only. The contract every mode implements. |
-| `js/modes/LanderMode.js` | 2D-style side view, orthographic camera, jerk-based thrust physics. |
-| `js/modes/WalkMode.js` | 3D third-person, `PointerLockControls` for mouse look. |
-| `js/modes/TransitionMode.js` | Cinematic camera lerp between the two modes. |
-| `js/Main.js` | Renderer, frame loop, mode switcher. |
+| `index.html` · `css/main.css` | Boot page, retro HUD, menu/overlay DOM |
+| `js/Main.js` | Renderer, frame loop, mode switcher, error boundaries |
+| `js/Constants.js` | Every tunable — physics, progression curves, achievements |
+| `js/GameState.js` | Shared store (fuel, score, objectives, settings) with `startNewRun` / `commitRunToHighScores` / `unlockAchievement` |
+| `js/Input.js` | Keyboard + synthetic-key injection for touch |
+| `js/Touch.js` | Mobile buttons + joystick feeding the same Input queue |
+| `js/Sound.js` | Audio wrapper with per-Sound `setVolume` and a global `setMasterVolume` |
+| `js/HUD.js` | DOM HUD, comms blips, achievement toasts, and every overlay |
+| `js/Particles.js` | Pooled thruster cone + crash explosion (quality-scaled) |
+| `js/Progression.js` | Pure helpers that turn a `level` into effective values |
+| `js/Quality.js` | Rolling-FPS adaptive quality (scales particles, toggles fog) |
+| `js/Preload.js` | Asset prefetch with a progress bar |
+| `js/TerrainData.js` | Lander-mode terrain polyline |
+| `js/modes/LanderMode.js` | 2D ortho, 3-circle collision, scored landings |
+| `js/modes/WalkMode.js` | 3D strict chase cam, displaced terrain, interactables |
+| `js/modes/TransitionMode.js` | Cinematic ortho→perspective swap w/ letterbox, fade, crossfade |
+| `js/modes/MainMenuMode.js` | Boot mode: starfield behind the main-menu overlay |
+| `textures/lander.png` | Pixel-art lander sprite (generated) |
+| `audio/*.wav` | Placeholder rocket / crash / alarm / morse / wind tracks |
 
-## How the 2D ↔ 3D switch works
+## Design notes
 
-1. **One renderer, one canvas.** The `WebGLRenderer` is created once in `Main.js`
-   and lives for the whole session. No dispose/recreate on mode change.
-2. **Each mode owns its own scene and camera.** LanderMode builds an orthographic
-   camera + line-based terrain. WalkMode builds a perspective camera + ground
-   plane + astronaut.
-3. **Mode swap = `exit()` + `enter()`.** `exit()` disposes every geometry and
-   material the mode created (the memory-discipline checkpoint). The next
-   mode's `enter()` builds fresh assets.
-4. **Transition is its own mode.** When the lander touches down, Main.js enters
-   `TransitionMode`, which animates the camera from lander-ortho pose to
-   walk-perspective pose, then hands off. This is where polish (letterbox,
-   DOF, crossfade) will go.
-5. **GameState is the handoff.** When the lander lands, `LanderMode` writes
-   `GameState.lastLanding.x` etc. When the astronaut loads fuel,
-   `WalkMode` writes `GameState.fuel.current`. Neither mode talks to the
-   other directly — they talk through `GameState`.
+- **One renderer, one canvas.** `WebGLRenderer` is created once in `Main.js`
+  and lives for the whole session. Modes own their scene/camera and dispose
+  on exit; the renderer is untouched.
+- **DOM HUD, not canvas-texture HUD.** All menus, toasts, and the heads-up
+  overlay are plain HTML. No second Three.js scene, no per-frame render
+  cost, and it survives mode switches for free.
+- **GameState is the handoff.** Modes never reference each other's meshes;
+  they read/write shared facts (fuel, landing segment index, objectives).
+- **Save is semantic.** `localStorage` key `moonlander.save.v3` — versioned
+  in the key, shallow-merged on load so adding new state fields is additive.
+- **Difficulty is data.** `Progression.js` takes `GameState.level` and
+  returns effective gravity / tolerance / edge-margin / spawn-velocity /
+  fuel-gain. LanderMode and WalkMode just ask.
 
-## What currently works
+## Credits
 
-- Boots, renders, shows the HUD.
-- LanderMode: gravity, jerk-based thrust, rotation, drag, fuel burn, naive
-  terrain collision (single-circle against segment top), crash/land resolution.
-- Cinematic-ish transition to WalkMode after a successful landing.
-- WalkMode: tank-style WASD astronaut, mouse look, fuel cart interaction
-  adds fuel to `GameState`, "press E to board" returns to LanderMode.
-- Memory: each mode disposes its assets on `exit()`.
+- [Three.js](https://threejs.org/) (MIT) — loaded via importmap from unpkg.
+- Architecture inspired by [tblazevic/moonlander](https://github.com/tblazevic/moonlander);
+  no code copied — layout only.
+- All placeholder textures and audio in `textures/` and `audio/` are
+  generated from scratch by this project (pixel-art PNG written with
+  stdlib zlib; WAVs synthesized with stdlib `struct`). Replace them with
+  your own MP3s/PNGs any time — filenames live in `js/Sound.js` and
+  `js/modes/LanderMode.js` / `js/modes/WalkMode.js`.
 
-## What's stubbed (deliberate — fill these in next)
+## License
 
-- **3-circle collision** in LanderMode. Currently a single point-vs-segment
-  test. The tblazevic approach (1 big circle + 2 foot circles) is the pattern
-  to reimplement.
-- **Particle systems**. `Particles.js` has class stubs matching the shape of
-  tblazevic's `ParticleSystemCone` / `ParticleSystemExplosion`.
-- **Textures and models**. Lander is a gray quad; astronaut is a capsule;
-  ground is flat. Drop `textures/lander.png` and GLTF models and wire them up.
-- **Score multipliers on flat pads**. Data structure is there (segment slope
-  is recorded); random multiplier assignment and HUD labels need to be added.
-- **Audio files**. Sound.js expects `audio/crash.mp3`, `audio/rocket.mp3`,
-  `audio/alarm.mp3`, `audio/morse.mp3`. Missing files log a warning and no-op.
-- **Game-over / restart flow**. Fuel-exhaustion end state is not yet wired.
-
-## Running it
-
-It's pure static files, but module scripts need to be served over HTTP, not
-opened via `file://`. From the project root:
-
-```
-python3 -m http.server 8000
-# then open http://localhost:8000
-```
-
-## Controls
-
-**Lander mode:** ↑ thrust · ← → rotate
-
-**Walk mode:** click to lock mouse · W/S move · A/D turn · mouse look · E interact
-
-## Where to add things
-
-- New tunable? `Constants.js`.
-- New persistent fact about the player/session? `GameState.js`.
-- New HUD element? `index.html` + `HUD.js` (keep it DOM, not canvas).
-- New mode (e.g., `CockpitMode`, `MapMode`)? Copy `LanderMode.js` as a
-  template, implement `enter/exit/update/render/getCamera/getScene`, then
-  swap into it via `goToMode()` or `cinematicSwap()` in `Main.js`.
-
-## Design decisions worth calling out
-
-- **Importmap over bundler.** Keeps the project zero-build and lets you copy
-  addon code from the Three.js examples without rewriting paths. Swap in
-  Vite or esbuild later if you want tree-shaking.
-- **DOM HUD, not canvas-texture HUD.** tblazevic's approach of a second
-  Three.js scene with a canvas texture is clever but pays render cost every
-  frame. DOM is free, styleable with CSS, and survives mode switches untouched.
-- **Modes are objects, not classes.** There's only ever one of each, so a
-  module-level singleton object is simpler than `new LanderMode()`.
-- **Ortho→perspective is a midpoint swap, not a matrix morph.** Genuinely
-  interpolating an ortho projection into a perspective one would require
-  custom shader work; a midpoint handoff reads fine and is one line of code.
+This directory inherits the repo's top-level `LICENSE`. Third-party assets,
+if any are added later, keep their own license — note them here.
