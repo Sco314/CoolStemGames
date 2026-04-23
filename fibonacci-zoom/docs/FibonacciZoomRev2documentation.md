@@ -1270,6 +1270,28 @@ Classroom report after the move from the prior repo to `coolstemgames.com`: Goog
 
 **UX note.** Redirect-first replaces the popup with a full-page nav to Google and back. Mobile users (iOS/Android) already had this behavior; it is new for desktop. In exchange, the flow completes reliably on every classroom device.
 
+### v4.4 — Sign-in from initial load + guest click merge
+
+Two small changes aimed at lowering the "sign-in later" friction curve for pre-n=8 players.
+
+**Change 1 — Sign-in is now available immediately, not gated behind F(21).** Pre-v4.4, the Account card in the signed-out state only showed "Reach Fibonacci 21 to join the leaderboard"; the `Sign in with Google` button was inside the `#signedIn` state and only became reachable once anonymous Firebase auth fired at n=8. Students had to climb to F(21) before they could even choose to sign in with their school Google account. Now `#signedOut` (and its mobile `#mobileSignedOut` twin) carries a `Sign in with Google` button of its own, wired to the same `doSignIn` helper. The copy changes from "Reach Fibonacci 21 to join the leaderboard" to "Playing as guest / Sign in to save progress". Auto-anonymous-auth at n=8 is unchanged — users who don't choose to sign in still get a persistent guest account at that threshold.
+
+**Change 2 — Guest clicks merge into the signed-in account on sign-in.** If a player has been clicking as a pre-auth guest and then signs in with an existing Google account, their accumulated `clickCountThisWeek` is now added to the saved account's weekly total (or seeded as the initial value for a first-time Google account). This is the only state that crosses the sign-in boundary from guest mode — tokens, boost upgrades, the Golden Ratio Engine, active skin, achievements, and streak stay with whichever account earned them. That's deliberate: sign-in must not be a shortcut for incentive-gated rewards.
+
+The merge has to survive the redirect round-trip, which wipes in-memory state. `doSignIn` now writes `state.weekly.clickCountThisWeek` into `sessionStorage` under key `fibzoomGuestClicks` right before `signInWithRedirect` fires (only in the non-anonymous branch — anonymous users' clicks are already in their Firestore doc via `saveProgress`). `onSignIn` reads the stash alongside the (post-redirect, usually zero) in-memory count, takes the max, and deletes the key so it can't leak to a later session. The choice of `sessionStorage` (not `localStorage`) is intentional: it's tab-scoped and dies on tab close, matching the lifetime of the redirect round-trip, and doesn't compromise the "Firestore is the persistence layer" convention from `CLAUDE.md`.
+
+`onSignIn` applies the merge two ways depending on whether the target account already has a Firestore doc:
+
+- **Existing account (`doc.exists === true`).** After the Tier 3 `weekly` restore, add the captured guest clicks: `state.weekly.clickCountThisWeek += guestClicksThisWeek`. Then call `saveProgress()` and `maybeUpdateWeeklyScore()` unconditionally after the n-merge if/else, so the merged count is durably persisted to both `scores/{uid}` and `weeklyScores/{weekId}/entries/{uid}` without waiting for the next debounced save tick. (The existing `maybeSaveScore(guestN)` in the "guestAbsN > userBestAbsN" branch already wrote `clickCountThisWeek`; the explicit `saveProgress()` covers the other branch, where we'd otherwise lose the merge if the user closed the tab immediately.)
+
+- **Fresh Google account (`doc.exists === false`).** Before the existing `maybeSaveScore(guestN)` call, seed `state.weekly.clickCountThisWeek = guestClicksThisWeek`. Since `state.n` initializes to 1 and `guestAbsN > 0` is therefore always truthy, `maybeSaveScore` reliably fires and writes the seeded value as part of the initial doc.
+
+**Incentives unaffected.** Only the weekly `'clicks'` challenge metric (in `currentWeeklyMetric` at `case 'clicks': return state.weekly.clickCountThisWeek`) reads this field. There are no achievements, tokens, boost unlocks, skin unlocks, challenge badges, or streak rewards keyed on raw click count. Merging is therefore a pure leaderboard-fairness improvement — guests who've been clicking all session see those clicks counted toward the 'clicks' weekly challenge after they sign in, with no path to exploit merging for progression rewards.
+
+**Out of scope.** The `auth/credential-already-in-use` path (an anonymous user's `linkWithRedirect` fails because the Google account already exists, and `handleLinkError` falls back to `signInWithCredential`) does not yet carry the abandoned anonymous doc's `clickCountThisWeek` over to the signed-in Google user. Those clicks stay in the (now-orphaned) anonymous doc. Handling that path requires reading the anonymous doc before the fallback sign-in, which is a larger change. Flagged as a follow-up.
+
+No state shape changes. No Firestore schema changes. `_headers` not touched.
+
 ### Future tiers (not in this release)
 
 The Tier 4 source plan (`fibonacci-zoom/docs/Fibonacci Zoom Revision Tier 4.md`) closes out the planned four-tier revision arc. Tiers 1/2/3/4 together deliver:

@@ -1378,9 +1378,18 @@ html, body {
       <!-- Auth card -->
       <div class="card" id="authCard">
         <div class="card-title">Account</div>
-        <!-- Signed-out state (unauthenticated until n=8) -->
+        <!-- Signed-out state (pre-authentication) -->
         <div id="signedOut">
-          <div class="lb-status">Reach Fibonacci 21 to join<br>the leaderboard</div>
+          <div class="lb-status" style="margin-bottom:8px;">Playing as guest<br>Sign in to save progress</div>
+          <button class="auth-btn" id="guestSignInBtn">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;flex-shrink:0">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Sign in with Google
+          </button>
         </div>
         <!-- Signed-in state (both anonymous and Google users) -->
         <div id="signedIn" style="display:none">
@@ -1448,7 +1457,16 @@ html, body {
     <div class="card" id="mobileAuthCard">
       <div class="card-title">Account</div>
       <div id="mobileSignedOut">
-        <div class="lb-status">Reach Fibonacci 21 to join<br>the leaderboard</div>
+        <div class="lb-status" style="margin-bottom:8px;">Playing as guest<br>Sign in to save progress</div>
+        <button class="auth-btn" id="mobileGuestSignInBtn">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;flex-shrink:0">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Sign in with Google
+        </button>
       </div>
       <div id="mobileSignedIn" style="display:none">
         <div class="user-row">
@@ -5316,6 +5334,17 @@ function initFirebase() {
         // pre-redirect failures (e.g. offline).
         currentUser.linkWithRedirect(provider).catch(handleLinkError);
       } else {
+        // v4.4: stash pre-auth guest click count so it can merge into the
+        // signed-in account in onSignIn. signInWithRedirect reloads the
+        // whole page, destroying in-memory state — without this stash the
+        // click-merge feature would be a no-op for the primary use case
+        // (pure guest user clicks the Sign In button). sessionStorage is
+        // per-tab and cleared on tab close; it's not a persistence layer
+        // and doesn't violate the "Firestore only" convention.
+        try {
+          const clicks = (state.weekly && state.weekly.clickCountThisWeek) || 0;
+          if (clicks > 0) sessionStorage.setItem('fibzoomGuestClicks', String(clicks));
+        } catch (e) { /* storage blocked — accept click loss for this user */ }
         fbAuth.signInWithRedirect(provider).catch(err => {
           console.error('❌ Sign-in redirect error:', err.message);
         });
@@ -5333,9 +5362,16 @@ function initFirebase() {
       console.error('❌ Link error:', err.message);
     }
 
-    // Sign-in buttons (desktop + mobile)
+    // Sign-in buttons (desktop + mobile). The ones in #signedIn fire for
+    // anonymous→Google upgrade; v4.4 also wires sign-in from the
+    // #signedOut state (pre-anonymous-auth) so users don't have to reach
+    // F(21) before they can log in.
     document.getElementById('signInBtn').addEventListener('click', doSignIn);
     document.getElementById('mobileSignInBtn').addEventListener('click', doSignIn);
+    const guestSignInBtn = document.getElementById('guestSignInBtn');
+    if (guestSignInBtn) guestSignInBtn.addEventListener('click', doSignIn);
+    const mobileGuestSignInBtn = document.getElementById('mobileGuestSignInBtn');
+    if (mobileGuestSignInBtn) mobileGuestSignInBtn.addEventListener('click', doSignIn);
 
     // Sign-out: delete anonymous accounts entirely, sign out Google accounts
     async function doSignOut() {
@@ -5459,6 +5495,20 @@ async function onSignIn(user) {
   // Capture guest progress before loading saved data
   const guestN    = state.n;
   const guestAbsN = Math.abs(guestN);
+  // v4.4: also capture click count so guest ticks can merge into the
+  // signed-in account. Only this one metric — tokens, boosts, engine,
+  // skins, and achievements stay with whichever account earned them.
+  // Fall back to sessionStorage stash because signInWithRedirect reloads
+  // the page and wipes in-memory state; doSignIn stashes the count
+  // before redirecting so we can recover it here.
+  let guestClicksThisWeek = state.weekly.clickCountThisWeek || 0;
+  try {
+    const stashed = parseInt(sessionStorage.getItem('fibzoomGuestClicks') || '0', 10);
+    if (stashed > 0) {
+      guestClicksThisWeek = Math.max(guestClicksThisWeek, stashed);
+      sessionStorage.removeItem('fibzoomGuestClicks');
+    }
+  } catch (e) { /* storage blocked — nothing to recover */ }
 
   // Load saved progress
   try {
@@ -5521,6 +5571,16 @@ async function onSignIn(user) {
         state.weekly.lowestNThisWeek     = data.weekly.lowestNThisWeek     ?? (state.lowestN ?? 1);
         state.weekly.championBadges      = Array.isArray(data.weekly.championBadges) ? data.weekly.championBadges : [];
       }
+      // v4.4: merge guest click count (captured above before this restore
+      // clobbered it) into the signed-in account's weekly total. This is
+      // the only state that carries across the sign-in boundary from
+      // guest mode — tokens, boosts, upgrades, engine, skins, and
+      // achievements intentionally stay with whichever account earned
+      // them, so sign-in can't be used as a shortcut for incentives.
+      if (guestClicksThisWeek > 0) {
+        state.weekly.clickCountThisWeek += guestClicksThisWeek;
+        console.log(`✅ Merged ${guestClicksThisWeek} guest clicks → ${state.weekly.clickCountThisWeek} total`);
+      }
       state.galleryViewed = data.galleryViewed ?? {};
       // v4.0 Tier 4 — restore level-fact history + preference
       state.factsShown    = data.factsShown    ?? {};
@@ -5546,6 +5606,15 @@ async function onSignIn(user) {
           updateUserBestDisplay(data.n ?? restoreN);
           console.log(`✅ Restored n=${restoreN} subStep=${state.subStep} for ${user.displayName}`);
         }
+      }
+
+      // v4.4: if guest clicks merged into an existing account, persist
+      // the new weekly total right away — don't wait for the next
+      // debounced save tick to flush it, since a quick tab close would
+      // otherwise drop the merged clicks.
+      if (guestClicksThisWeek > 0) {
+        saveProgress();
+        maybeUpdateWeeklyScore();
       }
 
       // v2.0 Tier 1 — compute offline progress (engine must be owned)
@@ -5589,6 +5658,14 @@ async function onSignIn(user) {
         return;
       }
       userBestAbsN = 0;
+      // v4.4: fresh Google account with no saved data — seed clickCountThisWeek
+      // from the guest's pre-sign-in count so guest ticks aren't lost when a
+      // first-time Google user signs in. maybeSaveScore below reads from
+      // state.weekly.clickCountThisWeek, so this must happen before that call.
+      if (guestClicksThisWeek > 0) {
+        state.weekly.clickCountThisWeek = guestClicksThisWeek;
+        console.log(`✅ Seeded new account with ${guestClicksThisWeek} guest clicks`);
+      }
       if (guestAbsN > 0) {
         updateUserBestDisplay(guestN);
         maybeSaveScore(guestN);
