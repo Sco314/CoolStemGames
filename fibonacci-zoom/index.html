@@ -5256,13 +5256,22 @@ function initFirebase() {
     fbAuth = firebase.auth();
     fbDb   = firebase.firestore();
 
-    // Handle redirect result when returning from Google auth on mobile
+    // Handle redirect result when returning from Google auth (all browsers
+    // as of v4.2 login-harden — used to be mobile-only).
     fbAuth.getRedirectResult().then(result => {
       if (result && result.user) {
         console.log('✅ Redirect sign-in complete:', result.user.displayName);
       }
     }).catch(err => {
-      if (err.code !== 'auth/no-auth-event') {
+      // v4.2 login-harden: "Google account already in use as a different
+      // UID" used to arrive via the inline .catch on linkWithPopup; with
+      // redirect-first it arrives here on the return visit. Reuse the same
+      // handler so the fallback to signInWithCredential still works.
+      if (err && err.code === 'auth/credential-already-in-use') {
+        handleLinkError(err);
+        return;
+      }
+      if (err && err.code !== 'auth/no-auth-event') {
         console.error('❌ Redirect result error:', err.message);
       }
     });
@@ -5291,27 +5300,23 @@ function initFirebase() {
     // Sign-in helper: links anonymous → Google, or direct Google sign-in
     function doSignIn() {
       const provider = new firebase.auth.GoogleAuthProvider();
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
+      // v4.2 login-harden: redirect-first on every browser. signInWithPopup
+      // silently fails on school-managed Chromebooks (third-party cookie
+      // blocking + popup-blocker enterprise policies) — the popup opens,
+      // closes, and the promise never resolves, which looked like "Sign in
+      // with Google does nothing" to our classroom users. Redirect works
+      // universally; a single full-page nav is a tiny UX cost for a flow
+      // that actually completes. Mobile was already on redirect.
       if (currentUser && currentUser.isAnonymous) {
-        // Link anonymous account to Google (preserves UID + all data)
-        if (isMobile) {
-          currentUser.linkWithRedirect(provider).catch(handleLinkError);
-        } else {
-          currentUser.linkWithPopup(provider).then(result => {
-            console.log('✅ Account linked:', result.user.displayName);
-          }).catch(handleLinkError);
-        }
+        // Link anonymous account to Google (preserves UID + all data).
+        // The linked-user promise resolves after the return trip via
+        // getRedirectResult(); handleLinkError runs here only for synchronous
+        // pre-redirect failures (e.g. offline).
+        currentUser.linkWithRedirect(provider).catch(handleLinkError);
       } else {
-        if (isMobile) {
-          fbAuth.signInWithRedirect(provider).catch(err => {
-            console.error('❌ Sign-in redirect error:', err.message);
-          });
-        } else {
-          fbAuth.signInWithPopup(provider).catch(err => {
-            console.error('❌ Sign-in popup error:', err.message);
-          });
-        }
+        fbAuth.signInWithRedirect(provider).catch(err => {
+          console.error('❌ Sign-in redirect error:', err.message);
+        });
       }
     }
 
