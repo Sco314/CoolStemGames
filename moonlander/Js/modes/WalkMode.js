@@ -22,12 +22,17 @@ import {
   INTERACTABLE_TYPES, LANDING_SITE_LOOT, DEFAULT_LOOT,
   DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
   TRANSITION_WIND_VOL,
+  HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
   MODE
 } from '../Constants.js';
-import { GameState, update as updateState, notify, refreshObjectives } from '../GameState.js';
+import {
+  GameState, update as updateState, notify, refreshObjectives,
+  unlockAchievement
+} from '../GameState.js';
 import { Input } from '../Input.js';
-import { setCenterMessage, showComms } from '../HUD.js';
+import { setCenterMessage, showComms, showAchievementToast } from '../HUD.js';
 import { Sounds } from '../Sound.js';
+import { effectiveFuelGain } from '../Progression.js';
 
 let scene = null;
 let camera = null;
@@ -270,8 +275,9 @@ export const WalkMode = {
 function bindMouse() {
   onMouseMove = (e) => {
     if (!pointerLocked || scripted) return;
+    const pitchSign = GameState.settings?.invertY ? -1 : 1;
     yawRad   -= e.movementX * WALK_MOUSE_SENSITIVITY;
-    pitchRad += e.movementY * WALK_MOUSE_SENSITIVITY;
+    pitchRad += e.movementY * WALK_MOUSE_SENSITIVITY * pitchSign;
     if (pitchRad < WALK_PITCH_MIN) pitchRad = WALK_PITCH_MIN;
     if (pitchRad > WALK_PITCH_MAX) pitchRad = WALK_PITCH_MAX;
   };
@@ -649,14 +655,21 @@ function performInteraction(it) {
 
   switch (it.type) {
     case 'fuel': {
+      const scaled = effectiveFuelGain(GameState.level, spec.amount);
       const room = GameState.fuel.capacity - GameState.fuel.current;
-      const gained = Math.min(spec.amount, room);
+      const gained = Math.min(scaled, room);
       updateState(s => {
         s.fuel.current += gained;
         if (s.isAlerted && s.fuel.current >= s.fuel.capacity * 0.3) s.isAlerted = false;
         justDone = refreshObjectives();
       }, 'pickup-fuel');
       showComms(`+${gained | 0} FUEL — TANKS TOPPED UP`);
+      // Hot-swap achievement: landed with critically low fuel, refueled past
+      // the high threshold.
+      if ((GameState.lastLanding.fuelAtLanding ?? Infinity) < HOT_SWAP_LOW_FUEL &&
+          GameState.fuel.current >= HOT_SWAP_HIGH_FUEL) {
+        showAchievementToast(unlockAchievement('hot-swap-refuel'));
+      }
       break;
     }
     case 'repair': {
@@ -670,41 +683,44 @@ function performInteraction(it) {
     case 'sample': {
       updateState(s => {
         s.supplies.scienceSamples += 1;
+        s.stats.totalSamples += 1;
         s.score += spec.score;
         justDone = refreshObjectives();
       }, 'pickup-sample');
       showComms(`SAMPLE LOGGED (+${spec.score})`);
+      if (GameState.stats.totalSamples >= 10) {
+        showAchievementToast(unlockAchievement('sample-collector'));
+      }
       break;
     }
     case 'damaged': {
-      // Blocked path — surface the reason but don't consume anything.
       if (GameState.supplies.repairKits < spec.costKits) {
         showComms('PROBE NEEDS A REPAIR KIT');
         return;
       }
       updateState(s => {
         s.supplies.repairKits -= spec.costKits;
+        s.stats.totalProbesRepaired += 1;
         s.score += spec.score;
         s.flags.probeRepaired = true;
         justDone = refreshObjectives();
       }, 'probe-repair');
       showComms(`PROBE RECOVERED (+${spec.score})`);
-      // Recolor the hull so the repaired state reads visually.
       it.object3d.traverse(child => {
         if (child.isMesh && child.userData.role === 'hull') {
           child.material.color.set(0x3ec46c);
         }
       });
+      if (GameState.stats.totalProbesRepaired >= 3) {
+        showAchievementToast(unlockAchievement('probe-rescuer'));
+      }
       break;
     }
   }
 
   it.used = true;
-  // Consumables disappear; the repaired probe stays visible but inert.
   if (it.type !== 'damaged') it.object3d.visible = false;
 
-  // Congratulate the player on each newly-completed objective. Offset the
-  // second blip so it doesn't stomp the pickup comms.
   if (justDone.length) {
     setTimeout(() => showComms(`OBJECTIVE COMPLETE: ${firstObjectiveLabel(justDone[0])}`), 1100);
   }

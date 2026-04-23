@@ -1,4 +1,4 @@
-// Main.js — v0.1.0
+// Main.js — v0.3.0
 // Entry point. Owns the renderer, the frame loop, and the current mode.
 // Everything else is in modules under /js.
 //
@@ -10,19 +10,31 @@
 //   - HUD is DOM, also survives mode switches.
 //
 // Changelog:
-//   0.1.0 — Initial skeleton. LanderMode playable (stub terrain collision),
-//           WalkMode walkable, cinematic TransitionMode wired between them.
-//           Particles, sounds, textures, and proper collision are stubbed.
+//   0.1.0 — Initial skeleton.
+//   0.2.0 — Phase-5 cinematic transitions (letterbox, fade, crossfade,
+//           disembark/embark scripts) wired around cinematicSwap().
+//   0.3.0 — Phase-6 game loop: boot into MainMenuMode, game-over routing on
+//           fuel-zero crash, settings toggle on Escape.
 
 import * as THREE from 'three';
 import { MODE } from './Constants.js';
-import { GameState, notify, load as loadSave } from './GameState.js';
+import {
+  GameState, notify,
+  startNewRun, commitRunToHighScores,
+  load as loadSave
+} from './GameState.js';
 import { initInput } from './Input.js';
 import { initSound } from './Sound.js';
-import { initHUD, renderFrame as renderHUDFrame } from './HUD.js';
+import {
+  initHUD, renderFrame as renderHUDFrame,
+  showMainMenu, hideMainMenu,
+  showGameOver, hideGameOver,
+  showSettings, hideSettings, isSettingsOpen
+} from './HUD.js';
 import { LanderMode }     from './modes/LanderMode.js';
 import { WalkMode }       from './modes/WalkMode.js';
 import { TransitionMode } from './modes/TransitionMode.js';
+import { MainMenuMode }   from './modes/MainMenuMode.js';
 
 let renderer, canvas;
 let currentMode = null;
@@ -49,29 +61,33 @@ function init() {
   document.body.appendChild(canvas);
 
   window.addEventListener('resize', onResize);
+  window.addEventListener('keydown', onGlobalKey);
 
   // --- shared systems ---
+  // Load order matters: initHUD applies settings, so loadSave has to populate
+  // GameState.settings first or we'd wire the Sound master volume off defaults.
   initInput();
   initSound();
+  loadSave();
   initHUD();
-  loadSave(); // no-op if there's no save — logs which
 
-  // --- start in LanderMode ---
-  goToMode(LanderMode, {
-    onLanded:  handleLanded,
-    onCrashed: handleCrashed
-  });
+  // --- boot into the main menu. LanderMode starts when the user clicks START. ---
+  openMainMenu();
 }
 
 // ---------- frame loop ----------
 function animate() {
   requestAnimationFrame(animate);
   const now = performance.now();
-  const dt = Math.min(0.1, (now - lastFrameTime) / 1000); // clamp huge gaps (tab-switch)
+  const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
 
   if (GameState.mode !== MODE.PAUSED && currentMode) {
-    GameState.timeElapsed += dt;
+    // Only advance gameplay time while actually playing (menu/game-over are
+    // their own modes and don't accumulate run time).
+    if (GameState.mode === MODE.LANDER || GameState.mode === MODE.WALK || GameState.mode === MODE.TRANSITION) {
+      GameState.timeElapsed += dt;
+    }
     currentMode.update(dt);
     currentMode.render(renderer);
   }
@@ -79,31 +95,14 @@ function animate() {
 }
 
 // ---------- mode switching ----------
-/**
- * Swap the active mode. Calls exit() on the old, enter() on the new.
- * @param {Mode} nextMode — a mode module (LanderMode / WalkMode / TransitionMode)
- * @param {object} opts   — passed through to nextMode.enter()
- */
 function goToMode(nextMode, opts = {}) {
   if (currentMode) currentMode.exit();
   currentMode = nextMode;
   currentMode.enter({ renderer, canvas }, opts);
 }
 
-/**
- * Cinematic swap: old mode stays rendered while a transition camera eases
- * into the new mode's starting pose. Used for lander→walk and walk→lander.
- * For lander→walk, the destination mode's scripted disembark is kicked off
- * after the transition completes, so the astronaut visibly steps out before
- * player control activates.
- */
 function cinematicSwap(fromMode, toMode, enterOpts = {}) {
-  // Enter the destination mode FIRST so its scene and camera exist. We just
-  // don't render it yet — the transition does.
   toMode.enter({ renderer, canvas }, enterOpts);
-
-  // Stash the destination scene on its camera so TransitionMode can find it
-  // without a separate parameter.
   toMode.getCamera().userData.scene = toMode.getScene();
 
   const direction = (toMode === WalkMode) ? 'lander-to-walk' : 'walk-to-lander';
@@ -117,13 +116,10 @@ function cinematicSwap(fromMode, toMode, enterOpts = {}) {
     direction,
     onComplete: () => {
       TransitionMode.exit();
-      prevMode.exit();           // NOW dispose the old mode's scene
+      prevMode.exit();
       currentMode = toMode;
       GameState.mode = (toMode === WalkMode) ? MODE.WALK : MODE.LANDER;
       notify('mode');
-
-      // After a lander→walk transition, run the astronaut's scripted
-      // disembark before handing control back to the player.
       if (direction === 'lander-to-walk' && typeof toMode.startDisembark === 'function') {
         toMode.startDisembark();
       }
@@ -131,41 +127,93 @@ function cinematicSwap(fromMode, toMode, enterOpts = {}) {
   });
 }
 
+// ---------- menu / game-over flow ----------
+function openMainMenu() {
+  goToMode(MainMenuMode);
+  showMainMenu({
+    onStart: () => {
+      hideMainMenu();
+      startRun();
+    },
+    onSettings: () => {
+      showSettings({ onClose: hideSettings });
+    }
+  });
+}
+
+function startRun() {
+  startNewRun();
+  goToMode(LanderMode, { onLanded: handleLanded, onCrashed: handleCrashed });
+}
+
+function openGameOver(lastCrashReason) {
+  const rank = commitRunToHighScores();
+  goToMode(MainMenuMode);     // park in a quiet scene behind the overlay
+  // MainMenuMode set mode=MENU; but we want GAME_OVER semantically so the HUD
+  // logic (e.g. walk-only rows) stays hidden. Override here.
+  GameState.mode = MODE.GAME_OVER;
+  notify('mode');
+  showGameOver({
+    score:    GameState.score,
+    level:    GameState.level,
+    landings: GameState.landingsCompleted,
+    rank,
+    onRestart: () => {
+      hideGameOver();
+      startRun();
+    },
+    onMenu: () => {
+      hideGameOver();
+      openMainMenu();
+    }
+  });
+  console.log(`🏁 Game over (${lastCrashReason || 'fuel out'}). Score ${GameState.score}, rank ${rank ?? '—'}`);
+}
+
 // ---------- handlers wired into mode callbacks ----------
 function handleLanded(result) {
   console.log('🛬 Landed on segment', result.segmentIndex);
-  // Pause a beat, then cinematic into walk mode.
   setTimeout(() => {
     cinematicSwap(LanderMode, WalkMode, {
       onReturnToLander: handleReturnToLander
     });
-  }, 1000); // matches POST_LAND_PAUSE_S — could pull from Constants instead
+  }, 1000);
 }
 
 function handleCrashed(result) {
   console.log('💥 Crashed:', result.reason);
-  // Simpler path: just restart lander mode. No walk-mode trip earned.
+  const fuelGone = GameState.fuel.current <= 0;
   setTimeout(() => {
-    goToMode(LanderMode, { onLanded: handleLanded, onCrashed: handleCrashed });
+    if (fuelGone) {
+      openGameOver(result.reason);
+    } else {
+      goToMode(LanderMode, { onLanded: handleLanded, onCrashed: handleCrashed });
+    }
   }, 2000);
 }
 
 function handleReturnToLander() {
   console.log('↩ Returning to lander mode');
-  // Walk the astronaut into the lander first, THEN kick off the cinematic
-  // swap. The embark animation takes ownership of input until it finishes.
   if (typeof WalkMode.startEmbark === 'function') {
     WalkMode.startEmbark(() => {
-      cinematicSwap(WalkMode, LanderMode, {
-        onLanded:  handleLanded,
-        onCrashed: handleCrashed
-      });
+      cinematicSwap(WalkMode, LanderMode, { onLanded: handleLanded, onCrashed: handleCrashed });
     });
   } else {
-    cinematicSwap(WalkMode, LanderMode, {
-      onLanded:  handleLanded,
-      onCrashed: handleCrashed
-    });
+    cinematicSwap(WalkMode, LanderMode, { onLanded: handleLanded, onCrashed: handleCrashed });
+  }
+}
+
+// ---------- keyboard routing ----------
+function onGlobalKey(e) {
+  if (e.key === 'Escape') {
+    // Escape toggles the settings overlay. Only allow opening outside of
+    // transitions/cinematics to avoid leaving cameras half-lerped.
+    const transitioning = GameState.mode === MODE.TRANSITION;
+    if (isSettingsOpen()) {
+      hideSettings();
+    } else if (!transitioning) {
+      showSettings({ onClose: hideSettings });
+    }
   }
 }
 
@@ -177,8 +225,6 @@ function onResize() {
     cam.aspect = window.innerWidth / window.innerHeight;
     cam.updateProjectionMatrix();
   }
-  // Ortho cameras in LanderMode are sized in world units, not pixels — no
-  // update needed on resize. The canvas scales via CSS.
 }
 
 function showFatalError(err) {

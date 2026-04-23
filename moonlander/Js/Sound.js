@@ -21,6 +21,7 @@ class Sound {
     this.el.preload = 'auto';
     this.el.style.display = 'none';
     this._baseVolume = 1;
+    _instances.add(this);
     this.el.addEventListener('error', () => {
       console.warn(`⚠️ Sound file not found: ${src} — falling back to no-op`);
       this.play = this.stop = () => {};
@@ -29,21 +30,16 @@ class Sound {
     document.body.appendChild(this.el);
   }
   play() {
-    // Browsers block autoplay until first user gesture; we swallow the
-    // rejection so a blocked play doesn't take down the frame.
     const p = this.el.play();
     if (p && p.catch) p.catch(() => {});
   }
   stop() { this.el.pause(); }
   setVolume(v) {
-    // Clamp to [0, 1]; the audio element rejects out-of-range values.
     if (v < 0) v = 0; else if (v > 1) v = 1;
-    this.el.volume = v;
     this._baseVolume = v;
+    this.el.volume = v * _masterVolume;
   }
   loop() {
-    // tblazevic-style seamless loop using timeupdate instead of HTMLAudio.loop
-    // because the latter has gaps on some browsers.
     this.el.addEventListener('timeupdate', () => {
       const buffer = 0.42;
       if (this.el.currentTime > this.el.duration - buffer) {
@@ -53,6 +49,20 @@ class Sound {
     });
   }
 }
+
+// Registry so setMasterVolume() can retune every live Sound without the
+// callers needing to know the list.
+const _instances = new Set();
+let _masterVolume = 1;
+
+/** Scale all Sound element volumes by a global master multiplier. */
+export function setMasterVolume(mv) {
+  if (mv < 0) mv = 0; else if (mv > 1) mv = 1;
+  _masterVolume = mv;
+  for (const s of _instances) s.el.volume = s._baseVolume * _masterVolume;
+}
+
+export function getMasterVolume() { return _masterVolume; }
 
 export const Sounds = {
   crash:    null,

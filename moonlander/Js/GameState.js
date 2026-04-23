@@ -1,4 +1,4 @@
-// GameState.js — v0.1.0
+// GameState.js — v0.3.0
 // This is the "store" discussed in the design conversation. Both the lander
 // mode and the walk mode read from and write to this object. Nothing else
 // crosses the boundary between modes.
@@ -6,62 +6,91 @@
 // Keep this file SEMANTIC, not VISUAL. Store fuel amounts, mission progress,
 // landing coordinates — never camera positions, mesh references, or particle
 // pools. Those belong to whichever mode owns them and get disposed on exit.
+//
+// Phase 6 additions:
+//   - `level` counter (run-local, bumps on each successful landing)
+//   - `highScores`, `achievements`, `stats` (profile-level, persist forever)
+//   - `settings` (master volume, invert-Y — applied on load)
+//   - startNewRun() / commitRunToHighScores() / unlockAchievement()
 
-import { STARTING_FUEL, MODE, OBJECTIVES } from './Constants.js';
+import {
+  STARTING_FUEL, MODE, OBJECTIVES, ACHIEVEMENTS, HIGH_SCORE_SLOTS
+} from './Constants.js';
 
 export const GameState = {
   // ----- Mission state -----
-  mode: MODE.BOOT,              // current top-level mode
-  previousMode: null,           // useful for transitions and unpausing
+  mode: MODE.BOOT,
+  previousMode: null,
 
-  // ----- Resources -----
-  fuel: {
-    current: STARTING_FUEL,
-    capacity: STARTING_FUEL
-  },
-  supplies: {
-    repairKits:     0,
-    scienceSamples: 0
-  },
+  // ----- Resources (run-local) -----
+  fuel:     { current: STARTING_FUEL, capacity: STARTING_FUEL },
+  supplies: { repairKits: 0, scienceSamples: 0 },
 
-  // ----- Scoring -----
+  // ----- Scoring (run-local) -----
   score: 0,
-  timeElapsed: 0,               // seconds since game start
+  timeElapsed: 0,
   landingsCompleted: 0,
+  level: 0,                     // bumps on each successful landing
 
   // ----- Handoff between modes -----
-  // When the lander touches down we record where, so the walk scene can
-  // spawn the astronaut next to the parked lander. When the astronaut
-  // returns and re-enters, we read this back.
   lastLanding: {
-    x: 0,                       // world x-coordinate of landing site
-    terrainSegmentIndex: -1,    // which segment of the terrain polyline
-    surfaceNormal: null         // THREE.Vector2 — set by lander on land
+    x: 0,
+    terrainSegmentIndex: -1,
+    surfaceNormal: null,
+    fuelAtLanding: STARTING_FUEL // snapshot for the hot-swap achievement
   },
 
-  // ----- Flags -----
+  // ----- Flags (run-local) -----
   hasLanded: false,
   hasFuel: true,
-  isAlerted: false,              // low-fuel alert currently showing
+  isAlerted: false,
   debug: false,
+  flags: { probeRepaired: false },
 
-  // ----- Mission flags (Phase 4) -----
-  // Free-form bag of booleans the objective predicates and dialog triggers
-  // read from. Keep keys lowercase-camel for consistency.
-  flags: {
-    probeRepaired: false
+  // ----- Objective tracker (run-local) -----
+  objectives: OBJECTIVES.map(o => ({ id: o.id, label: o.label, done: false })),
+
+  // ----- High scores (profile-level) -----
+  // { score, level, landings, timestamp } sorted score-desc, top HIGH_SCORE_SLOTS.
+  highScores: [],
+
+  // ----- Achievements (profile-level) -----
+  // Map id → { unlocked: true, at: timestampMs }. Undefined means locked.
+  achievements: {},
+
+  // ----- Profile stats (cumulative across runs, for achievements) -----
+  stats: {
+    totalSamples: 0,
+    totalProbesRepaired: 0
   },
 
-  // ----- Objective tracker -----
-  // Mirrors Constants.OBJECTIVES, one entry per id, { id, label, done }.
-  // Kept in state so saves round-trip mid-run progress.
-  objectives: OBJECTIVES.map(o => ({ id: o.id, label: o.label, done: false }))
+  // ----- User settings (profile-level) -----
+  settings: {
+    masterVolume: 0.8,
+    invertY:      false
+  }
 };
 
+// ----- Event bus -----
+const listeners = new Set();
+
+export function subscribe(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+export function notify(changeKey = '*') {
+  for (const fn of listeners) fn(GameState, changeKey);
+}
+
+export function update(fn, changeKey = '*') {
+  fn(GameState);
+  notify(changeKey);
+}
+
 /**
- * Re-evaluates every objective predicate against the current state. Call
- * after any fact-changing mutation. Returns the ids that flipped done on
- * this call so callers can fire congratulations, comms blips, etc.
+ * Re-evaluates every objective predicate against the current state. Returns
+ * the ids that flipped to done on this call.
  */
 export function refreshObjectives() {
   const justCompleted = [];
@@ -76,44 +105,80 @@ export function refreshObjectives() {
   return justCompleted;
 }
 
-// ----- Tiny event bus so the HUD (or anything else) can react to changes
-// without polling. Not reactive-framework-fancy; just enough to be useful. -----
-const listeners = new Set();
-
-export function subscribe(fn) {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
+/**
+ * Reset run-local state for a new attempt but keep profile-level data
+ * (high scores, achievements, stats, settings) intact.
+ */
+export function startNewRun() {
+  GameState.fuel.current = GameState.fuel.capacity;
+  GameState.supplies.repairKits = 0;
+  GameState.supplies.scienceSamples = 0;
+  GameState.score = 0;
+  GameState.timeElapsed = 0;
+  GameState.landingsCompleted = 0;
+  GameState.level = 0;
+  GameState.hasLanded = false;
+  GameState.hasFuel = true;
+  GameState.isAlerted = false;
+  GameState.flags = { probeRepaired: false };
+  GameState.objectives = OBJECTIVES.map(o => ({ id: o.id, label: o.label, done: false }));
+  GameState.lastLanding = {
+    x: 0,
+    terrainSegmentIndex: -1,
+    surfaceNormal: null,
+    fuelAtLanding: GameState.fuel.capacity
+  };
+  notify('new-run');
 }
 
-export function notify(changeKey = '*') {
-  for (const fn of listeners) fn(GameState, changeKey);
+/**
+ * Commit the current run's final score to highScores and persist. Returns
+ * the rank (1-indexed) on the board or null if the score didn't qualify.
+ */
+export function commitRunToHighScores() {
+  const entry = {
+    score: GameState.score,
+    level: GameState.level,
+    landings: GameState.landingsCompleted,
+    timestamp: Date.now()
+  };
+  GameState.highScores.push(entry);
+  GameState.highScores.sort((a, b) => b.score - a.score);
+  GameState.highScores.length = Math.min(GameState.highScores.length, HIGH_SCORE_SLOTS);
+  save();
+  const rank = GameState.highScores.indexOf(entry);
+  return rank >= 0 ? rank + 1 : null;
 }
 
-// Convenience mutator that auto-notifies. Use when you want subscribers to hear.
-// For high-frequency per-frame updates (position, velocity), mutate GameState
-// directly without notify() and let the renderer/HUD pull on each frame.
-export function update(fn, changeKey = '*') {
-  fn(GameState);
-  notify(changeKey);
+/**
+ * Unlock an achievement if it's not already unlocked. Returns the definition
+ * on the first-unlock call so the caller can show a toast; returns null on
+ * repeat calls.
+ */
+export function unlockAchievement(id) {
+  if (GameState.achievements[id]?.unlocked) return null;
+  const def = ACHIEVEMENTS.find(a => a.id === id);
+  if (!def) { console.warn(`Unknown achievement id: ${id}`); return null; }
+  GameState.achievements[id] = { unlocked: true, at: Date.now() };
+  save();
+  notify('achievement');
+  return def;
 }
 
 // ----- Save/load -----
 // Because GameState is a plain object of semantic values, serialization is trivial.
-// Version the save format so future-you can migrate old saves.
-// v1 → v2 (Phase 4): supplies.oxygenCanisters removed, supplies.scienceSamples
-// added, flags/objectives introduced. Old saves are ignored rather than
-// migrated field-by-field; the shape difference is small and a fresh start
-// is preferable to guessing at mid-run objective progress.
-const SAVE_KEY = 'moonlander.save.v2';
+// v3 (Phase 6): added level, highScores, achievements, stats, settings; old
+// saves are read-forward compatible — unknown keys are ignored, missing keys
+// fall back to defaults.
+const SAVE_KEY = 'moonlander.save.v3';
 
 export function save() {
   try {
-    const snapshot = JSON.parse(JSON.stringify(GameState)); // deep clone via JSON
-    // Strip things that shouldn't persist (e.g., transient mode).
+    const snapshot = JSON.parse(JSON.stringify(GameState));
+    // Strip things that shouldn't persist across sessions.
     snapshot.mode = MODE.BOOT;
     snapshot.previousMode = null;
     localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot));
-    console.log('✅ Game saved');
     return true;
   } catch (err) {
     console.error('❌ Save failed:', err.message);
@@ -129,7 +194,13 @@ export function load() {
       return false;
     }
     const data = JSON.parse(raw);
-    Object.assign(GameState, data);
+    // Shallow-merge at the top level so defaults for newer fields survive.
+    for (const k of Object.keys(data)) {
+      if (k in GameState) GameState[k] = data[k];
+    }
+    // Run-local fields should never persist; force a clean run slate.
+    GameState.mode = MODE.BOOT;
+    GameState.previousMode = null;
     notify('load');
     console.log('✅ Save loaded');
     return true;

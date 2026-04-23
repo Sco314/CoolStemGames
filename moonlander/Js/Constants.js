@@ -209,10 +209,49 @@ export const OBJECTIVES = [
   }
 ];
 
+// ---------- Progression (Phase 6) ----------
+// Each successful landing bumps GameState.level. Progression.js reads these
+// bases and scales effective gameplay values accordingly.
+export const DIFFICULTY_GRAVITY_PER_LEVEL       = 0.07;  // fractional gravity growth per level
+export const DIFFICULTY_TOLERANCE_FLOOR         = 2.0;   // lowest landing-velocity tolerance
+export const DIFFICULTY_TOLERANCE_STEP          = 0.2;
+export const DIFFICULTY_EDGE_MARGIN_STEP        = 0.02;
+export const DIFFICULTY_EDGE_MARGIN_CAP         = 0.48;
+export const DIFFICULTY_SPAWN_VEL_BASE          = 60;
+export const DIFFICULTY_SPAWN_VEL_STEP          = 8;
+export const DIFFICULTY_FUEL_GAIN_STEP          = 15;
+export const DIFFICULTY_FUEL_GAIN_FLOOR_FRAC    = 0.4;
+
+// ---------- Achievements (Phase 6) ----------
+// Definitions only — unlock logic lives in GameState.unlockAchievement()
+// called from the gameplay modes.
+export const ACHIEVEMENTS = [
+  { id: 'first-landing',    title: 'FIRST LANDING',    description: 'Made it home safely.' },
+  { id: 'perfect-landing',  title: 'PERFECT LANDING',  description: 'Feather touch on a bonus pad.' },
+  { id: 'hot-swap-refuel',  title: 'HOT SWAP',         description: 'Refueled from a dangerously low tank.' },
+  { id: 'sample-collector', title: 'SAMPLE COLLECTOR', description: 'Banked 10 science samples.' },
+  { id: 'probe-rescuer',    title: 'PROBE RESCUER',    description: 'Fixed 3 damaged probes.' },
+  { id: 'marathon',         title: 'MARATHON',         description: '10 successful landings in one run.' }
+];
+
+// High-score board — how many entries we keep, the top-N leaderboard.
+export const HIGH_SCORE_SLOTS = 10;
+
+// Perfect-landing thresholds (every condition must hold).
+export const PERFECT_FUEL_FRAC      = 0.95;   // >= 95% of capacity remaining
+export const PERFECT_VELOCITY_MAX   = 0.5;    // speed squared threshold in m/s
+export const PERFECT_CENTER_FRAC    = 0.12;   // within 12% of pad half-width of center
+export const PERFECT_ANGLE_MAX      = 1.5 * (Math.PI / 180);
+
+// Hot-swap achievement: land with fuel below this, refuel up past this.
+export const HOT_SWAP_LOW_FUEL      = 100;
+export const HOT_SWAP_HIGH_FUEL     = 800;
+
 // ---------- Mode identifiers ----------
 // Use strings so console logs and save files are human-readable.
 export const MODE = Object.freeze({
   BOOT:       'BOOT',
+  MENU:       'MENU',        // main menu / high-score board
   LANDER:     'LANDER',      // 2D-style side view, orthographic
   TRANSITION: 'TRANSITION',  // cinematic camera move
   WALK:       'WALK',        // 3D third-person

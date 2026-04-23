@@ -125,3 +125,120 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
   transition: opacity 0.45s ease;
 }
 #hud-comms.show { opacity: 1; }
+
+/* ---- Phase-6 overlays (main menu, game over, settings) ---- */
+.overlay[hidden] { display: none !important; }
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(4, 6, 14, 0.88);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  pointer-events: auto;
+  font-family: "Courier New", Courier, monospace;
+  letter-spacing: 2px;
+}
+.overlay h1 {
+  margin: 0;
+  font-size: 48px;
+  letter-spacing: 8px;
+  color: #ffee88;
+}
+.overlay h2 { margin: 0; font-size: 28px; color: #ffee88; }
+.overlay h3 { margin: 0 0 8px 0; font-size: 18px; color: #ffee88; }
+.overlay .subtitle { opacity: 0.7; letter-spacing: 4px; margin: -12px 0 8px; }
+.overlay button {
+  font-family: inherit;
+  letter-spacing: 3px;
+  background: transparent;
+  border: 2px solid #ffee88;
+  color: #ffee88;
+  padding: 10px 26px;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.overlay button:hover { background: rgba(255, 238, 136, 0.12); transform: scale(1.04); }
+.overlay button.big   { font-size: 22px; padding: 14px 36px; }
+.overlay button.small { font-size: 14px; padding: 6px 18px; opacity: 0.8; }
+
+.overlay .hs-panel { text-align: center; }
+.overlay ol#hs-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 16px;
+  min-width: 280px;
+}
+.overlay ol#hs-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 16px;
+  opacity: 0.92;
+}
+.overlay ol#hs-list li.empty { justify-content: center; opacity: 0.4; }
+
+.overlay .go-row {
+  display: flex;
+  gap: 16px;
+  font-size: 18px;
+}
+.overlay .go-row span { color: #ffee88; min-width: 80px; text-align: right; }
+.overlay .go-rank { color: #66ff88; font-size: 18px; min-height: 1.4em; }
+
+#settings-menu label.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 15px;
+}
+#settings-menu input[type="range"] {
+  width: 200px;
+  accent-color: #ffee88;
+}
+#settings-menu input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #ffee88;
+}
+#set-volume-label { min-width: 30px; text-align: right; color: #ffee88; }
+
+/* Achievement toast — top-right, slides in and fades */
+.toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 95;
+  min-width: 260px;
+  padding: 10px 16px;
+  background: rgba(10, 15, 25, 0.92);
+  border: 1px solid #66ff88;
+  color: #d6ffd6;
+  font-family: "Courier New", Courier, monospace;
+  letter-spacing: 1px;
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+}
+.toast[hidden] { display: none !important; }
+.toast.show { opacity: 1; transform: translateX(0); }
+.toast .toast-label {
+  font-size: 11px;
+  color: #66ff88;
+  letter-spacing: 3px;
+  margin-bottom: 4px;
+}
+.toast .toast-title {
+  font-size: 18px;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+.toast .toast-desc {
+  font-size: 13px;
+  opacity: 0.75;
+}

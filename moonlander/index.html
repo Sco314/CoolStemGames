@@ -55,6 +55,50 @@
     <div id="hud-center" class="center-msg"></div>
   </div>
 
+  <!-- Phase-6 menus and toasts. All hidden by default; Main.js + HUD.js
+       decide visibility based on mode and events. -->
+  <div id="main-menu" class="overlay" hidden>
+    <h1>MOONLANDER</h1>
+    <p class="subtitle">2D ↔ 3D</p>
+    <button id="btn-start" class="big">START</button>
+    <div class="hs-panel">
+      <h3>HIGH SCORES</h3>
+      <ol id="hs-list"></ol>
+    </div>
+    <button id="btn-settings-menu" class="small">SETTINGS</button>
+  </div>
+
+  <div id="game-over" class="overlay" hidden>
+    <h1>MISSION OVER</h1>
+    <div class="go-row">FINAL SCORE <span id="go-score">0</span></div>
+    <div class="go-row">LEVEL <span id="go-level">0</span></div>
+    <div class="go-row">LANDINGS <span id="go-landings">0</span></div>
+    <div id="go-rank" class="go-rank"></div>
+    <button id="btn-restart" class="big">RESTART</button>
+    <button id="btn-menu" class="small">MAIN MENU</button>
+  </div>
+
+  <div id="settings-menu" class="overlay" hidden>
+    <h2>SETTINGS</h2>
+    <label class="row">
+      <span>MASTER VOLUME</span>
+      <input type="range" min="0" max="100" step="1" id="set-volume">
+      <span id="set-volume-label">80</span>
+    </label>
+    <label class="row">
+      <input type="checkbox" id="set-invert-y">
+      <span>INVERT MOUSE Y</span>
+    </label>
+    <button id="btn-fullscreen" class="small">TOGGLE FULLSCREEN</button>
+    <button id="btn-close-settings" class="big">CLOSE</button>
+  </div>
+
+  <div id="achievement-toast" class="toast" hidden>
+    <div class="toast-label">ACHIEVEMENT UNLOCKED</div>
+    <div class="toast-title"></div>
+    <div class="toast-desc"></div>
+  </div>
+
   <script type="module" src="js/Main.js"></script>
 </body>
 </html>

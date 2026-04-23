@@ -13,22 +13,27 @@
 import * as THREE from 'three';
 import {
   GAME_WIDTH, GAME_HEIGHT, HALF_WIDTH, HALF_HEIGHT,
-  LANDER_SCALE, GRAVITY, THRUSTER_ACCEL_MAX, THRUSTER_JERK,
+  LANDER_SCALE, THRUSTER_ACCEL_MAX, THRUSTER_JERK,
   ACCEL_FALLOFF_MULT, ANGULAR_VELOCITY, HORIZONTAL_DRAG_COEF,
   FUEL_CONSUMPTION_MIN, FUEL_CONSUMPTION_MAX, FUEL_ALERT_THRESHOLD,
-  LANDING_ANGLE_TOLERANCE, LANDING_VELOCITY_TOLERANCE,
+  LANDING_ANGLE_TOLERANCE,
   MAIN_COLLIDER_SCALE, SMALL_COLLIDER_SCALE,
   FOOT_COLLIDER_OFFSET_X, FOOT_COLLIDER_OFFSET_Y,
-  LANDING_EDGE_MARGIN_FRAC, PAD_MULTIPLIER_WEIGHTS, SCORE_PER_LANDING,
+  PAD_MULTIPLIER_WEIGHTS, SCORE_PER_LANDING,
   CAMERA_ZOOM_ALTITUDE, CAMERA_ZOOM_FACTOR,
+  PERFECT_FUEL_FRAC, PERFECT_VELOCITY_MAX, PERFECT_CENTER_FRAC, PERFECT_ANGLE_MAX,
   ORTHO_NEAR, ORTHO_FAR, MODE
 } from '../Constants.js';
-import { GameState, update as updateState, notify } from '../GameState.js';
+import { GameState, update as updateState, notify, unlockAchievement } from '../GameState.js';
 import { Input } from '../Input.js';
-import { setLanderTelemetry, setCenterMessage } from '../HUD.js';
+import { setLanderTelemetry, setCenterMessage, showAchievementToast } from '../HUD.js';
 import { points as terrainPoints } from '../TerrainData.js';
 import { Sounds } from '../Sound.js';
 import { ParticleSystemCone, ParticleSystemExplosion } from '../Particles.js';
+import {
+  effectiveGravity, effectiveLandingVelocityTolerance, effectiveEdgeMarginFrac,
+  effectiveSpawnVelocity
+} from '../Progression.js';
 
 // ----- mode-local state (reset in enter(), cleared in exit()) -----
 let scene = null;
@@ -174,7 +179,7 @@ export const LanderMode = {
     const fwdX = -Math.sin(angle);
     const fwdY =  Math.cos(angle);
 
-    velY += -GRAVITY * dt;
+    velY += -effectiveGravity(GameState.level) * dt;
     velX += fwdX * currentAcceleration * dt;
     velY += fwdY * currentAcceleration * dt;
     velX += -velX * HORIZONTAL_DRAG_COEF * dt;
@@ -326,7 +331,7 @@ function buildLander() {
 }
 
 function respawn() {
-  velX = (Math.random() - 0.5) * 60;
+  velX = (Math.random() - 0.5) * effectiveSpawnVelocity(GameState.level);
   velY = 0;
   currentAcceleration = 0;
   lander.position.set(
@@ -403,14 +408,16 @@ function circleHitsSegment(pt, radius, seg) {
 }
 
 function evaluateLanding(segment, segmentIndex, bothFeetOnSamePad) {
-  const speed2 = velX * velX + velY * velY;
-  const tooFast    = speed2 > LANDING_VELOCITY_TOLERANCE * LANDING_VELOCITY_TOLERANCE;
+  const level    = GameState.level;
+  const speedMax = effectiveLandingVelocityTolerance(level);
+  const speed2   = velX * velX + velY * velY;
+  const tooFast    = speed2 > speedMax * speedMax;
   const tooTilted  = Math.abs(lander.rotation.z) > LANDING_ANGLE_TOLERANCE;
   const unevenPad  = segment.slope > 0.001;
 
   // Too close to either edge of the landing pad — counts as a crash even when
   // the lander is otherwise stable. Prevents half-on/half-off landings.
-  const edgeMargin = LANDER_SCALE * LANDING_EDGE_MARGIN_FRAC;
+  const edgeMargin = LANDER_SCALE * effectiveEdgeMarginFrac(level);
   const tooCloseToEdge =
     lander.position.x < segment.left.x  + edgeMargin ||
     lander.position.x > segment.right.x - edgeMargin;
@@ -431,14 +438,36 @@ function resolveLanding(segment, segmentIndex) {
   landingResolved = true;
   const multiplier = segment.multiplier || 1;
   const earned = SCORE_PER_LANDING * multiplier;
+  // Snapshot fuel now — the hot-swap achievement compares it to post-refuel.
+  const fuelAtLanding = GameState.fuel.current;
+
+  // Perfect-landing check has to read the pre-mutation state to evaluate the
+  // "full fuel" condition sensibly.
+  const padCenter = (segment.left.x + segment.right.x) / 2;
+  const padHalf   = (segment.right.x - segment.left.x) / 2;
+  const perfect =
+    multiplier > 1 &&
+    fuelAtLanding >= GameState.fuel.capacity * PERFECT_FUEL_FRAC &&
+    (velX * velX + velY * velY) <= PERFECT_VELOCITY_MAX * PERFECT_VELOCITY_MAX &&
+    Math.abs(lander.position.x - padCenter) <= padHalf * PERFECT_CENTER_FRAC &&
+    Math.abs(lander.rotation.z) <= PERFECT_ANGLE_MAX;
+
   updateState(s => {
     s.hasLanded = true;
     s.landingsCompleted += 1;
+    s.level += 1;
     s.score += earned;
     s.lastLanding.x = lander.position.x;
     s.lastLanding.terrainSegmentIndex = segmentIndex;
-    s.lastLanding.surfaceNormal = new THREE.Vector2(0, 1); // flat pad
+    s.lastLanding.surfaceNormal = new THREE.Vector2(0, 1);
+    s.lastLanding.fuelAtLanding = fuelAtLanding;
   }, 'landed');
+
+  // Achievement triggers.
+  showAchievementToast(unlockAchievement('first-landing'));
+  if (perfect)                              showAchievementToast(unlockAchievement('perfect-landing'));
+  if (GameState.landingsCompleted >= 10)    showAchievementToast(unlockAchievement('marathon'));
+
   const suffix = multiplier > 1 ? `  X${multiplier} +${earned}` : '';
   setCenterMessage('SUCCESSFULLY LANDED' + suffix);
   onLandedCallback({ segment, segmentIndex, multiplier, earned });
