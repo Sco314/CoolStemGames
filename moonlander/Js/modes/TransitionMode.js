@@ -1,4 +1,4 @@
-// modes/TransitionMode.js — v0.1.0
+// modes/TransitionMode.js — v0.2.0
 // A temporary mode that sits between LanderMode and WalkMode. Owns no scene
 // of its own — it borrows the scene of the mode being left, interpolates a
 // camera from the "from" camera's pose to the "to" camera's pose, and on
@@ -6,45 +6,56 @@
 //
 // Why a dedicated mode rather than a coroutine inside Main.js?
 //   - Keeps Main.js's loop uniform (every mode gets update(dt)/render()).
-//   - The transition is its own place to add polish later: DOF sweep,
-//     letterbox bars, a subtle zoom, music crossfade, etc.
+//   - The transition is its own place to add polish: DOF sweep, letterbox
+//     bars, a subtle zoom, music crossfade, etc.
+//
+// Phase 5 polish:
+//   - Letterbox bars slide in via a body.in-transition class.
+//   - Fullscreen fade-through-black peaks at t=0.5 (triangle wave), hiding
+//     the ortho→perspective projection swap completely.
+//   - Audio crossfade: rocket hum fades out, wind ambience fades in on
+//     lander→walk; reversed on walk→lander.
 //
 // Implementation note on ortho→perspective blending:
 // You can't literally "morph" an OrthographicCamera into a PerspectiveCamera —
-// they use different projection matrices. The trick here is:
-//   1. Use the "from" mode's camera as-is for the first half of the transition,
-//      but move it through space toward the destination pose.
-//   2. At the midpoint (e.g., t=0.5), swap to the destination perspective
-//      camera, already positioned to match roughly where the ortho was
-//      looking, and continue interpolating it to its final pose.
-// The swap is barely perceptible if you pick a visually similar frame and
-// have the scene already dark/rotated enough. For a first pass, just fade to
-// black at the swap and back up — visually it reads as a smooth cut.
+// they use different projection matrices. We move the "from" camera through
+// the first half, render the destination camera during the second half, and
+// rely on the fade-to-black at the midpoint to hide the cut.
 
 import * as THREE from 'three';
-import { TRANSITION_DURATION_S, MODE } from '../Constants.js';
+import {
+  TRANSITION_DURATION_S,
+  TRANSITION_ROCKET_VOL, TRANSITION_WIND_VOL,
+  MODE
+} from '../Constants.js';
 import { GameState, notify } from '../GameState.js';
 import { setCenterMessage } from '../HUD.js';
+import { Sounds } from '../Sound.js';
 
 let elapsed = 0;
 let fromCamera = null;
 let toCamera   = null;
 let fromScene  = null;       // we keep rendering this during the transition
 let onComplete = null;
+let direction  = 'lander-to-walk';   // or 'walk-to-lander'
+
+let fadeEl = null;           // cached DOM refs
+let bodyEl = null;
 
 // Captured start and end poses (we won't mutate the real cameras mid-transition
 // except to animate fromCamera during the first half).
-let startPos = new THREE.Vector3();
-let endPos   = new THREE.Vector3();
-let startQuat = new THREE.Quaternion();
-let endQuat   = new THREE.Quaternion();
+const startPos = new THREE.Vector3();
+const endPos   = new THREE.Vector3();
+const startQuat = new THREE.Quaternion();
+const endQuat   = new THREE.Quaternion();
 
 export const TransitionMode = {
   /**
    * @param {object} context  { renderer, canvas }
    * @param {object} opts     {
-   *   fromMode, toMode,          // Mode objects (not constructors — already-entered)
-   *   onComplete                 // called when transition is done
+   *   fromCamera, fromScene, toCamera,
+   *   direction: 'lander-to-walk' | 'walk-to-lander',
+   *   onComplete
    * }
    *
    * Note: toMode must already have been `.enter()`-ed by Main.js BEFORE the
@@ -52,19 +63,32 @@ export const TransitionMode = {
    * this; see its goToMode() implementation.
    */
   enter(context, opts) {
-    console.log('▶ TransitionMode.enter');
+    console.log('▶ TransitionMode.enter', opts.direction || '');
     elapsed = 0;
     fromCamera = opts.fromCamera;
     toCamera   = opts.toCamera;
     fromScene  = opts.fromScene;
+    direction  = opts.direction || 'lander-to-walk';
     onComplete = opts.onComplete || (() => {});
 
-    // Snapshot start pose (from the "from" camera) and end pose (from the "to"
-    // camera's desired resting position, which its mode's enter() set up).
     startPos.copy(fromCamera.position);
     startQuat.copy(fromCamera.quaternion);
     endPos.copy(toCamera.position);
     endQuat.copy(toCamera.quaternion);
+
+    // Letterbox + fade chrome — bars slide in via CSS, opacity driven per frame.
+    fadeEl = fadeEl || document.getElementById('fade-overlay');
+    bodyEl = bodyEl || document.body;
+    bodyEl.classList.add('in-transition');
+    if (fadeEl) fadeEl.style.opacity = '0';
+
+    // Make sure the rocket hum isn't lingering from gameplay; we want to
+    // control it explicitly for the crossfade.
+    Sounds.rocket?.stop();
+    if (direction === 'lander-to-walk') {
+      Sounds.wind?.play();
+      Sounds.wind?.setVolume(0);
+    }
 
     GameState.previousMode = GameState.mode;
     GameState.mode = MODE.TRANSITION;
@@ -74,6 +98,17 @@ export const TransitionMode = {
 
   exit() {
     console.log('◀ TransitionMode.exit');
+    // Tear down chrome. The destination mode is now active; let its enter()
+    // finish deciding what sound bed to keep running.
+    if (bodyEl) bodyEl.classList.remove('in-transition');
+    if (fadeEl) fadeEl.style.opacity = '0';
+
+    // Reset the rocket bed to full volume so the next thrust in LanderMode
+    // isn't quiet (the crossfade leaves it partial). Wind volume is left at
+    // its end-of-crossfade value — 0 after walk→lander, TRANSITION_WIND_VOL
+    // after lander→walk (WalkMode.startDisembark refreshes it anyway).
+    Sounds.rocket?.setVolume(1);
+
     fromCamera = toCamera = fromScene = null;
     onComplete = null;
   },
@@ -83,18 +118,23 @@ export const TransitionMode = {
     const t = Math.min(1, elapsed / TRANSITION_DURATION_S);
     const eased = easeInOutCubic(t);
 
-    // Animate the camera we're currently rendering.
-    // For the first half we animate fromCamera in place. At t >= 0.5 we'll
-    // be rendering with toCamera and interpolate it the rest of the way.
+    // Camera interpolation. First half animates the ortho/from camera; second
+    // half animates the perspective/to camera. Fade-to-black hides the swap.
     if (t < 0.5) {
       fromCamera.position.lerpVectors(startPos, endPos, eased);
-      // Slerp ortho camera quaternion — for ortho it's cosmetic (rotation of
-      // the frame) but doesn't hurt.
       fromCamera.quaternion.slerpQuaternions(startQuat, endQuat, eased);
     } else {
       toCamera.position.lerpVectors(startPos, endPos, eased);
       toCamera.quaternion.slerpQuaternions(startQuat, endQuat, eased);
     }
+
+    // Triangle-wave fade: 0 at t=0 and t=1, peaks at 1 at t=0.5.
+    const fade = 1 - Math.abs(t * 2 - 1);
+    if (fadeEl) fadeEl.style.opacity = String(fade);
+
+    // Audio crossfade. Rocket fades from its entry volume to 0 across the
+    // whole transition; wind does the reverse (or inverted for walk→lander).
+    updateAudioCrossfade(t);
 
     if (t >= 1) {
       onComplete();
@@ -104,13 +144,10 @@ export const TransitionMode = {
   render(renderer) {
     const t = elapsed / TRANSITION_DURATION_S;
     if (t < 0.5) {
-      // Still visually in the "from" scene.
       renderer.render(fromScene, fromCamera);
     } else {
-      // Swap: render the destination scene with the destination camera.
-      // Main.js handed us opts.toScene through getCamera/getScene indirection —
-      // we fetch it via toCamera's parent scene. To keep it simple, require
-      // the caller to provide toScene on the camera itself (see Main.js).
+      // Destination scene and camera were wired in by Main.js on the camera's
+      // userData.
       renderer.render(toCamera.userData.scene, toCamera);
     }
   },
@@ -123,4 +160,15 @@ export const TransitionMode = {
 
 function easeInOutCubic(t) {
   return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+}
+
+function updateAudioCrossfade(t) {
+  if (direction === 'lander-to-walk') {
+    Sounds.rocket?.setVolume(TRANSITION_ROCKET_VOL * (1 - t));
+    Sounds.wind?.setVolume(TRANSITION_WIND_VOL * t);
+  } else {
+    // walk→lander: wind tapers, rocket hum sneaks in for the re-entry vibe.
+    Sounds.wind?.setVolume(TRANSITION_WIND_VOL * (1 - t));
+    Sounds.rocket?.setVolume(TRANSITION_ROCKET_VOL * t);
+  }
 }

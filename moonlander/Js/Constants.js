@@ -64,6 +64,16 @@ export const PERSP_FAR  = 2000;
 // Cinematic transition between lander landing and walk mode
 export const TRANSITION_DURATION_S = 2.5;  // length of the camera pull-back
 export const POST_LAND_PAUSE_S     = 1.0;  // beat of stillness after touchdown
+// Max volumes for the two audio beds that crossfade across the transition.
+// Individual SFX still call play() at their normal volume.
+export const TRANSITION_ROCKET_VOL = 0.45;
+export const TRANSITION_WIND_VOL   = 0.55;
+
+// Scripted disembark (lander → walk) and embark (walk → lander) animations
+// that bracket the camera transition. Input is locked for the duration.
+export const DISEMBARK_DURATION_S  = 1.5;
+export const DISEMBARK_STEP_UNITS  = 7.0;   // how far the astronaut walks out
+export const EMBARK_DURATION_S     = 1.2;
 
 // ---------- Walk mode ----------
 export const WALK_SPEED              = 18;   // units per second

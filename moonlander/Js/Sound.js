@@ -20,9 +20,11 @@ class Sound {
     this.el.src = src;
     this.el.preload = 'auto';
     this.el.style.display = 'none';
+    this._baseVolume = 1;
     this.el.addEventListener('error', () => {
       console.warn(`⚠️ Sound file not found: ${src} — falling back to no-op`);
       this.play = this.stop = () => {};
+      this.setVolume = () => {};
     });
     document.body.appendChild(this.el);
   }
@@ -33,6 +35,12 @@ class Sound {
     if (p && p.catch) p.catch(() => {});
   }
   stop() { this.el.pause(); }
+  setVolume(v) {
+    // Clamp to [0, 1]; the audio element rejects out-of-range values.
+    if (v < 0) v = 0; else if (v > 1) v = 1;
+    this.el.volume = v;
+    this._baseVolume = v;
+  }
   loop() {
     // tblazevic-style seamless loop using timeupdate instead of HTMLAudio.loop
     // because the latter has gaps on some browsers.
@@ -50,7 +58,8 @@ export const Sounds = {
   crash:    null,
   rocket:   null,
   lowFuel:  null,
-  comms:    null
+  comms:    null,
+  wind:     null
 };
 
 let _timersStarted = false;
@@ -60,7 +69,12 @@ export function initSound() {
   Sounds.rocket  = new Sound('audio/rocket.wav');
   Sounds.lowFuel = new Sound('audio/alarm.wav');
   Sounds.comms   = new Sound('audio/morse.wav');
+  Sounds.wind    = new Sound('audio/wind.wav');
   Sounds.rocket.loop();
+  Sounds.wind.loop();
+  // Wind is continuous ambience; it stays "playing" at volume 0 until the
+  // TransitionMode / WalkMode crossfade it up.
+  Sounds.wind.setVolume(0);
 
   // Most browsers won't actually play audio until the user has interacted with
   // the page. Defer the alert/comms chains until first input so they don't

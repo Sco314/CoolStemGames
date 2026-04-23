@@ -20,11 +20,14 @@ import {
   WALK_PITCH_MIN, WALK_PITCH_MAX,
   WALK_GROUND_AMPLITUDE, WALK_CRATER_COUNT,
   INTERACTABLE_TYPES, LANDING_SITE_LOOT, DEFAULT_LOOT,
+  DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
+  TRANSITION_WIND_VOL,
   MODE
 } from '../Constants.js';
 import { GameState, update as updateState, notify, refreshObjectives } from '../GameState.js';
 import { Input } from '../Input.js';
 import { setCenterMessage, showComms } from '../HUD.js';
+import { Sounds } from '../Sound.js';
 
 let scene = null;
 let camera = null;
@@ -41,6 +44,11 @@ let yawRad = 0;
 let pitchRad = 0.55;
 let pointerLocked = false;
 let walkPhase = 0;             // drives the leg/arm cycle
+
+// Phase-5 scripted disembark/embark animation state. While non-null, player
+// input is ignored and astronaut position/yaw are driven by the timeline.
+let scripted = null;
+// { kind, t, duration, startPos, endPos, startYaw, endYaw, onDone }
 
 // Mouse-move handler bound in enter(), unbound in exit().
 let onMouseMove = null;
@@ -103,9 +111,31 @@ export const WalkMode = {
     landerModel = null;
     interactables = [];
     pointerLocked = false;
+    scripted = null;
   },
 
   update(dt) {
+    // Scripted disembark / embark takes priority over player input. It drives
+    // position, yaw, walk animation, and camera each frame, then bails out
+    // before the normal input loop runs.
+    if (scripted) {
+      scripted.t = Math.min(1, scripted.t + dt / scripted.duration);
+      const t = scripted.t;
+      astronaut.position.x = lerp(scripted.startPos.x, scripted.endPos.x, t);
+      astronaut.position.z = lerp(scripted.startPos.z, scripted.endPos.z, t);
+      astronaut.position.y = groundHeight(astronaut.position.x, astronaut.position.z);
+      yawRad = lerpAngle(scripted.startYaw, scripted.endYaw, t);
+      astronaut.rotation.y = yawRad;
+      updateWalkAnim(dt, true);
+      updateChaseCamera();
+      if (t >= 1) {
+        const done = scripted.onDone;
+        scripted = null;
+        done();
+      }
+      return;
+    }
+
     // --- movement in the astronaut's facing direction ---
     astronaut.rotation.y = yawRad;
     const fwdX = -Math.sin(yawRad);
@@ -177,14 +207,69 @@ export const WalkMode = {
 
   getCamera() { return camera; },
   getScene()  { return scene; },
-  getAstronaut() { return astronaut; }
+  getAstronaut() { return astronaut; },
+
+  /**
+   * Phase-5 disembark: teleport the astronaut to the parked lander's hatch,
+   * then walk them forward DISEMBARK_STEP_UNITS. Input is locked for the
+   * duration. Main.js fires this on the lander→walk transition's onComplete.
+   */
+  startDisembark(onDone = () => {}) {
+    const lx = landerModel.position.x;
+    const lz = landerModel.position.z;
+    // Hatch is just in front of the lander along +Z; astronaut faces +Z.
+    const hatchX = lx;
+    const hatchZ = lz + 3;
+    astronaut.position.set(hatchX, groundHeight(hatchX, hatchZ), hatchZ);
+    yawRad = Math.PI;   // facing +Z so forward walks away from the lander
+    pitchRad = 0.55;
+    const endX = hatchX;
+    const endZ = hatchZ + DISEMBARK_STEP_UNITS;
+    scripted = {
+      kind: 'disembark',
+      t: 0,
+      duration: DISEMBARK_DURATION_S,
+      startPos: astronaut.position.clone(),
+      endPos: new THREE.Vector3(endX, 0, endZ),
+      startYaw: yawRad,
+      endYaw: yawRad,
+      onDone
+    };
+    // Prompt is irrelevant mid-script; the lockout is also visually cued by
+    // the still-sliding letterbox bars.
+    setCenterMessage('');
+    // Wind ambience takes over from the transition crossfade.
+    Sounds.wind?.setVolume(TRANSITION_WIND_VOL);
+  },
+
+  /**
+   * Phase-5 embark: walk the astronaut into the parked lander, then fire
+   * onDone so Main.js can start the walk→lander cinematic swap.
+   */
+  startEmbark(onDone = () => {}) {
+    const target = landerModel.position.clone();
+    const dx = target.x - astronaut.position.x;
+    const dz = target.z - astronaut.position.z;
+    const targetYaw = Math.atan2(-dx, -dz); // astronaut forward = (-sin, 0, -cos)
+    scripted = {
+      kind: 'embark',
+      t: 0,
+      duration: EMBARK_DURATION_S,
+      startPos: astronaut.position.clone(),
+      endPos: target,
+      startYaw: yawRad,
+      endYaw: targetYaw,
+      onDone
+    };
+    setCenterMessage('');
+  }
 };
 
 // ---------- helpers ----------
 
 function bindMouse() {
   onMouseMove = (e) => {
-    if (!pointerLocked) return;
+    if (!pointerLocked || scripted) return;
     yawRad   -= e.movementX * WALK_MOUSE_SENSITIVITY;
     pitchRad += e.movementY * WALK_MOUSE_SENSITIVITY;
     if (pitchRad < WALK_PITCH_MIN) pitchRad = WALK_PITCH_MIN;
@@ -206,6 +291,16 @@ function unbindMouse() {
   if (onPointerLockChange) document.removeEventListener('pointerlockchange', onPointerLockChange);
   if (onCanvasClick && canvasEl) canvasEl.removeEventListener('click', onCanvasClick);
   onMouseMove = onPointerLockChange = onCanvasClick = null;
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function lerpAngle(a, b, t) {
+  // Shortest-path angular lerp so a PI→-PI swing doesn't take the long way.
+  let d = b - a;
+  while (d >  Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return a + d * t;
 }
 
 function updateChaseCamera() {

@@ -22,6 +22,13 @@
   </script>
 </head>
 <body>
+  <!-- Cinematic-transition chrome: black letterbox bars slide in during the
+       mode swap, and a fullscreen fade overlay is driven directly by the
+       transition's elapsed time to hide the ortho→perspective projection swap. -->
+  <div id="letterbox-top" class="letterbox"></div>
+  <div id="letterbox-bottom" class="letterbox"></div>
+  <div id="fade-overlay"></div>
+
   <!-- The HUD overlay lives in the DOM, NOT in a Three.js scene.
        Cheaper than a second scene/camera, easier to style, and it survives
        mode switches untouched. The Three.js canvas is appended by Main.js. -->

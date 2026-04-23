@@ -93,6 +93,9 @@ function goToMode(nextMode, opts = {}) {
 /**
  * Cinematic swap: old mode stays rendered while a transition camera eases
  * into the new mode's starting pose. Used for lander→walk and walk→lander.
+ * For lander→walk, the destination mode's scripted disembark is kicked off
+ * after the transition completes, so the astronaut visibly steps out before
+ * player control activates.
  */
 function cinematicSwap(fromMode, toMode, enterOpts = {}) {
   // Enter the destination mode FIRST so its scene and camera exist. We just
@@ -103,20 +106,27 @@ function cinematicSwap(fromMode, toMode, enterOpts = {}) {
   // without a separate parameter.
   toMode.getCamera().userData.scene = toMode.getScene();
 
-  // Hand control to the TransitionMode. On complete, drop it and make the
-  // destination mode the "current" one — its enter() already ran.
+  const direction = (toMode === WalkMode) ? 'lander-to-walk' : 'walk-to-lander';
+
   const prevMode = fromMode;
   currentMode = TransitionMode;
   TransitionMode.enter({ renderer, canvas }, {
     fromCamera: fromMode.getCamera(),
     fromScene:  fromMode.getScene(),
     toCamera:   toMode.getCamera(),
+    direction,
     onComplete: () => {
       TransitionMode.exit();
       prevMode.exit();           // NOW dispose the old mode's scene
       currentMode = toMode;
       GameState.mode = (toMode === WalkMode) ? MODE.WALK : MODE.LANDER;
       notify('mode');
+
+      // After a lander→walk transition, run the astronaut's scripted
+      // disembark before handing control back to the player.
+      if (direction === 'lander-to-walk' && typeof toMode.startDisembark === 'function') {
+        toMode.startDisembark();
+      }
     }
   });
 }
@@ -142,10 +152,21 @@ function handleCrashed(result) {
 
 function handleReturnToLander() {
   console.log('↩ Returning to lander mode');
-  cinematicSwap(WalkMode, LanderMode, {
-    onLanded:  handleLanded,
-    onCrashed: handleCrashed
-  });
+  // Walk the astronaut into the lander first, THEN kick off the cinematic
+  // swap. The embark animation takes ownership of input until it finishes.
+  if (typeof WalkMode.startEmbark === 'function') {
+    WalkMode.startEmbark(() => {
+      cinematicSwap(WalkMode, LanderMode, {
+        onLanded:  handleLanded,
+        onCrashed: handleCrashed
+      });
+    });
+  } else {
+    cinematicSwap(WalkMode, LanderMode, {
+      onLanded:  handleLanded,
+      onCrashed: handleCrashed
+    });
+  }
 }
 
 // ---------- misc ----------

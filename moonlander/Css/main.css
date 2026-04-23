@@ -12,6 +12,34 @@ html, body {
 
 canvas { display: block; }
 
+/* Cinematic transition chrome. Letterbox bars slide in from off-screen; the
+ * fade overlay's opacity is driven imperatively each frame by TransitionMode. */
+.letterbox {
+  position: fixed;
+  left: 0;
+  width: 100%;
+  height: 14vh;
+  background: #000;
+  z-index: 50;
+  pointer-events: none;
+  transition: transform 0.6s cubic-bezier(0.7, 0, 0.3, 1);
+}
+#letterbox-top    { top: 0;    transform: translateY(-100%); }
+#letterbox-bottom { bottom: 0; transform: translateY(100%);  }
+body.in-transition #letterbox-top,
+body.in-transition #letterbox-bottom {
+  transform: translateY(0);
+}
+
+#fade-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+}
+
 #hud {
   position: fixed;
   inset: 0;
