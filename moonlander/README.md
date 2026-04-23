@@ -1,11 +1,13 @@
-# Moonlander (2D ↔ 3D)
+# Space Racer (2D ↔ 3D)
 
 A lunar-lander game that transitions between a 2D-style side-view landing
 sequence and a 3D third-person walk sequence on the moon surface, **all in
 Three.js with zero build step**. Import maps pull Three directly from unpkg;
 the rest is plain ES modules.
 
-Live URL: https://coolstemgames.com/moonlander/
+Live URL: https://coolstemgames.com/moonlander/ (the folder name is kept as
+`moonlander/` to avoid breaking existing links and cache; the player-facing
+name is Space Racer).
 
 ## How to play
 

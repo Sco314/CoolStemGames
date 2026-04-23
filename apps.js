@@ -14,7 +14,7 @@ window.COOL_STEM_APPS = [
     external: true,
   },
   {
-    title: "Moonlander",
+    title: "Space Racer",
     sub: "Land soft, explore the moon",
     href: "/moonlander/",
     image: "/link-images/moonlander.svg",
