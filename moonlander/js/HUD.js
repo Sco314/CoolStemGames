@@ -55,11 +55,17 @@ const overlay = {
   muteBtn:          document.getElementById('mute-btn'),
   muteIcon:         document.querySelector('#mute-btn .mute-icon'),
   toastTitle:       document.querySelector('#achievement-toast .toast-title'),
-  toastDesc:        document.querySelector('#achievement-toast .toast-desc')
+  toastDesc:        document.querySelector('#achievement-toast .toast-desc'),
+  walkTutorial:     document.getElementById('walk-tutorial'),
+  walkTutorialClose:document.getElementById('walk-tutorial-close')
 };
 
 // Per-frame pull state — lander mode writes these before renderFrame().
-const landerTelemetry = { altitude: 0, hSpeed: 0, vSpeed: 0, angleDeg: 0 };
+// State strings drive the green/yellow/red gauge color classes.
+const landerTelemetry = {
+  altitude: 0, hSpeed: 0, vSpeed: 0, angleDeg: 0,
+  vSpeedState: 'ok', hSpeedState: 'ok', angleState: 'ok'
+};
 
 let commsTimer = null;
 let toastTimer = null;
@@ -117,6 +123,31 @@ function bindOverlayButtons() {
     refreshMuteIcon();
     persistSettings();
   });
+
+  // Walk-mode first-time tutorial close button. Dismiss sets the
+  // profile-level flag so the card doesn't reappear next run.
+  overlay.walkTutorialClose?.addEventListener('click', dismissWalkTutorial);
+}
+
+/**
+ * Show the first-time walk tutorial card. Call from WalkMode when the
+ * astronaut disembarks. No-op if the player has already seen it.
+ */
+export function showWalkTutorial() {
+  if (GameState.flags?.walkTutorialSeen) return;
+  if (!overlay.walkTutorial) return;
+  overlay.walkTutorial.hidden = false;
+}
+
+export function hideWalkTutorial() {
+  if (overlay.walkTutorial) overlay.walkTutorial.hidden = true;
+}
+
+function dismissWalkTutorial() {
+  hideWalkTutorial();
+  GameState.flags = GameState.flags || {};
+  GameState.flags.walkTutorialSeen = true;
+  persistSettings();
 }
 
 function applySettings(settings) {
@@ -142,11 +173,17 @@ function persistSettings() {
 }
 
 // ---------- per-frame ----------
-export function setLanderTelemetry({ altitude, hSpeed, vSpeed, angleDeg }) {
-  landerTelemetry.altitude = altitude;
-  landerTelemetry.hSpeed   = hSpeed;
-  landerTelemetry.vSpeed   = vSpeed;
-  landerTelemetry.angleDeg = angleDeg;
+export function setLanderTelemetry({
+  altitude, hSpeed, vSpeed, angleDeg,
+  vSpeedState = 'ok', hSpeedState = 'ok', angleState = 'ok'
+}) {
+  landerTelemetry.altitude     = altitude;
+  landerTelemetry.hSpeed       = hSpeed;
+  landerTelemetry.vSpeed       = vSpeed;
+  landerTelemetry.angleDeg     = angleDeg;
+  landerTelemetry.vSpeedState  = vSpeedState;
+  landerTelemetry.hSpeedState  = hSpeedState;
+  landerTelemetry.angleState   = angleState;
 }
 
 export function renderFrame() {
@@ -155,10 +192,22 @@ export function renderFrame() {
     el.hspeed.textContent = landerTelemetry.hSpeed.toFixed(1).padStart(6);
     el.vspeed.textContent = landerTelemetry.vSpeed.toFixed(1).padStart(6);
     el.angle.textContent  = landerTelemetry.angleDeg.toFixed(1).padStart(6);
+    setGaugeClass(el.vspeed, landerTelemetry.vSpeedState);
+    setGaugeClass(el.hspeed, landerTelemetry.hSpeedState);
+    setGaugeClass(el.angle,  landerTelemetry.angleState);
   }
 
   const t = GameState.timeElapsed;
   el.time.textContent = `${(t / 60) | 0}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+}
+
+/** Apply a tri-state color class ('ok' | 'warn' | 'danger') to a gauge element. */
+function setGaugeClass(node, state) {
+  if (!node) return;
+  node.classList.remove('gauge-ok', 'gauge-warn', 'gauge-danger');
+  if (state === 'ok')     node.classList.add('gauge-ok');
+  if (state === 'warn')   node.classList.add('gauge-warn');
+  if (state === 'danger') node.classList.add('gauge-danger');
 }
 
 export function setCenterMessage(text) {
@@ -267,6 +316,14 @@ function onStateChange(state /*, changeKey */) {
   el.fuel.textContent  = pad(state.fuel.current.toFixed(0), 4);
   el.kits.textContent    = state.supplies.repairKits;
   el.samples.textContent = state.supplies.scienceSamples;
+
+  // Fuel gauge color — green at comfortable, amber at "plan your descent",
+  // red at critical. Matches the low-fuel alarm threshold at 30%.
+  const fuelFrac = state.fuel.capacity ? state.fuel.current / state.fuel.capacity : 0;
+  const fuelState =
+    fuelFrac <= 0.15 ? 'danger' :
+    fuelFrac <= 0.35 ? 'warn'   : 'ok';
+  setGaugeClass(el.fuel, fuelState);
 
   document.body.classList.toggle('mode-walk',   state.mode === MODE.WALK);
   document.body.classList.toggle('mode-lander', state.mode === MODE.LANDER);

@@ -30,7 +30,10 @@ import {
   unlockAchievement
 } from '../GameState.js';
 import { Input } from '../Input.js';
-import { setCenterMessage, showComms, showAchievementToast } from '../HUD.js';
+import {
+  setCenterMessage, showComms, showAchievementToast,
+  showWalkTutorial, hideWalkTutorial
+} from '../HUD.js';
 import { Sounds } from '../Sound.js';
 import { effectiveFuelGain } from '../Progression.js';
 import { getQuality, onQualityChange } from '../Quality.js';
@@ -107,6 +110,9 @@ export const WalkMode = {
     unbindMouse();
     if (unsubQuality) { unsubQuality(); unsubQuality = null; }
     if (document.pointerLockElement) document.exitPointerLock();
+    // Tear down the first-time tutorial if it was still open — we don't
+    // want it hovering over lander mode.
+    hideWalkTutorial();
 
     for (const d of disposables) {
       if (d.geometry) d.geometry.dispose();
@@ -255,6 +261,9 @@ export const WalkMode = {
     setCenterMessage('');
     // Wind ambience takes over from the transition crossfade.
     Sounds.wind?.setVolume(TRANSITION_WIND_VOL);
+    // First-time-on-the-moon help card. No-ops if the player has dismissed
+    // it before (GameState.flags.walkTutorialSeen persists across saves).
+    showWalkTutorial();
   },
 
   /**

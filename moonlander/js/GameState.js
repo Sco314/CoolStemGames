@@ -45,7 +45,10 @@ export const GameState = {
   hasFuel: true,
   isAlerted: false,
   debug: false,
-  flags: { probeRepaired: false },
+  flags: {
+    probeRepaired:    false,
+    walkTutorialSeen: false
+  },
 
   // ----- Objective tracker (run-local) -----
   objectives: OBJECTIVES.map(o => ({ id: o.id, label: o.label, done: false })),
@@ -125,7 +128,11 @@ export function startNewRun() {
   GameState.hasLanded = false;
   GameState.hasFuel = true;
   GameState.isAlerted = false;
-  GameState.flags = { probeRepaired: false };
+  // walkTutorialSeen is profile-level, not run-level — preserve across restarts.
+  GameState.flags = {
+    probeRepaired:    false,
+    walkTutorialSeen: GameState.flags?.walkTutorialSeen === true
+  };
   GameState.objectives = OBJECTIVES.map(o => ({ id: o.id, label: o.label, done: false }));
   GameState.lastLanding = {
     x: 0,

@@ -192,12 +192,20 @@ export const LanderMode = {
     checkCollisions();
 
     // --- telemetry for HUD ---
+    // Gauge colors are driven off the current effective tolerances so the
+    // player can read "am I in the safe zone?" at a glance: green well
+    // under, amber approaching, red over.
     const altitude = computeAltitude(lander.position.x, lander.position.y);
+    const vTol = effectiveLandingVelocityTolerance(GameState.level);
+    const aTol = LANDING_ANGLE_TOLERANCE;
     setLanderTelemetry({
       altitude,
       hSpeed:   velX,
       vSpeed:  -velY,
-      angleDeg: -angle * 180 / Math.PI
+      angleDeg: -angle * 180 / Math.PI,
+      vSpeedState: gaugeState(Math.abs(velY), vTol, 0.4, 0.8),
+      hSpeedState: gaugeState(Math.abs(velX), vTol, 0.4, 0.8),
+      angleState:  gaugeState(Math.abs(angle), aTol, 0.4, 0.85)
     });
 
     // --- camera zoom near ground (final-approach drama) ---
@@ -517,4 +525,16 @@ function computeAltitude(x, y) {
     return Math.max(0, y - LANDER_SCALE/2 - groundY);
   }
   return 0;
+}
+
+/**
+ * Map a magnitude to a tri-state color flag used by HUD.js:
+ *   value < tol * okFrac   → 'ok'     (green)
+ *   value < tol * warnFrac → 'warn'   (amber)
+ *   otherwise              → 'danger' (red / bold)
+ */
+function gaugeState(value, tol, okFrac, warnFrac) {
+  if (value < tol * okFrac)   return 'ok';
+  if (value < tol * warnFrac) return 'warn';
+  return 'danger';
 }

@@ -93,48 +93,17 @@
           <li><kbd>←</kbd> <kbd>→</kbd> <span>rotate</span></li>
           <li class="touch-hint">On touch: on-screen <kbd>◀</kbd> <kbd>▲</kbd> <kbd>▶</kbd> buttons</li>
         </ul>
-
-        <h4>3D WALK</h4>
-        <ul class="controls">
-          <li><kbd>click</kbd> <span>lock mouse look</span></li>
-          <li><kbd>W</kbd> <kbd>S</kbd> <span>forward / back</span></li>
-          <li><kbd>A</kbd> <kbd>D</kbd> <span>strafe</span></li>
-          <li><kbd>mouse</kbd> <span>turn astronaut + pitch camera</span></li>
-          <li><kbd>E</kbd> <span>interact / board lander</span></li>
-          <li class="touch-hint">On touch: joystick to move, <kbd>E</kbd> to interact</li>
-        </ul>
-
-        <h4>ANYWHERE</h4>
-        <ul class="controls">
-          <li><kbd>Esc</kbd> <span>settings (volume, invert-Y, fullscreen)</span></li>
-          <li><kbd>🔇 / 🔊</kbd> <span>mute toggle, top-right corner</span></li>
-        </ul>
       </section>
 
       <section class="howto">
         <h3>FUEL, BRIEFLY</h3>
         <ul class="bullet">
-          <li><b>Starts at 1000.</b> Thrusting burns 4–14 / second depending on how hard you push the throttle.</li>
-          <li><b>Below 300</b> the low-fuel alarm starts beeping — plan your descent.</li>
-          <li><b>At 0</b> the engine dies. You'll fall and crash. If that crash happens while dry, the run ends.</li>
-          <li><b>Refuel on the moon.</b> Every walk scene has at least one fuel drum. Higher levels give less per drum, so don't waste it.</li>
+          <li>Refuel on the moon.</li>
         </ul>
 
         <h3>LANDING CHECKLIST</h3>
         <ul class="bullet">
           <li>Pick a <b>flat pad</b> — bonus pads marked <b>X2 / X3 / X5</b> multiply your score.</li>
-          <li>Keep <b>V-SPEED low</b> (the right-side gauge). Feather your thrust.</li>
-          <li>Keep <b>ANGLE near 0°</b>. A tilted touchdown is a crash.</li>
-          <li><b>Both feet on the same pad.</b> Half-off = "too close to edge".</li>
-        </ul>
-
-        <h3>ON THE MOON</h3>
-        <ul class="bullet">
-          <li><span class="pill fuel">FUEL DRUM</span> tops up your tanks.</li>
-          <li><span class="pill kit">SUPPLY CRATE</span> adds a repair kit.</li>
-          <li><span class="pill sample">SAMPLE</span> +50 score, banks toward the SAMPLE COLLECTOR achievement.</li>
-          <li><span class="pill damaged">DAMAGED PROBE</span> spends a kit, +500 score.</li>
-          <li>Walk to your lander and press <kbd>E</kbd> when you're done.</li>
         </ul>
 
         <h3>DON'T</h3>
@@ -155,6 +124,38 @@
       </div>
     </div>
   </div>
+
+  <!-- First-time walk-mode tutorial. Shown once per profile (tracked in
+       GameState.flags.walkTutorialSeen) when the astronaut first disembarks
+       into walk mode, so the player isn't asked to absorb walk-mode controls
+       + loot legend on the main menu before they've even landed. -->
+  <aside id="walk-tutorial" class="walk-tutorial" hidden>
+    <button class="walk-tutorial-close" id="walk-tutorial-close" aria-label="Close tutorial">×</button>
+    <h3>WELCOME, COMMANDER</h3>
+    <h4>3D WALK</h4>
+    <ul class="controls">
+      <li><kbd>click</kbd> <span>lock mouse look</span></li>
+      <li><kbd>W</kbd> <kbd>S</kbd> <span>forward / back</span></li>
+      <li><kbd>A</kbd> <kbd>D</kbd> <span>strafe</span></li>
+      <li><kbd>mouse</kbd> <span>turn astronaut + pitch camera</span></li>
+      <li><kbd>E</kbd> <span>interact / board lander</span></li>
+      <li class="touch-hint">On touch: joystick to move, <kbd>E</kbd> to interact</li>
+    </ul>
+    <h4>ON THE MOON</h4>
+    <ul class="bullet">
+      <li><span class="pill fuel">FUEL DRUM</span> tops up your tanks.</li>
+      <li><span class="pill kit">SUPPLY CRATE</span> adds a repair kit.</li>
+      <li><span class="pill sample">SAMPLE</span> +50 score, banks toward SAMPLE COLLECTOR.</li>
+      <li><span class="pill damaged">DAMAGED PROBE</span> spends a kit, +500 score.</li>
+      <li>Walk to your lander and press <kbd>E</kbd> when you're done.</li>
+    </ul>
+    <h4>ANYWHERE</h4>
+    <ul class="controls">
+      <li><kbd>Esc</kbd> <span>settings (volume, invert-Y, fullscreen)</span></li>
+      <li><kbd>🔇 / 🔊</kbd> <span>mute toggle, top-right corner</span></li>
+    </ul>
+    <p class="walk-tutorial-foot">This card only shows once.</p>
+  </aside>
 
   <div id="game-over" class="overlay" hidden>
     <h1>MISSION OVER</h1>
