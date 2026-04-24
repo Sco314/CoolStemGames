@@ -12,7 +12,7 @@
 
 import { GameState, subscribe, save as saveGameState } from './GameState.js';
 import { MODE } from './Constants.js';
-import { setMasterVolume } from './Sound.js';
+import { setMasterVolume, setMuted, isMuted } from './Sound.js';
 
 // ---------- cached DOM refs ----------
 const el = {
@@ -52,6 +52,8 @@ const overlay = {
   setInvertY:       document.getElementById('set-invert-y'),
   btnFullscreen:    document.getElementById('btn-fullscreen'),
   btnCloseSettings: document.getElementById('btn-close-settings'),
+  muteBtn:          document.getElementById('mute-btn'),
+  muteIcon:         document.querySelector('#mute-btn .mute-icon'),
   toastTitle:       document.querySelector('#achievement-toast .toast-title'),
   toastDesc:        document.querySelector('#achievement-toast .toast-desc')
 };
@@ -105,13 +107,34 @@ function bindOverlayButtons() {
     if (document.fullscreenElement) document.exitFullscreen?.();
     else document.documentElement.requestFullscreen?.();
   });
+
+  // Always-visible corner mute toggle. Click flips state, persists,
+  // retunes every live Sound.
+  overlay.muteBtn.addEventListener('click', () => {
+    const next = !isMuted();
+    setMuted(next);
+    GameState.settings.muted = next;
+    refreshMuteIcon();
+    persistSettings();
+  });
 }
 
 function applySettings(settings) {
   setMasterVolume(settings.masterVolume ?? 0.8);
+  setMuted(settings.muted !== false); // default to muted on first boot
   overlay.setVolume.value = String(Math.round((settings.masterVolume ?? 0.8) * 100));
   overlay.setVolLabel.textContent = overlay.setVolume.value;
   overlay.setInvertY.checked = !!settings.invertY;
+  refreshMuteIcon();
+}
+
+function refreshMuteIcon() {
+  const muted = isMuted();
+  if (overlay.muteIcon) overlay.muteIcon.textContent = muted ? '🔇' : '🔊';
+  if (overlay.muteBtn) {
+    overlay.muteBtn.setAttribute('aria-label', muted ? 'Unmute sound' : 'Mute sound');
+    overlay.muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+  }
 }
 
 function persistSettings() {

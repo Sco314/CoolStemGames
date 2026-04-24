@@ -34,6 +34,7 @@ import { setCenterMessage, showComms, showAchievementToast } from '../HUD.js';
 import { Sounds } from '../Sound.js';
 import { effectiveFuelGain } from '../Progression.js';
 import { getQuality, onQualityChange } from '../Quality.js';
+import { getSharedTexture } from '../AssetCache.js';
 
 let scene = null;
 let camera = null;
@@ -493,10 +494,9 @@ function updateWalkAnim(dt, moving) {
 }
 
 function buildParkedLander() {
-  // Visual continuity: reuse the same texture as the flying lander. Rendered
-  // as a billboard sprite so it reads the same no matter which angle the
-  // astronaut views it from.
-  const tex = new THREE.TextureLoader().load('textures/lander.png');
+  // Visual continuity: reuse the same texture as the flying lander, shared
+  // via AssetCache so we don't upload the PNG twice on low-memory devices.
+  const tex = getSharedTexture('textures/lander.png');
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
@@ -506,7 +506,8 @@ function buildParkedLander() {
   const lx = 0, lz = 0;
   landerModel.position.set(lx, groundHeight(lx, lz) + size * 0.5, lz);
   scene.add(landerModel);
-  disposables.push({ material: mat, texture: tex });
+  // Note: the cached texture is NOT disposed — AssetCache owns it.
+  disposables.push({ material: mat });
 }
 
 // ---------- Phase-4 interactable system ----------
