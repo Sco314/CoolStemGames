@@ -12,11 +12,14 @@ export const HALF_WIDTH  = GAME_WIDTH  / 2;
 export const HALF_HEIGHT = GAME_HEIGHT / 2;
 
 // ---------- Lander physics (tblazevic values, unchanged) ----------
-// LANDER_SCALE bumped 8 → 16 for a larger, more readable craft. All
-// dependent values (collider sizes, foot offsets, particle spawn offsets,
-// parked-lander sprite) are expressed as multiples of LANDER_SCALE so they
-// scale with it.
-export const LANDER_SCALE          = 16;
+// LANDER_SCALE: 8 → 16 (200% bigger) → 24 (now ~3× the original) so the
+// craft reads clearly on phone viewports after the letterbox fix. Every
+// dependent value (collider sizes, foot offsets, particle spawn offsets,
+// parked-lander sprite) is expressed as a multiple of LANDER_SCALE, so the
+// scale change propagates automatically — but we also tighten the foot
+// offset / edge-margin fractions below so the wider craft still fits the
+// terrain's narrowest 15-unit pads.
+export const LANDER_SCALE          = 24;
 export const GRAVITY               = 1.62;          // Moon gravity m/s²
 export const THRUSTER_ACCEL_MAX    = 4;
 export const THRUSTER_JERK         = 4;             // Jerk = d(accel)/dt — gives smooth lift-off feel
@@ -27,19 +30,19 @@ export const HORIZONTAL_DRAG_COEF  = 0.04;
 // ---------- Collision shapes (3-circle approximation) ----------
 // The lander is approximated by three circles: one at the body center, and one
 // at each foot. The foot circles are offset from the lander origin so they
-// rotate with the craft; see LanderMode.buildLander(). Foot offset is kept
-// tight (0.25 of LANDER_SCALE) so the two feet fit comfortably inside the
-// 15–20 unit flat pads the terrain polyline provides.
+// rotate with the craft; see LanderMode.buildLander(). Foot-offset / edge-
+// margin fractions tightened with the scale bump so feet span 9.6 units and
+// the effective landing footprint is 13.4 units — fits the narrowest 15-unit
+// pads with room to spare.
 export const MAIN_COLLIDER_SCALE   = LANDER_SCALE / 2;
 export const SMALL_COLLIDER_SCALE  = LANDER_SCALE / 8;
-export const FOOT_COLLIDER_OFFSET_X = LANDER_SCALE * 0.25;  // outward from center (was 0.45)
+export const FOOT_COLLIDER_OFFSET_X = LANDER_SCALE * 0.20;  // feet closer to center
 export const FOOT_COLLIDER_OFFSET_Y = -LANDER_SCALE * 0.45; // below center
 
 // If the lander x is within this fraction of the lander scale of either
 // landing-pad edge, the landing is rejected as "TOO CLOSE TO EDGE".
-// Kept small at level 0 so first-time players don't bounce on barely-
-// off-center touchdowns. Progression.js tightens it each landing.
-export const LANDING_EDGE_MARGIN_FRAC = 0.12;
+// Small margin so the wider sprite still lands comfortably.
+export const LANDING_EDGE_MARGIN_FRAC = 0.08;
 
 // ---------- Fuel / scoring ----------
 export const STARTING_FUEL          = 1000;

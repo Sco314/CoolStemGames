@@ -17,7 +17,7 @@
 //           fuel-zero crash, settings toggle on Escape.
 
 import * as THREE from 'three';
-import { MODE } from './Constants.js';
+import { MODE, GAME_WIDTH, GAME_HEIGHT } from './Constants.js';
 import {
   GameState, notify,
   startNewRun, commitRunToHighScores,
@@ -58,13 +58,16 @@ window.addEventListener('load', () => {
 function init() {
   // --- renderer ---
   renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   canvas = renderer.domElement;
   document.body.appendChild(canvas);
 
   window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onGlobalKey);
+
+  // Set canvas size + letterbox now; onResize handles both the renderer
+  // size and absolute-position centering.
+  onResize();
 
   // --- shared systems ---
   // Load order matters: initHUD applies settings, so loadSave has to populate
@@ -260,11 +263,40 @@ function onGlobalKey(e) {
 }
 
 // ---------- misc ----------
+/**
+ * Resize + letterbox the canvas so the game's fixed 800×450 world never
+ * renders stretched on portrait phones / ultrawide monitors. We compute a
+ * canvas size that fits inside the viewport while preserving GAME_WIDTH :
+ * GAME_HEIGHT, then center it absolutely. Overlays (menu, HUD, touch) are
+ * positioned against the viewport, not the canvas, so they're unaffected.
+ */
 function onResize() {
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  const ww = window.innerWidth;
+  const wh = window.innerHeight;
+  const gameAspect   = GAME_WIDTH / GAME_HEIGHT;
+  const windowAspect = ww / wh;
+
+  let canvasW, canvasH;
+  if (windowAspect > gameAspect) {
+    // Wider than the game — pillar-box: cap by height.
+    canvasH = wh;
+    canvasW = wh * gameAspect;
+  } else {
+    // Taller than the game (e.g. portrait phone) — letter-box: cap by width.
+    canvasW = ww;
+    canvasH = ww / gameAspect;
+  }
+
+  renderer.setSize(canvasW, canvasH);
+  canvas.style.position = 'fixed';
+  canvas.style.left = `${Math.round((ww - canvasW) / 2)}px`;
+  canvas.style.top  = `${Math.round((wh - canvasH) / 2)}px`;
+
+  // Perspective camera (walk mode) uses the canvas aspect, which now matches
+  // the game aspect — stable no matter the viewport.
   const cam = currentMode?.getCamera?.();
   if (cam?.isPerspectiveCamera) {
-    cam.aspect = window.innerWidth / window.innerHeight;
+    cam.aspect = canvasW / canvasH;
     cam.updateProjectionMatrix();
   }
 }
