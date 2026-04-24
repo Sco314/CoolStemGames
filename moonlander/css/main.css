@@ -416,13 +416,36 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 /* ---- Telemetry gauge color states ----
  * Applied to #hud-fuel, #hud-vspeed, #hud-hspeed, #hud-angle depending on
  * how close the reading is to its failure threshold. Colors are tuned for
- * the Phase-7 colorblind-safer palette (amber not pure red). */
+ * strong contrast against the #000 canvas + inherited white HUD text.
+ *
+ * Selectors intentionally combine the ID with the class so they beat any
+ * ancestor-scoped color (specificity 1,1,0) without !important. */
 #hud-fuel, #hud-vspeed, #hud-hspeed, #hud-angle {
-  transition: color 0.15s ease;
+  transition: color 0.2s ease, text-shadow 0.2s ease;
 }
-.gauge-ok     { color: #66ff88; }
-.gauge-warn   { color: #ffd84d; }
-.gauge-danger { color: #ff6b4a; font-weight: bold; }
+#hud-fuel.gauge-ok,
+#hud-vspeed.gauge-ok,
+#hud-hspeed.gauge-ok,
+#hud-angle.gauge-ok {
+  color: #5dff78;
+  text-shadow: 0 0 6px rgba(93, 255, 120, 0.45);
+}
+#hud-fuel.gauge-warn,
+#hud-vspeed.gauge-warn,
+#hud-hspeed.gauge-warn,
+#hud-angle.gauge-warn {
+  color: #ffcc33;
+  font-weight: bold;
+  text-shadow: 0 0 6px rgba(255, 204, 51, 0.55);
+}
+#hud-fuel.gauge-danger,
+#hud-vspeed.gauge-danger,
+#hud-hspeed.gauge-danger,
+#hud-angle.gauge-danger {
+  color: #ff3c3c;
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(255, 60, 60, 0.7);
+}
 
 .overlay .go-row {
   display: flex;

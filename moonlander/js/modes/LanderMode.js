@@ -393,13 +393,12 @@ function checkCollisions() {
     return;
   }
 
-  // Feet-first contact: evaluate as a landing attempt.
+  // Feet-first contact: evaluate as a landing attempt. We pick whichever foot
+  // hit first as the "contact" segment and let evaluateLanding decide.
   if (leftHitIdx >= 0 || rightHitIdx >= 0) {
     const contactIdx = leftHitIdx >= 0 ? leftHitIdx : rightHitIdx;
     const contactSeg = terrainSegments[contactIdx];
-    const bothFeetOnSamePad =
-      leftHitIdx >= 0 && rightHitIdx >= 0 && leftHitIdx === rightHitIdx;
-    evaluateLanding(contactSeg, contactIdx, bothFeetOnSamePad);
+    evaluateLanding(contactSeg, contactIdx);
   }
 }
 
@@ -419,7 +418,13 @@ function circleHitsSegment(pt, radius, seg) {
   return (ex * ex + ey * ey) <= radius * radius;
 }
 
-function evaluateLanding(segment, segmentIndex, bothFeetOnSamePad) {
+function evaluateLanding(segment, segmentIndex /*, bothFeetOnSamePad */) {
+  // The `bothFeetOnSamePad` flag from checkCollisions() used to be a crash
+  // condition, but it fired false positives on the first-contact frame when
+  // one foot touched a tick before the other. The center-based edge-margin
+  // check below already prevents half-on/half-off landings, and the
+  // `unevenPad` check prevents landing on slopes — so we don't need the
+  // simultaneous-feet requirement on top.
   const level    = GameState.level;
   const speedMax = effectiveLandingVelocityTolerance(level);
   const speed2   = velX * velX + velY * velY;
@@ -427,14 +432,14 @@ function evaluateLanding(segment, segmentIndex, bothFeetOnSamePad) {
   const tooTilted  = Math.abs(lander.rotation.z) > LANDING_ANGLE_TOLERANCE;
   const unevenPad  = segment.slope > 0.001;
 
-  // Too close to either edge of the landing pad — counts as a crash even when
-  // the lander is otherwise stable. Prevents half-on/half-off landings.
+  // Too close to either edge of the landing pad. Uses the lander's center x
+  // against the pad's boundaries plus a small margin.
   const edgeMargin = LANDER_SCALE * effectiveEdgeMarginFrac(level);
   const tooCloseToEdge =
     lander.position.x < segment.left.x  + edgeMargin ||
     lander.position.x > segment.right.x - edgeMargin;
 
-  if (tooFast || tooTilted || unevenPad || !bothFeetOnSamePad || tooCloseToEdge) {
+  if (tooFast || tooTilted || unevenPad || tooCloseToEdge) {
     const reason =
       tooFast   ? 'LANDING VELOCITY WAS TOO HIGH' :
       tooTilted ? 'LANDING ANGLE WAS TOO HIGH'    :
