@@ -5,6 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Fibonacci Zoom</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -183,12 +184,15 @@ html, body {
   border-color: var(--amber);
   transform: translateY(-1px);
 }
+/* Notification dot: larger, red, centered on the top-right corner so half the
+   dot sits outside the box (parent has no overflow:hidden). */
 .sidebar-ach-emblem.new::after {
   content: '';
-  position: absolute; top: 3px; right: 3px;
-  width: 7px; height: 7px; background: var(--amber);
+  position: absolute; top: -7px; right: -7px;
+  width: 14px; height: 14px; background: var(--red);
+  border: 2px solid var(--bg);
   border-radius: 50%;
-  box-shadow: 0 0 6px var(--amber);
+  box-shadow: 0 0 8px rgba(224,92,92,0.7);
 }
 
 /* UX polish: compact Found in Nature panel (left sidebar, always visible desktop) */
@@ -203,12 +207,15 @@ html, body {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 6px;
-  overflow: hidden;
+  /* overflow removed so the corner notification dot isn't clipped.
+     Inner img/emblem get their own border-radius to stay inside the curve. */
   cursor: pointer;
   transition: all .15s;
   position: relative;
   display: flex; align-items: center; justify-content: center;
 }
+.sidebar-gallery-tile img,
+.sidebar-gallery-tile .emblem-placeholder { border-radius: 6px; }
 .sidebar-gallery-tile.locked {
   opacity: 0.3;
   cursor: default;
@@ -229,11 +236,12 @@ html, body {
 }
 .sidebar-gallery-tile.new::after {
   content: '';
-  position: absolute; top: 4px; right: 4px;
-  width: 8px; height: 8px; background: var(--amber);
+  position: absolute; top: -7px; right: -7px;
+  width: 14px; height: 14px; background: var(--red);
+  border: 2px solid var(--bg);
   border-radius: 50%;
-  box-shadow: 0 0 6px var(--amber);
-  z-index: 1;
+  box-shadow: 0 0 8px rgba(224,92,92,0.7);
+  z-index: 2;
 }
 
 .card {
@@ -429,6 +437,45 @@ html, body {
   width: 34px; height: 34px; border-radius: 50%;
   object-fit: cover; border: 2px solid var(--amber);
   flex-shrink: 0;
+  background: var(--bg2);     /* fallback when no src and no emblem */
+  cursor: pointer;
+}
+.user-avatar.emblem-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 22px; line-height: 1;
+  overflow: hidden;           /* keep the emoji inside the circle */
+}
+.lb-avatar.emblem-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px; line-height: 1;
+}
+
+/* Emblem picker grid inside the settings overlay / modal */
+.emblem-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 8px;
+  max-height: 40vh; overflow-y: auto;
+}
+.emblem-picker-cell {
+  aspect-ratio: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; line-height: 1;
+  cursor: pointer;
+  transition: all .15s;
+}
+.emblem-picker-cell:hover { border-color: var(--amber); transform: translateY(-1px); }
+.emblem-picker-cell.active {
+  background: rgba(245,166,35,0.12);
+  border-color: var(--amber);
+  box-shadow: 0 0 10px rgba(245,166,35,0.25);
+}
+.emblem-picker-cell.none {
+  font-size: 11px; color: var(--txt3);
+  font-family: 'JetBrains Mono', monospace;
 }
 .user-name {
   font-size: 15px; color: var(--txt);
@@ -965,12 +1012,14 @@ html, body {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 10px;
-  overflow: hidden;
+  /* overflow removed so the corner notification dot isn't clipped.
+     img-wrap carries its own rounded top corners to keep the image inside. */
   cursor: pointer;
   transition: all .2s;
   position: relative;
   display: flex; flex-direction: column;
 }
+.gallery-card .img-wrap { border-radius: 10px 10px 0 0; }
 .gallery-card:hover:not(.gallery-locked) {
   border-color: var(--amber);
   transform: translateY(-2px);
@@ -1009,11 +1058,12 @@ html, body {
   font-size: 12px; font-weight: 600;
 }
 .gallery-card .new-dot {
-  position: absolute; top: 8px; right: 8px;
-  width: 12px; height: 12px; background: var(--amber);
+  position: absolute; top: -9px; right: -9px;
+  width: 18px; height: 18px; background: var(--red);
+  border: 2px solid var(--bg);
   border-radius: 50%;
-  box-shadow: 0 0 10px var(--amber);
-  z-index: 1;
+  box-shadow: 0 0 10px rgba(224,92,92,0.7);
+  z-index: 2;
 }
 
 /* ── Tier 4: Level-up fact card ──────────────────────── */
@@ -1151,7 +1201,7 @@ html, body {
     <div class="ch-banner-main">
       <div class="ch-banner-title">
         <span id="chBannerName">Class Challenge</span> ·
-        Target F(<span id="chBannerTarget">13</span>) ·
+        Target: Fibonacci #<span id="chBannerTarget">13</span> ·
         <span id="chBannerCountdown">--:--</span> left
       </div>
       <div class="ch-banner-code">Code: <strong id="chBannerCode">----</strong></div>
@@ -1239,10 +1289,10 @@ html, body {
             <input type="text" id="challengeName" placeholder="Challenge name (optional)" maxlength="40" class="guest-name-input">
             <div style="display:flex;gap:8px;margin-top:8px;">
               <select id="challengeTarget" class="guest-name-input" style="flex:1">
-                <option value="8">F(8) = 21</option>
-                <option value="13" selected>F(13) = 233</option>
-                <option value="21">F(21) = 10,946</option>
-                <option value="34">F(34) = 5.7M</option>
+                <option value="8">8th Fibonacci number (21)</option>
+                <option value="13" selected>13th Fibonacci number (233)</option>
+                <option value="21">21st Fibonacci number (10,946)</option>
+                <option value="34">34th Fibonacci number (5.7M)</option>
               </select>
               <select id="challengeDuration" class="guest-name-input" style="flex:1">
                 <option value="5">5 min</option>
@@ -1272,6 +1322,12 @@ html, body {
           <div id="memPanelBody">Open the panel to start metrics…</div>
           <button class="btn btn-secondary" id="memStressBtn" style="margin-top:8px;width:100%;font-size:11px;padding:6px;">Stress test: 300 clicks over 3 s</button>
         </div>
+      </div>
+
+      <!-- Tier 4: Join Classroom Challenge (user-facing; admin creation is in its own section above) -->
+      <div id="joinChallengeSection" style="display:none;">
+        <div class="overlay-section" style="margin-top:16px;">Classroom Challenge</div>
+        <button class="auth-btn" id="joinChallengeBtn">🏫 Join a Challenge</button>
       </div>
 
       <!-- Tier 2: Skin picker -->
@@ -1394,12 +1450,16 @@ html, body {
         <!-- Signed-in state (both anonymous and Google users) -->
         <div id="signedIn" style="display:none">
           <div class="user-row">
-            <img class="user-avatar" id="userAvatar" src="" alt="">
+            <div class="user-avatar" id="userAvatar" title="Click to choose an avatar"></div>
             <div style="flex:1;min-width:0;">
               <input type="text" class="guest-name-input" id="guestNameInput" placeholder="Enter your name" maxlength="20" style="display:none">
               <div class="user-name" id="userName"></div>
               <div class="user-score" id="userBestScore">Best: —</div>
             </div>
+          </div>
+          <!-- Guest-status hint (anonymous users only); hidden for Google-linked. -->
+          <div id="guestStatusHint" class="lb-status" style="margin-top:6px;display:none;">
+            Playing as guest — save progress below
           </div>
           <button class="auth-btn" id="signInBtn" style="margin-top:8px;display:none">
             <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;flex-shrink:0">
@@ -1408,11 +1468,7 @@ html, body {
               <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
               <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
             </svg>
-            Sign in with Google
-          </button>
-          <!-- Tier 4: Join Classroom Challenge -->
-          <button class="auth-btn" id="joinChallengeBtn" style="margin-top:6px;font-size:10px;padding:6px 8px;">
-            🏫 Join Challenge
+            Save progress with Google
           </button>
           <button class="signout-btn" id="signOutBtn" style="display:none">sign out</button>
         </div>
@@ -1421,7 +1477,7 @@ html, body {
       <!-- Boosts card (v2.0 Tier 1) -->
       <div class="card" id="boostsCard">
         <div class="card-title">⚡ Boosts · <span id="tokenBalance">0</span> 🪙</div>
-        <div id="boostsList"><div class="lb-empty">Reach F(3) to earn tokens</div></div>
+        <div id="boostsList"><div class="lb-empty">Reach the 3rd Fibonacci number to earn tokens</div></div>
       </div>
 
       <!-- Golden Ratio Engine card (v2.0 Tier 1) -->
@@ -1470,12 +1526,15 @@ html, body {
       </div>
       <div id="mobileSignedIn" style="display:none">
         <div class="user-row">
-          <img class="user-avatar" id="mobileUserAvatar" src="" alt="">
+          <div class="user-avatar" id="mobileUserAvatar" title="Tap to choose an avatar"></div>
           <div style="flex:1;min-width:0;">
             <input type="text" class="guest-name-input" id="mobileGuestNameInput" placeholder="Enter your name" maxlength="20" style="display:none">
             <div class="user-name" id="mobileUserName"></div>
             <div class="user-score" id="mobileUserBestScore">Best: —</div>
           </div>
+        </div>
+        <div id="mobileGuestStatusHint" class="lb-status" style="margin-top:6px;display:none;">
+          Playing as guest — save progress below
         </div>
         <button class="auth-btn" id="mobileSignInBtn" style="margin-top:8px;display:none">
           <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;flex-shrink:0">
@@ -1484,18 +1543,14 @@ html, body {
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
           </svg>
-          Sign in with Google
-        </button>
-        <!-- Tier 4: Join Classroom Challenge (mobile) -->
-        <button class="auth-btn" id="mobileJoinChallengeBtn" style="margin-top:6px;font-size:10px;padding:6px 8px;">
-          🏫 Join Challenge
+          Save progress with Google
         </button>
         <button class="signout-btn" id="mobileSignOutBtn" style="display:none">sign out</button>
       </div>
     </div>
     <div class="card" id="mobileBoostsCard">
       <div class="card-title">⚡ Boosts · <span id="mobileTokenBalance">0</span> 🪙</div>
-      <div id="mobileBoostsList"><div class="lb-empty">Reach F(3) to earn tokens</div></div>
+      <div id="mobileBoostsList"><div class="lb-empty">Reach the 3rd Fibonacci number to earn tokens</div></div>
     </div>
     <div class="card" id="mobileEngineCard" style="display:none;">
       <div class="card-title">⚙️ Golden Ratio Engine</div>
@@ -1559,6 +1614,21 @@ html, body {
     <button class="overlay-close" id="achievementsClose">✕</button>
     <div class="overlay-title">🏆 Achievements · <span id="achievementsCount">0</span> / <span id="achievementsTotal">0</span></div>
     <div id="achievementsGrid"></div>
+  </div>
+</div>
+
+<!-- Avatar picker overlay — choose an unlocked achievement emblem as your avatar. -->
+<div class="overlay-backdrop" id="avatarPickerOverlay">
+  <div class="overlay-panel" style="width:360px;max-width:94vw;">
+    <button class="overlay-close" id="avatarPickerClose">✕</button>
+    <div class="overlay-title">Choose your avatar</div>
+    <p style="font-size:12px;color:var(--txt2);line-height:1.45;margin-bottom:12px;">
+      Pick an emblem from an achievement you've unlocked. You can change it any time.
+    </p>
+    <div id="avatarPickerGrid" class="emblem-picker-grid"></div>
+    <div id="avatarPickerEmpty" style="display:none;font-size:12px;color:var(--txt3);text-align:center;padding:14px 0;font-style:italic;">
+      Unlock an achievement to pick an avatar.
+    </div>
   </div>
 </div>
 
@@ -1652,6 +1722,58 @@ function fib(n) {
 function fmt(v) {
   const s = v < 0n ? '-' + String(-v) : String(v);
   return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// Human-readable Fibonacci phrasing. Replaces the old "F(n) = value" style
+// across achievement/boost/gallery/challenge/level copy so students see
+// "the 6th Fibonacci number which is 8" instead of cryptic math notation.
+// Kept short-form math symbols out of UI strings unless absolutely necessary.
+function ordinalSuffix(n) {
+  const a = Math.abs(n);
+  const mod100 = a % 100;
+  if (mod100 >= 11 && mod100 <= 13) return 'th';
+  switch (a % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; }
+}
+function fibOrdinal(n) {
+  return `${n}${ordinalSuffix(n)} Fibonacci number`;
+}
+// "the 6th Fibonacci number which is 8" (withValue=true, default)
+// "the 6th Fibonacci number"             (withValue=false — unlock text where value is obvious)
+function fibPhrase(n, withValue = true) {
+  const absN = Math.abs(n);
+  const sign = n < 0 ? 'negative ' : '';
+  const head = `the ${sign}${fibOrdinal(absN)}`;
+  if (!withValue) return head;
+  return `${head} which is ${fmt(fib(n))}`;
+}
+
+// Render an avatar into a container element. `emblem` (an emoji string) wins
+// over `photoURL` so a student's chosen achievement emblem always shows,
+// even on Google-linked accounts. Both null → blank circle (shows parent bg).
+// Used for Account-card user-avatars and for dynamically-rendered lb-avatars.
+function paintAvatar(el, emblem, photoURL) {
+  if (!el) return;
+  if (emblem) {
+    el.classList.add('emblem-avatar');
+    el.textContent = emblem;
+  } else if (photoURL) {
+    el.classList.remove('emblem-avatar');
+    el.innerHTML = `<img src="${photoURL}" alt="" referrerpolicy="no-referrer"
+      style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">`;
+  } else {
+    el.classList.remove('emblem-avatar');
+    el.textContent = '';
+  }
+}
+function avatarEmblemHtml(emblem, photoURL) {
+  // Used by leaderboard renderers that build rows as HTML strings.
+  if (emblem) {
+    return `<div class="lb-avatar emblem-avatar">${emblem}</div>`;
+  }
+  if (photoURL) {
+    return `<img class="lb-avatar" src="${photoURL}" alt="" referrerpolicy="no-referrer">`;
+  }
+  return `<div class="lb-avatar"></div>`;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -1748,6 +1870,11 @@ const state = {
   lowestN:         1,              // mirror of highestAbsN for negative exploration
   _dragExploredNs: null,           // lazy-initialised Set for "Explorer" achievement
 
+  // ── v2.5 Tier 2: Avatar emblem — picked from an unlocked achievement.
+  //    Empty string falls back to Google photoURL (if linked) or a blank
+  //    circle. Persisted to Firestore and surfaced on the leaderboard.
+  avatarEmblem:     '',
+
   // ── v2.5 Tier 2: Skins ───────────────────────────────────────────
   activeSkin:       'classic',
   _canvasBg:        '#0a0e1a',     // canvas clear color (overridden by skins)
@@ -1802,8 +1929,8 @@ const state = {
 const BOOST_UPGRADES = [
   { id: 'x2',           name: '×2 Click',           cost: 10,    tickMult: 2,    unlock: 3,  desc: 'Each click = 2 ticks' },
   { id: 'x3',           name: '×3 Click',           cost: 50,    tickMult: 1.5,  unlock: 5,  desc: 'Stacks to ×3 total' },
-  { id: 'fingers',      name: 'Fibonacci Fingers',  cost: 100,   tickMult: 1.66, unlock: 8,  desc: 'Every 5th click: +F(5)=5 ticks' },
-  { id: 'touch',        name: 'Golden Touch',       cost: 500,   tickMult: 2,    unlock: 13, desc: 'Every 13th click: +F(13)=233 ticks' },
+  { id: 'fingers',      name: 'Fibonacci Fingers',  cost: 100,   tickMult: 1.66, unlock: 8,  desc: 'Every 5th click: +5 bonus ticks (the 5th Fibonacci number)' },
+  { id: 'touch',        name: 'Golden Touch',       cost: 500,   tickMult: 2,    unlock: 13, desc: 'Every 13th click: +233 bonus ticks (the 13th Fibonacci number)' },
   { id: 'phi',          name: 'The Phi Multiplier', cost: 2000,  tickMult: PHI,  unlock: 21, desc: 'All clicks ×φ (≈1.618)' },
   { id: 'fermat',       name: "Fermat's Flourish",  cost: 5000,  tickMult: 1.5,  unlock: 34, desc: 'Permanent ×1.5 on all output' },
   { id: 'golden_ratio', name: 'Ratio Resonance',    cost: 13000, tickMult: PHI,  unlock: 55, desc: 'Another ×φ layer' },
@@ -1822,25 +1949,25 @@ const OFFLINE_CAP_SECONDS = 8 * 3600;
 // ─── Tier 2: Achievements catalog ─────────────────────────────────
 const ACHIEVEMENTS = [
   // Early progression
-  { id: 'sprout',       emblem: '🌱', title: 'Sprout',             unlock: 'Reach F(3)',
+  { id: 'sprout',       emblem: '🌱', title: 'Sprout',             unlock: 'Reach the 3rd Fibonacci number (2)',
     fact: 'A tree branches in Fibonacci patterns — one trunk splits into two, then three branches, then five. This is how trees maximize sunlight.' },
-  { id: 'sunflower',    emblem: '🌻', title: 'Sunflower',          unlock: 'Reach F(8)',
+  { id: 'sunflower',    emblem: '🌻', title: 'Sunflower',          unlock: 'Reach the 8th Fibonacci number (21)',
     fact: 'Real sunflower heads have 21 spirals in one direction and 34 in the other — always consecutive Fibonacci numbers. This packs seeds most efficiently.' },
-  { id: 'nautilus',     emblem: '🐚', title: 'Nautilus',           unlock: 'Reach F(13)',
+  { id: 'nautilus',     emblem: '🐚', title: 'Nautilus',           unlock: 'Reach the 13th Fibonacci number (233)',
     fact: 'The nautilus shell grows each chamber φ times larger than the last. This exact proportion appears in ferns, shells, and galaxies.' },
-  { id: 'hurricane',    emblem: '🌀', title: 'Hurricane',          unlock: 'Reach F(21)',
+  { id: 'hurricane',    emblem: '🌀', title: 'Hurricane',          unlock: 'Reach the 21st Fibonacci number (10,946)',
     fact: 'Hurricane arms are logarithmic spirals — the same mathematical shape the Fibonacci spiral converges to. The closer you look, the more repeats.' },
-  { id: 'galaxy',       emblem: '🌌', title: 'Galaxy',             unlock: 'Reach F(34)',
+  { id: 'galaxy',       emblem: '🌌', title: 'Galaxy',             unlock: 'Reach the 34th Fibonacci number (5,702,887)',
     fact: 'Spiral galaxies like the Milky Way have arms that follow logarithmic spirals. At galactic scale, φ still shows up.' },
-  { id: 'phi_master',   emblem: 'φ',  title: 'Phi Master',         unlock: 'Reach F(55)',
+  { id: 'phi_master',   emblem: 'φ',  title: 'Phi Master',         unlock: 'Reach the 55th Fibonacci number',
     fact: 'φ = (1 + √5) / 2 ≈ 1.6180339887. It appears in human anatomy, the Parthenon, and Da Vinci paintings.' },
-  { id: 'transcendent', emblem: '∞',  title: 'Transcendent',       unlock: 'Reach F(89)',
-    fact: 'F(89) = 1,134,903,170. In 10 more steps F(99) surpasses the number of atoms in a human body. Growth is not linear.' },
+  { id: 'transcendent', emblem: '∞',  title: 'Transcendent',       unlock: 'Reach the 89th Fibonacci number',
+    fact: 'The 89th Fibonacci number is 1,134,903,170. In 10 more steps the 99th Fibonacci number surpasses the number of atoms in a human body. Growth is not linear.' },
 
   // Negative exploration
-  { id: 'mirror',       emblem: '🪞', title: 'Through the Mirror', unlock: 'Reach F(-5)',
-    fact: 'Negafibonacci numbers follow F(-n) = (-1)^(n+1) · F(n). The sequence extends infinitely backward, alternating sign.' },
-  { id: 'antimatter',   emblem: '⚛️', title: 'Antimatter',         unlock: 'Reach F(-13)',
+  { id: 'mirror',       emblem: '🪞', title: 'Through the Mirror', unlock: 'Reach the negative 5th Fibonacci number',
+    fact: 'Negative Fibonacci numbers follow a pattern: the negative nth equals the regular nth with its sign flipped when n is even. The sequence extends infinitely backward, alternating sign.' },
+  { id: 'antimatter',   emblem: '⚛️', title: 'Antimatter',         unlock: 'Reach the negative 13th Fibonacci number',
     fact: 'Going backward in the Fibonacci sequence matches going forward in a mirrored universe — a pattern physicists call CPT symmetry.' },
 
   // Engagement
@@ -1849,13 +1976,13 @@ const ACHIEVEMENTS = [
   { id: 'engine',       emblem: '⚙️', title: 'Autonomous',         unlock: 'Buy the Golden Ratio Engine',
     fact: 'Automation is how humans turned the industrial revolution into the information age. Your spiral now grows on its own.' },
   { id: 'phi_disciple', emblem: '🔥', title: 'Phi Disciple',       unlock: '13-day streak',
-    fact: 'You played 13 days in a row — F(7). Your persistence matches the sequence itself.' },
+    fact: 'You played 13 days in a row — the 7th Fibonacci number. Your persistence matches the sequence itself.' },
   { id: 'dedicated',    emblem: '📅', title: 'Dedicated',          unlock: '34-day streak',
-    fact: 'Thirty-four days — F(9). Most players stop by day 7. You are in rare company.' },
+    fact: 'Thirty-four days — the 9th Fibonacci number. Most players stop by day 7. You are in rare company.' },
 
   // Oddities
-  { id: 'zero',         emblem: '⚪', title: 'The Zero Point',     unlock: 'Reach n=0',
-    fact: 'F(0) = 0. The sequence starts here — the void from which everything grows.' },
+  { id: 'zero',         emblem: '⚪', title: 'The Zero Point',     unlock: 'Reach the 0th Fibonacci number',
+    fact: 'The 0th Fibonacci number is 0. The sequence starts here — the void from which everything grows.' },
   { id: 'explorer',     emblem: '🧭', title: 'Free Explorer',      unlock: 'Drag the number line to five different n values',
     fact: 'Mathematicians often play with numbers just to see what happens. Curiosity is how discovery starts.' },
   { id: 'collector',    emblem: '🏆', title: 'Completionist',      unlock: 'Unlock all other achievements',
@@ -1863,7 +1990,7 @@ const ACHIEVEMENTS = [
 
   // v3.0 Tier 3 — Combo + Golden Moment
   { id: 'combo_21',     emblem: '⚡', title: 'Streaking',           unlock: 'Reach a 21-click combo',
-    fact: '21 clicks in under 21 seconds is F(8) worth of reflex. Jazz drummers know this rhythm.' },
+    fact: '21 clicks in under 21 seconds is the 8th Fibonacci number worth of reflex. Jazz drummers know this rhythm.' },
   { id: 'combo_55',     emblem: '🔥', title: 'Unstoppable',         unlock: 'Reach a 55-click combo',
     fact: '55 straight clicks. Your dopamine loop just peaked.' },
   { id: 'golden_touch', emblem: '✨', title: 'Seized the Moment',   unlock: 'Catch a Golden Moment',
@@ -1880,7 +2007,7 @@ const GALLERY = [
     title: 'Nautilus Shell',
     fact: 'The chambered nautilus grows each new section about φ times larger than the last. Cutting the shell in half reveals this perfect logarithmic spiral.' },
   { at: 6,  emblem: '🌻',
-    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Helianthus_whorl.JPG?width=640',
+    src: 'https://cdn.hswstatic.com/gif/fibonacci-update.jpg',
     wiki: 'Fibonacci_sequence#Nature',
     title: 'Sunflower Seed Head',
     fact: 'Sunflower florets pack into two opposing spirals — typically 21 clockwise and 34 counter-clockwise, or 34/55, or 55/89. Always consecutive Fibonacci numbers.' },
@@ -1923,13 +2050,13 @@ const GALLERY = [
     src: 'https://en.wikipedia.org/wiki/Special:FilePath/DNA_orbit_animated.gif?width=320',
     wiki: 'DNA',
     title: 'DNA Double Helix',
-    fact: 'The B-form DNA molecule is 21 Å wide and 34 Å per complete turn — F(8) and F(9). The ratio is φ. Life itself is Fibonacci.' },
+    fact: 'The B-form DNA molecule is 21 Å wide and 34 Å per complete turn — the 8th and 9th Fibonacci numbers. The ratio is φ. Life itself is Fibonacci.' },
 ];
 
 // ─── Tier 3: Weekly challenge metadata ─────────────────────────────
 const WEEKLY_CHALLENGES = [
-  { key: 'highest', title: 'Highest Peak',  desc: 'Reach the highest F(n) this week',     unit: 'level'   },
-  { key: 'lowest',  title: 'Deepest Dive',  desc: 'Reach the most negative F(n)',         unit: 'depth'   },
+  { key: 'highest', title: 'Highest Peak',  desc: 'Reach the highest Fibonacci number this week', unit: 'level'   },
+  { key: 'lowest',  title: 'Deepest Dive',  desc: 'Reach the deepest negative Fibonacci number',  unit: 'depth'   },
   { key: 'clicks',  title: 'Most Clicks',   desc: 'Rack up the most clicks',              unit: 'clicks'  },
   { key: 'flowers', title: 'Flower Hunter', desc: 'Collect the most flowers',             unit: 'flowers' },
   { key: 'tokens',  title: 'Token Magnate', desc: 'Earn the most Boost Tokens',           unit: 'tokens'  },
@@ -1937,29 +2064,29 @@ const WEEKLY_CHALLENGES = [
 
 // ─── Tier 4: Level-up facts ("Why Does This Matter?") ──────────────
 const LEVEL_FACTS = {
-  3:  "F(3) = 2. Every flowering plant that puts out leaves in an alternating pattern does it with two leaves per cycle — the simplest Fibonacci arrangement.",
-  4:  "F(4) = 3. A clover has three leaves. A daisy family root has three main branches. Three is the first Fibonacci number that isn't 1 or 2.",
-  5:  "F(5) = 5. Apple cores have five seed pockets in a star. Starfish have five arms. Most flowers have five petals. This isn't coincidence.",
-  6:  "F(6) = 8. Octopi have eight arms. Spiders have eight legs. Many seashells coil in groups of eight bands.",
-  7:  "F(7) = 13. A year has roughly 13 lunar cycles. Many moth species lay eggs in groups of 13.",
-  8:  "F(8) = 21. Sunflowers have 21 seed spirals in one direction (and 34 in the other — next level).",
-  9:  "F(9) = 34. The other sunflower direction. Also the number of vertebrae in the average giraffe neck lineage.",
-  10: "F(10) = 55. The ratio F(10)/F(9) = 55/34 ≈ 1.6176. Already extremely close to φ ≈ 1.6180. The sequence converges.",
-  11: "F(11) = 89. Your spiral now contains 11 squares and 11 quarter-arcs. If you drew it life-size with F(1)=1 inch, your drawing would be 89 inches wide.",
-  12: "F(12) = 144 — a dozen dozen. Known since ancient times as a 'gross'. A completely coincidental but delightful alignment.",
-  13: "F(13) = 233. The Fibonacci sequence appears in Pascal's triangle: the shallow diagonals sum to Fibonacci numbers. Try it.",
-  14: "F(14) = 377. If you had F(14) pennies, stacked flat, the tower would be about as tall as a four-story building.",
-  15: "F(15) = 610. The ratio F(15)/F(14) = 610/377 ≈ 1.6180. Twelve decimal places of φ are now visible in this sequence.",
-  16: "F(16) = 987. A standard deck of cards shuffled 'perfectly' 8 times returns to its original order. Coincidence? Yes, but 8 is Fibonacci.",
-  17: "F(17) = 1,597. Leonardo of Pisa (1170–1250), nicknamed Fibonacci, introduced this sequence to Europe in 1202 as a puzzle about rabbit populations.",
-  18: "F(18) = 2,584. Honeybee family trees follow the Fibonacci sequence exactly: a male bee has 1 parent (the queen), a female has 2 (both queen and drone).",
-  19: "F(19) = 4,181. The Fibonacci numbers are the ONLY solutions to x² - x - 1 = 0 that grow discretely. This equation defines φ.",
-  20: "F(20) = 6,765. F(20) is also a Lucas number — part of another sequence that follows the same rule but starts 2, 1, 3, 4, 7...",
-  21: "F(21) = 10,946. You reached F(21) — a Fibonacci index that is itself Fibonacci. These are rare and called 'Fibonacci-in-index' numbers.",
-  34: "F(34) = 5,702,887. Grown past five million with just 34 steps. The sequence outpaces most polynomial growth from this point on.",
-  55: "F(55) = 139,583,862,445. Roughly the number of seconds in 4,400 years. Your click count crossed the boundary of recorded human history.",
-  89: "F(89) = 1,779,979,416,004,714,189. Nearly two billion billion. In base-10, F(n) has approximately n × 0.209 digits — a direct consequence of φ.",
-  144:"F(144) = 555,565,404,224,292,694,404,015,791,808. Written out, it's 30 digits. Somewhere in the middle of this number lives the string '144' again — entirely by chance.",
+  3:  "The 3rd Fibonacci number is 2. Every flowering plant that puts out leaves in an alternating pattern does it with two leaves per cycle — the simplest Fibonacci arrangement.",
+  4:  "The 4th Fibonacci number is 3. A clover has three leaves. A daisy family root has three main branches. Three is the first Fibonacci number that isn't 1 or 2.",
+  5:  "The 5th Fibonacci number is 5. Apple cores have five seed pockets in a star. Starfish have five arms. Most flowers have five petals. This isn't coincidence.",
+  6:  "The 6th Fibonacci number is 8. Octopi have eight arms. Spiders have eight legs. Many seashells coil in groups of eight bands.",
+  7:  "The 7th Fibonacci number is 13. A year has roughly 13 lunar cycles. Many moth species lay eggs in groups of 13.",
+  8:  "The 8th Fibonacci number is 21. Sunflowers have 21 seed spirals in one direction (and 34 in the other — next level).",
+  9:  "The 9th Fibonacci number is 34. The other sunflower direction. Also the number of vertebrae in the average giraffe neck lineage.",
+  10: "The 10th Fibonacci number is 55. The ratio 55/34 ≈ 1.6176 — already extremely close to φ ≈ 1.6180. The sequence converges.",
+  11: "The 11th Fibonacci number is 89. Your spiral now contains 11 squares and 11 quarter-arcs. If you drew it life-size with the 1st Fibonacci number as 1 inch, your drawing would be 89 inches wide.",
+  12: "The 12th Fibonacci number is 144 — a dozen dozen. Known since ancient times as a 'gross'. A completely coincidental but delightful alignment.",
+  13: "The 13th Fibonacci number is 233. The Fibonacci sequence appears in Pascal's triangle: the shallow diagonals sum to Fibonacci numbers. Try it.",
+  14: "The 14th Fibonacci number is 377. If you had 377 pennies, stacked flat, the tower would be about as tall as a four-story building.",
+  15: "The 15th Fibonacci number is 610. The ratio 610/377 ≈ 1.6180. Twelve decimal places of φ are now visible in this sequence.",
+  16: "The 16th Fibonacci number is 987. A standard deck of cards shuffled 'perfectly' 8 times returns to its original order. Coincidence? Yes, but 8 is a Fibonacci number.",
+  17: "The 17th Fibonacci number is 1,597. Leonardo of Pisa (1170–1250), nicknamed Fibonacci, introduced this sequence to Europe in 1202 as a puzzle about rabbit populations.",
+  18: "The 18th Fibonacci number is 2,584. Honeybee family trees follow the Fibonacci sequence exactly: a male bee has 1 parent (the queen), a female has 2 (both queen and drone).",
+  19: "The 19th Fibonacci number is 4,181. The Fibonacci numbers are the ONLY solutions to x² − x − 1 = 0 that grow discretely. This equation defines φ.",
+  20: "The 20th Fibonacci number is 6,765. It's also a Lucas number — part of another sequence that follows the same rule but starts 2, 1, 3, 4, 7…",
+  21: "The 21st Fibonacci number is 10,946. You reached a Fibonacci index that is itself Fibonacci. These are rare — so-called 'Fibonacci-in-index' numbers.",
+  34: "The 34th Fibonacci number is 5,702,887. Grown past five million with just 34 steps. The sequence outpaces most polynomial growth from this point on.",
+  55: "The 55th Fibonacci number is 139,583,862,445. Roughly the number of seconds in 4,400 years. Your click count crossed the boundary of recorded human history.",
+  89: "The 89th Fibonacci number is 1,779,979,416,004,714,189. Nearly two billion billion. In base-10, the nth Fibonacci number has approximately n × 0.209 digits — a direct consequence of φ.",
+  144:"The 144th Fibonacci number is 555,565,404,224,292,694,404,015,791,808. Written out, it's 30 digits. Somewhere in the middle of this number lives the string '144' again — entirely by chance.",
 };
 
 // ─── Tier 4: Classroom Challenge code alphabet (0/O/1/I removed) ───
@@ -2527,7 +2654,7 @@ function drawSpiral() {
     ctx.fillStyle = 'rgba(168,230,207,0.55)';
     ctx.font = 'italic 22px Cormorant Garamond, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('F(0) = 0  ·  click or scroll to explore', W/2, H/2);
+    ctx.fillText('The 0th Fibonacci number is 0  ·  click or scroll to explore', W/2, H/2);
     updateFooter();
     return;
   }
@@ -2729,7 +2856,7 @@ function updateFooter() {
     const stepsNeeded = stepsForN(targetN);
     el.textContent = `n=${n} → n=${targetN}  [${state.subStep} / ${stepsNeeded}]  rot:${deg}°`;
   } else {
-    el.textContent = `n = ${n}  ·  F(n) = ${fmt(fib(n))}  ·  rot: ${deg}°`;
+    el.textContent = `Level ${n}  ·  ${fibPhrase(n)}  ·  rot: ${deg}°`;
   }
 }
 
@@ -2849,13 +2976,13 @@ function tickInput(dir) {
   if (state.boostUpgrades.fingers && state.clickCounter % 5 === 0) {
     ticksThisClick += 5;
     const boxRect = cc.getBoundingClientRect();
-    showPointsAnimation(lastInputX - boxRect.left, lastInputY - boxRect.top - 10, 'F(5)');
+    showPointsAnimation(lastInputX - boxRect.left, lastInputY - boxRect.top - 10, '5 bonus');
   }
-  // Golden Touch (F(13)=233 every 13th click)
+  // Golden Touch (+233 every 13th click — the 13th Fibonacci number)
   if (state.boostUpgrades.touch && state.clickCounter % 13 === 0) {
     ticksThisClick += 233;
     const boxRect = cc.getBoundingClientRect();
-    showPointsAnimation(lastInputX - boxRect.left, lastInputY - boxRect.top - 10, 'F(13)');
+    showPointsAnimation(lastInputX - boxRect.left, lastInputY - boxRect.top - 10, '233 bonus');
   }
 
   applyTicks(ticksThisClick);
@@ -3072,7 +3199,7 @@ function updateTokenDisplay() {
 // ── Boosts UI render ─────────────────────────────────────────────
 function boostsHtml() {
   if (state.highestAbsN < 3) {
-    return '<div class="lb-empty">Reach F(3) to earn tokens</div>';
+    return '<div class="lb-empty">Reach the 3rd Fibonacci number to earn tokens</div>';
   }
   return BOOST_UPGRADES.map(up => {
     const owned  = !!state.boostUpgrades[up.id];
@@ -3082,7 +3209,7 @@ function boostsHtml() {
     if (owned) cls += ' boost-owned';
     else if (locked) cls += ' boost-locked';
     else if (!afford) cls += ' boost-unaffordable';
-    const descText = locked ? `Unlocks at F(${up.unlock})` : up.desc;
+    const descText = locked ? `Unlocks at the ${up.unlock}${ordinalSuffix(up.unlock)} Fibonacci number` : up.desc;
     return `
       <div class="${cls}" data-boost="${up.id}">
         <div style="flex:1;min-width:0;">
@@ -3159,7 +3286,7 @@ function engineUpgradesHtml() {
     if (owned) cls += ' boost-owned';
     else if (locked) cls += ' boost-locked';
     else if (!afford) cls += ' boost-unaffordable';
-    const descText = locked ? `Unlocks at F(${up.unlock})` : up.desc;
+    const descText = locked ? `Unlocks at the ${up.unlock}${ordinalSuffix(up.unlock)} Fibonacci number` : up.desc;
     return `
       <div class="${cls}" data-engine-up="${up.id}">
         <div style="flex:1;min-width:0;">
@@ -3421,7 +3548,7 @@ function streakModalBodyHtml(freezeUsed, wasReset) {
     <div style="text-align:center;padding:20px;background:var(--bg2);border-radius:10px;margin-bottom:16px;">
       <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;">Day</div>
       <div style="font-size:44px;color:var(--amber);font-weight:700;font-family:'Cormorant Garamond',serif;">${state.streak.count}</div>
-      <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;margin-top:6px;">F(${Math.min(state.streak.count, 14)}) = ${reward}</div>
+      <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;margin-top:6px;">${fibOrdinal(Math.min(state.streak.count, 14))} — ${reward}</div>
       <div style="font-size:28px;color:var(--amber);font-weight:600;font-family:'JetBrains Mono',monospace;margin-top:10px;">+${reward} 🪙</div>
     </div>
     <div style="font-size:11px;color:var(--txt3);font-family:'JetBrains Mono',monospace;text-align:center;">
@@ -3460,7 +3587,7 @@ function showStreakInfoModal() {
     <div style="text-align:center;padding:20px;background:var(--bg2);border-radius:10px;margin-bottom:16px;">
       <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;">Current streak</div>
       <div style="font-size:44px;color:var(--amber);font-weight:700;font-family:'Cormorant Garamond',serif;">${state.streak.count}</div>
-      <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;margin-top:6px;">Today's reward would be F(${Math.min(Math.max(1,state.streak.count),14)}) = ${reward} 🪙</div>
+      <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;margin-top:6px;">Today's reward would be the ${fibOrdinal(Math.min(Math.max(1,state.streak.count),14))} — ${reward} 🪙</div>
     </div>
     <div style="font-size:11px;color:var(--txt3);font-family:'JetBrains Mono',monospace;text-align:center;line-height:1.8;">
       Freezes: ${freezeStr}<br>
@@ -3682,7 +3809,7 @@ function renderSkins() {
     let cls = 'skin-card';
     if (locked) cls += ' skin-locked';
     if (active) cls += ' skin-active';
-    const title = locked ? `Unlocks at F(${s.unlock})` : s.name;
+    const title = locked ? `Unlocks at the ${s.unlock}${ordinalSuffix(s.unlock)} Fibonacci number` : s.name;
     return `
       <div class="${cls}" data-skin="${s.id}" title="${title}">
         <div class="preview">${s.preview}</div>
@@ -3867,7 +3994,7 @@ function collectGolden(e) {
     }
     applyTicks(ticks);
     launchConfetti(x, y, 40);
-    showPointsAnimation(x, y - 20, `F(${state.highestAbsN})`);
+    showPointsAnimation(x, y - 20, `${fmt(fib(state.highestAbsN))} bonus`);
   } else if (roll < 0.85) {
     // Token bonus
     const choices = [5, 8, 13, 21, 34];
@@ -3945,7 +4072,7 @@ function renderGalleryGrid() {
       <div class="${cls}" data-at="${g.at}">
         ${isNew ? '<div class="new-dot"></div>' : ''}
         <div class="img-wrap">${imgHtml}</div>
-        <div class="caption">${locked ? `F(${g.at})` : escHtml(g.title)}</div>
+        <div class="caption">${locked ? `${g.at}${ordinalSuffix(g.at)} Fibonacci number` : escHtml(g.title)}</div>
       </div>`;
   }).join('') + '</div>';
 
@@ -3970,7 +4097,7 @@ function renderSidebarGallery() {
     const body = locked
       ? `<div class="emblem-placeholder">${g.emblem}</div>`
       : `<img src="${g.src}" alt="${escHtml(g.title)}" loading="lazy" onerror="this.outerHTML='<div class=\\'emblem-placeholder\\'>${g.emblem}</div>'">`;
-    const tip = locked ? `Unlocks at F(${g.at})` : g.title;
+    const tip = locked ? `Unlocks at the ${g.at}${ordinalSuffix(g.at)} Fibonacci number` : g.title;
     return `<div class="${cls}" data-at="${g.at}" title="${escHtml(tip)}">${body}</div>`;
   }).join('');
   for (const [gridId, countId] of [['sidebarGalleryGrid', 'sidebarGalleryCount'], ['mobileGalleryGrid', 'mobileGalleryCount']]) {
@@ -3999,7 +4126,7 @@ function openGalleryItem(atN) {
   document.getElementById('galleryItemTitle').textContent  = item.title;
   document.getElementById('galleryItemFact').textContent   = item.fact;
   document.getElementById('galleryItemUnlock').textContent =
-    `Unlocked at F(${item.at}) = ${fmt(fib(item.at))}`;
+    `Unlocked at ${fibPhrase(item.at)}`;
   const wikiLink = document.getElementById('galleryItemWiki');
   if (wikiLink) {
     if (item.wiki) {
@@ -4075,12 +4202,13 @@ function maybeUpdateWeeklyScore() {
     const metric = currentWeeklyMetric();
     try {
       await fbDb.collection('weeklyScores').doc(weekId).collection('entries').doc(currentUser.uid).set({
-        uid:         currentUser.uid,
-        displayName: currentUser.displayName || currentUser.email || 'Guest',
-        photoURL:    currentUser.photoURL || '',
-        metricKey:   ch.key,
+        uid:          currentUser.uid,
+        displayName:  currentUser.displayName || currentUser.email || 'Guest',
+        photoURL:     currentUser.photoURL || '',
+        avatarEmblem: state.avatarEmblem || '',
+        metricKey:    ch.key,
         metric,
-        updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt:    firebase.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
     } catch (err) {
       console.error('❌ Weekly score write error:', err.message);
@@ -4207,7 +4335,8 @@ function renderChallengeHeader() {
 }
 
 function formatWeeklyMetric(key, value) {
-  if (key === 'highest' || key === 'lowest') return `F(${value})`;
+  // Leaderboard score column is narrow — keep it compact but readable.
+  if (key === 'highest' || key === 'lowest') return `Level ${value}`;
   if (value == null) return '—';
   try { return fmt(BigInt(Math.round(value))); }
   catch (e) { return String(value); }
@@ -4245,9 +4374,7 @@ function renderWeeklyLeaderboard(rows) {
   list.innerHTML = rows.map((row, i) => `
     <div class="lb-row">
       <div class="lb-rank ${rankClass(i)}">${medal(i)}</div>
-      ${row.photoURL
-        ? `<img class="lb-avatar" src="${row.photoURL}" alt="" referrerpolicy="no-referrer">`
-        : `<div class="lb-avatar"></div>`}
+      ${avatarEmblemHtml(row.avatarEmblem, row.photoURL)}
       <div class="lb-name ${isMe(row) ? 'is-me' : ''}">${escHtml(row.displayName || 'Anonymous')}</div>
       <div class="lb-score">${formatWeeklyMetric(ch.key, row.metric)}</div>
     </div>`).join('');
@@ -4289,7 +4416,7 @@ function showLevelFact(n) {
   const linkEl  = document.getElementById('factLearnMore');
   if (!card || !levelEl || !textEl || !linkEl) return;
 
-  levelEl.textContent = `F(${n}) = ${fmt(fib(n))}`;
+  levelEl.textContent = fibPhrase(n);
   textEl.textContent  = fact;
 
   // Restart animation
@@ -4388,6 +4515,7 @@ async function joinChallenge(code, asCreator) {
       uid:             currentUser.uid,
       displayName:     currentUser.displayName || 'Guest',
       photoURL:        currentUser.photoURL || '',
+      avatarEmblem:    state.avatarEmblem || '',
       currentN:        state.n,
       reachedTargetTs: null,
       joinedTs:        firebase.firestore.FieldValue.serverTimestamp(),
@@ -4462,7 +4590,7 @@ function renderChallengeLeaderboard(participants) {
   if (!rankEl) return;
   const myIdx = participants.findIndex(p => p.uid === (currentUser && currentUser.uid));
   rankEl.textContent = myIdx >= 0
-    ? `You: F(${participants[myIdx].currentN}) · ${myIdx + 1}/${participants.length}`
+    ? `You: Level ${participants[myIdx].currentN} · ${myIdx + 1}/${participants.length}`
     : 'Not ranked';
 }
 
@@ -4500,7 +4628,7 @@ function showChallengeCompleteBanner() {
   overlay.innerHTML = `
     <div class="overlay-panel" style="text-align:center;">
       <div style="font-size:60px;margin-bottom:10px;">🎉</div>
-      <div style="font-size:22px;font-weight:700;color:var(--amber);margin-bottom:8px;font-family:'Cormorant Garamond',serif;">You reached F(${target})!</div>
+      <div style="font-size:22px;font-weight:700;color:var(--amber);margin-bottom:8px;font-family:'Cormorant Garamond',serif;">You reached ${fibPhrase(target)}!</div>
       <p style="color:var(--txt2);font-size:13px;">The challenge continues — keep climbing to stay at the top.</p>
       <button class="btn btn-primary" id="chCompleteOk" style="margin-top:16px;">Nice</button>
     </div>`;
@@ -4543,13 +4671,13 @@ function showChallengeResultsModal() {
       const overlay = document.createElement('div');
       overlay.className = 'overlay-backdrop open';
       const rankLine = myRank
-        ? `<div style="font-size:36px;color:var(--amber);font-weight:700;font-family:'Cormorant Garamond',serif;">${myRank} of ${rows.length}</div><div style="font-size:11px;color:var(--txt2);font-family:'JetBrains Mono',monospace;">Reached F(${me.currentN})</div>`
+        ? `<div style="font-size:36px;color:var(--amber);font-weight:700;font-family:'Cormorant Garamond',serif;">${myRank} of ${rows.length}</div><div style="font-size:11px;color:var(--txt2);font-family:'JetBrains Mono',monospace;">Reached ${fibPhrase(me.currentN)}</div>`
         : `<div style="font-size:16px;color:var(--txt2);">You did not score</div>`;
       overlay.innerHTML = `
         <div class="overlay-panel" style="width:420px;max-width:94vw;">
           <div class="overlay-title">🏁 Challenge Ended</div>
           <p style="color:var(--txt2);font-size:12px;margin-bottom:12px;">
-            ${escHtml(name)} · Target F(${targetN})
+            ${escHtml(name)} · Target: ${fibPhrase(targetN, false)}
           </p>
           <div style="background:var(--bg2);border-radius:8px;padding:14px;margin-bottom:14px;text-align:center;">
             <div style="font-size:10px;color:var(--txt3);font-family:'JetBrains Mono',monospace;">Your final rank</div>
@@ -4560,7 +4688,7 @@ function showChallengeResultsModal() {
             <div class="lb-row">
               <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${['🥇','🥈','🥉'][i] || `${i+1}.`}</div>
               <div class="lb-name ${currentUser && r.uid===currentUser.uid?'is-me':''}">${escHtml(r.displayName || 'Anonymous')}</div>
-              <div class="lb-score">F(${r.currentN})</div>
+              <div class="lb-score">Level ${r.currentN}</div>
             </div>`).join('')}
           </div>
           <button class="btn btn-primary" style="width:100%;margin-top:14px;" id="chResultsOk">Close</button>
@@ -4881,6 +5009,11 @@ function closeOverlay(id) { document.getElementById(id).classList.remove('open')
 document.getElementById('settingsBtn').addEventListener('click', () => {
   renderSkins();  // v2.5 Tier 2 — refresh skin lock/active state on open
   renderAdminChallengePanel(); // v4.0 Tier 4 — show create form or active-panel
+  // Join-challenge section moved out of Account card — only show it to
+  // signed-in users, and never to the admin who creates the challenge
+  // (that UI is the "Classroom Challenge" admin section above).
+  const joinSec = document.getElementById('joinChallengeSection');
+  if (joinSec) joinSec.style.display = (currentUser && !isAdmin) ? '' : 'none';
   openOverlay('settingsOverlay');
   startMemPanelTicker();       // v3.2 crash-fix: begin diagnostic updates while visible
 });
@@ -4976,14 +5109,13 @@ document.getElementById('factCardClose').addEventListener('click', () => {
 });
 function openJoinChallengeDialog() {
   if (!currentUser) { console.warn('⚠️  Must be signed in to join a challenge'); return; }
+  closeOverlay('settingsOverlay');
   openOverlay('joinChallengeOverlay');
   const input = document.getElementById('challengeCodeInput');
   if (input) { input.value = ''; input.focus(); }
   document.getElementById('joinChallengeError').textContent = '';
 }
 document.getElementById('joinChallengeBtn').addEventListener('click', openJoinChallengeDialog);
-const mobileJoinBtn = document.getElementById('mobileJoinChallengeBtn');
-if (mobileJoinBtn) mobileJoinBtn.addEventListener('click', openJoinChallengeDialog);
 document.getElementById('joinChallengeClose').addEventListener('click', () => closeOverlay('joinChallengeOverlay'));
 document.getElementById('joinChallengeOverlay').addEventListener('click', e => {
   if (e.target.id === 'joinChallengeOverlay') closeOverlay('joinChallengeOverlay');
@@ -5019,6 +5151,55 @@ document.getElementById('achievementsBtn').addEventListener('click', () => openA
 document.getElementById('achievementsClose').addEventListener('click', () => closeOverlay('achievementsOverlay'));
 document.getElementById('achievementsOverlay').addEventListener('click', e => {
   if (e.target.id === 'achievementsOverlay') closeOverlay('achievementsOverlay');
+});
+
+// ─── Avatar picker — choose an unlocked achievement emblem ────────
+function renderAvatarPicker() {
+  const grid  = document.getElementById('avatarPickerGrid');
+  const empty = document.getElementById('avatarPickerEmpty');
+  if (!grid) return;
+  const unlocked = ACHIEVEMENTS.filter(a => state.achievements && state.achievements[a.id]);
+  empty.style.display = unlocked.length === 0 ? '' : 'none';
+  grid.style.display  = unlocked.length === 0 ? 'none' : '';
+  const cells = [
+    `<div class="emblem-picker-cell none ${!state.avatarEmblem ? 'active' : ''}" data-emblem="">
+      default
+    </div>`,
+    ...unlocked.map(a => `
+      <div class="emblem-picker-cell ${state.avatarEmblem === a.emblem ? 'active' : ''}"
+           data-emblem="${a.emblem}" title="${escHtml(a.title)}">${a.emblem}</div>`),
+  ];
+  grid.innerHTML = cells.join('');
+  grid.querySelectorAll('.emblem-picker-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      state.avatarEmblem = cell.dataset.emblem || '';
+      // Repaint everywhere the avatar shows + persist to Firestore so it
+      // surfaces on other devices and in the leaderboard on next snapshot.
+      paintAvatar(document.getElementById('userAvatar'),
+                  state.avatarEmblem,
+                  currentUser && currentUser.photoURL);
+      paintAvatar(document.getElementById('mobileUserAvatar'),
+                  state.avatarEmblem,
+                  currentUser && currentUser.photoURL);
+      if (currentUser && fbDb) {
+        fbDb.collection('scores').doc(currentUser.uid)
+          .set({ avatarEmblem: state.avatarEmblem }, { merge: true })
+          .catch(err => console.error('❌ Avatar save error:', err.message));
+      }
+      closeOverlay('avatarPickerOverlay');
+    });
+  });
+}
+function openAvatarPicker() {
+  if (!currentUser) return;
+  renderAvatarPicker();
+  openOverlay('avatarPickerOverlay');
+}
+document.getElementById('userAvatar').addEventListener('click', openAvatarPicker);
+document.getElementById('mobileUserAvatar').addEventListener('click', openAvatarPicker);
+document.getElementById('avatarPickerClose').addEventListener('click', () => closeOverlay('avatarPickerOverlay'));
+document.getElementById('avatarPickerOverlay').addEventListener('click', e => {
+  if (e.target.id === 'avatarPickerOverlay') closeOverlay('avatarPickerOverlay');
 });
 
 // ─── Tier 3: Gallery + Leaderboard tab wiring ────────────────────
@@ -5079,11 +5260,13 @@ function syncMobileAuth() {
     const name = currentUser.displayName || (isAnon ? 'Guest' : currentUser.email);
     document.getElementById('mobileSignedOut').style.display  = 'none';
     document.getElementById('mobileSignedIn').style.display   = 'block';
-    document.getElementById('mobileUserAvatar').src = currentUser.photoURL || '';
+    paintAvatar(document.getElementById('mobileUserAvatar'), state.avatarEmblem, currentUser.photoURL);
     document.getElementById('mobileUserName').textContent = name;
     // Show/hide elements for anon vs Google
     document.getElementById('mobileSignInBtn').style.display     = isAnon ? '' : 'none';
     document.getElementById('mobileSignOutBtn').style.display     = isAnon ? 'none' : '';
+    const mHint = document.getElementById('mobileGuestStatusHint');
+    if (mHint) mHint.style.display = isAnon ? '' : 'none';
     // v4.3: show name-edit input for every signed-in user (mirrors the
     // desktop change in onSignIn — Google-linked users had no rename UI).
     document.getElementById('mobileGuestNameInput').style.display = '';
@@ -5508,12 +5691,14 @@ async function onSignIn(user) {
   }
 
   const displayName = user.displayName || (isAnon ? 'Guest' : user.email);
-  document.getElementById('userAvatar').src = user.photoURL || '';
+  paintAvatar(document.getElementById('userAvatar'), state.avatarEmblem, user.photoURL);
   document.getElementById('userName').textContent = displayName;
 
   // Show/hide elements based on anonymous vs Google
   document.getElementById('signInBtn').style.display     = isAnon ? '' : 'none';
   document.getElementById('signOutBtn').style.display     = isAnon ? 'none' : '';
+  const hint = document.getElementById('guestStatusHint');
+  if (hint) hint.style.display = isAnon ? '' : 'none';
   // v4.3: show name-edit input for every signed-in user (used to be
   // anonymous-only, leaving Google-linked users with no in-app rename
   // path). Pre-fill with whatever displayName resolved to above.
@@ -5592,7 +5777,11 @@ async function onSignIn(user) {
       state.achievements = data.achievements ?? {};
       state.lowestN      = data.lowestN      ?? 1;
       state.activeSkin   = data.activeSkin   ?? 'classic';
+      state.avatarEmblem = data.avatarEmblem ?? '';
       applySkin(state.activeSkin);
+      // Repaint with the restored emblem now that state has hydrated.
+      paintAvatar(document.getElementById('userAvatar'),       state.avatarEmblem, user.photoURL);
+      paintAvatar(document.getElementById('mobileUserAvatar'), state.avatarEmblem, user.photoURL);
 
       // v3.0 Tier 3 — restore weekly + gallery state
       if (data.weekly) {
@@ -5787,6 +5976,7 @@ async function maybeSaveScore(n) {
       achievements: state.achievements,
       lowestN:      state.lowestN ?? 1,
       activeSkin:   state.activeSkin || 'classic',
+      avatarEmblem: state.avatarEmblem || '',
       // v3.0 Tier 3 fields
       weekly: {
         currentWeekId:       state.weekly.currentWeekId,
@@ -5854,6 +6044,7 @@ async function saveProgress() {
       achievements: state.achievements,
       lowestN:      state.lowestN ?? 1,
       activeSkin:   state.activeSkin || 'classic',
+      avatarEmblem: state.avatarEmblem || '',
       // v3.0 Tier 3 fields
       weekly: {
         currentWeekId:       state.weekly.currentWeekId,
@@ -5917,15 +6108,13 @@ function renderLeaderboard(rows) {
   list.innerHTML = rows.map((row, i) => {
     // Compute F(n) client-side for display (fibDisplay may not be stored yet)
     let fibStr;
-    try { fibStr = fibDisplayStr(row.n); } catch(e) { fibStr = 'F(' + row.n + ')'; }
+    try { fibStr = fibDisplayStr(row.n); } catch(e) { fibStr = `Level ${row.n}`; }
     return `
     <div class="lb-row">
       <div class="lb-rank ${rankClass(i)}">${medal(i)}</div>
-      ${row.photoURL
-        ? `<img class="lb-avatar" src="${row.photoURL}" alt="" referrerpolicy="no-referrer">`
-        : `<div class="lb-avatar"></div>`}
+      ${avatarEmblemHtml(row.avatarEmblem, row.photoURL)}
       <div class="lb-name ${isMe(row) ? 'is-me' : ''}">${escHtml(row.displayName || 'Anonymous')}</div>
-      <div class="lb-score" title="n=${row.n}">${fibStr}</div>
+      <div class="lb-score" title="Level ${row.n}">${fibStr}</div>
     </div>`;
   }).join('');
 
