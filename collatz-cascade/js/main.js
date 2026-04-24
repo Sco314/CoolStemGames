@@ -7,7 +7,7 @@ import { initGraph, layoutStep, updateAnchorPulse, isSettled, getGroup } from '.
 import { updateAnimations, hasActiveAnimations, addNumber } from './animate.js';
 import { initCamera, updateCamera, getCamera, getControls, trackAutoFrame } from './camera.js';
 import { initUI, updateTooltip } from './ui.js';
-import { initNumberLine, updateOrbRun, isOrbRunActive } from './numberline.js';
+import { initNumberLine, updateOrbRun, isOrbRunActive, getFollowBall, getPlayState } from './numberline.js';
 import { initTimeSeries, updateTimeSeries, isTimeSeriesActive } from './timeseries.js';
 import { initSpiral, updateSpiral, isSpiralActive } from './spiral.js';
 import { initFlatChart, updateFlatChart, isFlatChartActive } from './flatchart.js';
@@ -90,13 +90,18 @@ function animate() {
   }
 
   if (isOrbRunActive()) {
-    // Number line mode: update playback and follow camera
     const camTarget = updateOrbRun(dt);
-    if (camTarget) {
-      const posAlpha = 1 - Math.exp(-8 * dt);
-      const lookAlpha = 1 - Math.exp(-10 * dt);
+    // Camera: orbital by default (user orbits freely). Only auto-follow
+    // when the Follow Ball toggle is on, or during intro phase.
+    if (camTarget && getFollowBall()) {
+      const posAlpha = 1 - Math.exp(-3 * dt);   // softer follow (was 8)
+      const lookAlpha = 1 - Math.exp(-4 * dt);   // softer look (was 10)
       camera.position.lerp(camTarget.position, posAlpha);
       controls.target.lerp(camTarget.lookAt, lookAlpha);
+    } else if (camTarget && getPlayState() === 'intro') {
+      // During intro: still auto-frame the cone
+      camera.position.lerp(camTarget.position, 0.05);
+      controls.target.lerp(camTarget.lookAt, 0.05);
     }
     controls.update();
   } else if (isTimeSeriesActive()) {

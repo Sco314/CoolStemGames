@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Space Racer</title>
+  <link rel="stylesheet" href="css/main.css">
+
+  <!--
+    NOTE: We use an importmap so that 'three' and 'three/addons/...' resolve
+    exactly the same way in our code as in the official Three.js examples.
+    This lets us copy-paste addon snippets (PointerLockControls, GLTFLoader,
+    etc.) without path rewrites. Requires a modern browser.
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three":          "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/":  "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Preload overlay (Phase 7). Covers the game until every texture and audio
+       file has been prefetched. Main.js hides it once preloadAssets() resolves. -->
+  <div id="preload" role="status" aria-live="polite">
+    <div class="preload-inner">
+      <div class="preload-title">SPACE RACER</div>
+      <div class="preload-bar-wrap"><div id="preload-bar"></div></div>
+      <div class="preload-meta">
+        <span id="preload-label">LOADING…</span>
+        <span id="preload-count">0 / 0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cinematic-transition chrome: black letterbox bars slide in during the
+       mode swap, and a fullscreen fade overlay is driven directly by the
+       transition's elapsed time to hide the ortho→perspective projection swap. -->
+  <div id="letterbox-top" class="letterbox"></div>
+  <div id="letterbox-bottom" class="letterbox"></div>
+  <div id="fade-overlay"></div>
+
+  <!-- The HUD overlay lives in the DOM, NOT in a Three.js scene.
+       Cheaper than a second scene/camera, easier to style, and it survives
+       mode switches untouched. The Three.js canvas is appended by Main.js. -->
+  <div id="hud">
+    <div id="hud-left">
+      <div class="row"><span class="label">SCORE</span><span id="hud-score">0000</span></div>
+      <div class="row"><span class="label">TIME</span><span id="hud-time">0:00</span></div>
+      <div class="row"><span class="label">FUEL</span><span id="hud-fuel">1000</span></div>
+      <div class="row walk-only"><span class="label">KITS</span><span id="hud-kits">0</span></div>
+      <div class="row walk-only"><span class="label">SAMPLES</span><span id="hud-samples">0</span></div>
+      <div class="row alert" id="hud-alert" hidden>LOW ON FUEL</div>
+    </div>
+    <div id="hud-right">
+      <div class="row"><span class="label">ALTITUDE</span><span id="hud-alt">0000</span></div>
+      <div class="row"><span class="label">H-SPEED</span><span id="hud-hspeed">0.0</span></div>
+      <div class="row"><span class="label">V-SPEED</span><span id="hud-vspeed">0.0</span></div>
+      <div class="row"><span class="label">ANGLE</span><span id="hud-angle">0.0</span></div>
+    </div>
+    <div id="hud-objectives" class="walk-only">
+      <div class="obj-title">OBJECTIVES</div>
+      <ul id="hud-obj-list"></ul>
+    </div>
+    <div id="hud-comms"></div>
+    <div id="hud-center" class="center-msg"></div>
+  </div>
+
+  <!-- Phase-6 menus and toasts. All hidden by default; Main.js + HUD.js
+       decide visibility based on mode and events. -->
+  <div id="main-menu" class="overlay" hidden>
+    <h1>SPACE RACER</h1>
+    <p class="subtitle">2D ↔ 3D</p>
+    <button id="btn-start" class="big">START</button>
+    <div class="hs-panel">
+      <h3>HIGH SCORES</h3>
+      <ol id="hs-list"></ol>
+    </div>
+    <button id="btn-settings-menu" class="small">SETTINGS</button>
+  </div>
+
+  <div id="game-over" class="overlay" hidden>
+    <h1>MISSION OVER</h1>
+    <div class="go-row">FINAL SCORE <span id="go-score">0</span></div>
+    <div class="go-row">LEVEL <span id="go-level">0</span></div>
+    <div class="go-row">LANDINGS <span id="go-landings">0</span></div>
+    <div id="go-rank" class="go-rank"></div>
+    <button id="btn-restart" class="big">RESTART</button>
+    <button id="btn-menu" class="small">MAIN MENU</button>
+  </div>
+
+  <div id="settings-menu" class="overlay" hidden>
+    <h2>SETTINGS</h2>
+    <label class="row">
+      <span>MASTER VOLUME</span>
+      <input type="range" min="0" max="100" step="1" id="set-volume">
+      <span id="set-volume-label">80</span>
+    </label>
+    <label class="row">
+      <input type="checkbox" id="set-invert-y">
+      <span>INVERT MOUSE Y</span>
+    </label>
+    <button id="btn-fullscreen" class="small">TOGGLE FULLSCREEN</button>
+    <button id="btn-close-settings" class="big">CLOSE</button>
+  </div>
+
+  <div id="achievement-toast" class="toast" hidden>
+    <div class="toast-label">ACHIEVEMENT UNLOCKED</div>
+    <div class="toast-title"></div>
+    <div class="toast-desc"></div>
+  </div>
+
+  <!-- Mobile touch controls (Phase 7). Hidden by default; the Touch module
+       adds a `body.touch` class on touch-capable devices so the CSS shows
+       them, and the HUD's body.mode-* classes pick which set is visible. -->
+  <div id="touch-lander" class="touch-controls">
+    <button id="touch-left"   class="touch-btn" aria-label="Rotate left">◀</button>
+    <button id="touch-thrust" class="touch-btn thrust" aria-label="Thrust">▲</button>
+    <button id="touch-right"  class="touch-btn" aria-label="Rotate right">▶</button>
+  </div>
+  <div id="touch-walk" class="touch-controls">
+    <div id="touch-pad" aria-label="Move">
+      <div id="touch-thumb"></div>
+    </div>
+    <button id="touch-interact" class="touch-btn" aria-label="Interact">E</button>
+  </div>
+
+  <script type="module" src="js/Main.js"></script>
+</body>
+</html>

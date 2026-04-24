@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.0 — Tier 1: Boosts + Engine + Offline -->
+<!-- v4.0 — Tier 4: Level Facts + Classroom Challenge (atop v3.0 Tier 3) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -136,7 +136,7 @@ html, body {
 
 /* ── Sidebar ─────────────────────────────── */
 .sidebar {
-  width: 240px;
+  width: 260px;          /* UX polish: +20px to fit compact Achievements + Gallery panels */
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -146,6 +146,95 @@ html, body {
 
 .sidebar::-webkit-scrollbar { width: 4px; }
 .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+
+/* UX polish: compact scroll-hint card so it doesn't dominate the sidebar */
+.card-hint { padding: 10px 12px; flex-shrink: 0; }
+
+/* UX polish: compact Achievements panel (left sidebar, always visible desktop) */
+.sidebar-ach-card { flex-shrink: 0; }
+.card-title-count {
+  margin-left: auto;
+  font-size: 10px; color: var(--txt3);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+.sidebar-ach-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.sidebar-ach-emblem {
+  aspect-ratio: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; line-height: 1;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+}
+.sidebar-ach-emblem.locked {
+  opacity: 0.25;
+  filter: grayscale(1);
+  cursor: default;
+}
+.sidebar-ach-emblem:hover:not(.locked) {
+  border-color: var(--amber);
+  transform: translateY(-1px);
+}
+.sidebar-ach-emblem.new::after {
+  content: '';
+  position: absolute; top: 3px; right: 3px;
+  width: 7px; height: 7px; background: var(--amber);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--amber);
+}
+
+/* UX polish: compact Found in Nature panel (left sidebar, always visible desktop) */
+.sidebar-gallery-card { flex-shrink: 0; }
+.sidebar-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.sidebar-gallery-tile {
+  aspect-ratio: 4 / 3;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.sidebar-gallery-tile.locked {
+  opacity: 0.3;
+  cursor: default;
+}
+.sidebar-gallery-tile:hover:not(.locked) {
+  border-color: var(--amber);
+  transform: translateY(-1px);
+}
+.sidebar-gallery-tile img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sidebar-gallery-tile .emblem-placeholder {
+  font-size: 28px;
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+.sidebar-gallery-tile.new::after {
+  content: '';
+  position: absolute; top: 4px; right: 4px;
+  width: 8px; height: 8px; background: var(--amber);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--amber);
+  z-index: 1;
+}
 
 .card {
   background: var(--card);
@@ -254,6 +343,12 @@ html, body {
   .mobile-account-btn { display: none !important; }
   .mobile-info-row { display: none !important; }
   .mobile-sheet-backdrop { display: none !important; }
+}
+/* UX polish: on desktop (>=900px) Achievements + Gallery live in the left
+   sidebar full-time, so the top-bar icon buttons become redundant. Keep
+   them on tablet (641–899px) since the left sidebar is hidden there. */
+@media (min-width: 900px) {
+  #achievementsBtn, #galleryBtn { display: none !important; }
 }
 /* tablet: hide left sidebar, keep right sidebar */
 @media (min-width: 641px) and (max-width: 900px) {
@@ -525,27 +620,42 @@ html, body {
   transition: background .15s;
 }
 .boost-row:last-child { border-bottom: none; }
-.boost-row:hover:not(.boost-locked):not(.boost-owned) { background: rgba(245,166,35,0.08); }
+.boost-row:hover:not(.boost-locked):not(.boost-owned) { background: rgba(245,166,35,0.12); }
 .boost-row.boost-owned { opacity: 0.6; cursor: default; }
 .boost-row.boost-owned .boost-cost::after { content: ' ✓'; color: var(--teal); }
 .boost-row.boost-locked { opacity: 0.35; cursor: not-allowed; }
 .boost-row.boost-unaffordable { cursor: not-allowed; }
 .boost-row.boost-unaffordable .boost-cost { color: var(--red); }
+/* UX polish: boosts more prominent — larger titles, bigger tap targets */
+#boostsCard .card-title { font-size: 16px; }
+#boostsCard .card-title #tokenBalance {
+  color: var(--amber); font-weight: 800; font-size: 18px;
+}
+.boost-row { padding: 10px 4px; }
 .boost-name {
-  font-size: 12px; color: var(--txt);
-  font-weight: 600;
+  font-size: 14px; color: var(--txt);
+  font-weight: 700;
+  margin-bottom: 2px;
 }
 .boost-desc {
-  font-size: 10px; color: var(--txt3);
+  font-size: 11px; color: var(--txt2);
   font-family: 'JetBrains Mono', monospace;
+  line-height: 1.35;
 }
 .boost-cost {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; color: var(--amber);
-  font-weight: 600;
+  font-size: 13px; color: var(--amber);
+  font-weight: 700;
   flex-shrink: 0;
+  padding: 4px 10px;
+  background: rgba(245,166,35,0.08);
+  border-radius: 6px;
 }
+.boost-row.boost-unaffordable .boost-cost { background: rgba(224,92,92,0.08); }
+.boost-row.boost-owned .boost-cost { background: transparent; color: var(--teal); }
 .boost-locked .boost-cost::before { content: '🔒 '; }
+/* Pulse the Boosts-card border amber when affordable upgrades exist */
+.card.boosts-ready { border-color: var(--amber); box-shadow: 0 0 20px rgba(245,166,35,0.15); }
 .engine-status {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px; color: var(--amber);
@@ -585,26 +695,470 @@ html, body {
 }
 .smiley-confetti svg { width: 100%; height: 100%; }
 
+/* ── Tier 2: Streak badge ─────────────────────────────── */
+.streak-badge {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 4px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 600; color: var(--amber);
+  cursor: pointer; transition: all .2s;
+}
+.streak-badge:hover { border-color: var(--amber); }
+.streak-badge.streak-zero { color: var(--txt3); }
+@media (max-width: 640px) {
+  .streak-badge { font-size: 11px; padding: 4px 8px; }
+}
+
+/* ── Tier 2: Achievement toasts (UX polish: larger + 12s dwell + fact body) ── */
+#achievementToasts {
+  position: fixed; top: 80px; right: 20px; z-index: 200;
+  display: flex; flex-direction: column; gap: 10px;
+  pointer-events: none;
+  max-width: calc(100vw - 40px);
+}
+.achievement-toast {
+  background: #111827;
+  border: 1px solid var(--amber);
+  border-radius: 12px;
+  padding: 14px 40px 14px 16px;    /* extra right for close button */
+  display: flex; align-items: flex-start; gap: 14px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.55), 0 0 24px rgba(245,166,35,0.18);
+  animation: toastSlide 12s ease-in-out forwards;
+  min-width: 280px; max-width: 360px;
+  pointer-events: auto; cursor: pointer;
+  position: relative;
+}
+.achievement-toast:hover { animation-play-state: paused; }
+.achievement-toast .emblem {
+  font-size: 34px; line-height: 1; flex-shrink: 0;
+  margin-top: 2px;
+}
+.achievement-toast .ach-body { flex: 1; min-width: 0; }
+.achievement-toast .ach-label {
+  font-size: 10px; color: var(--amber);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: .1em; text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.achievement-toast .ach-title {
+  font-size: 15px; color: var(--txt); font-weight: 700;
+  margin-bottom: 6px;
+  font-family: 'Cormorant Garamond', serif;
+}
+.achievement-toast .ach-fact {
+  font-size: 12px; color: var(--txt2); line-height: 1.45;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+}
+.achievement-toast .toast-close {
+  position: absolute; top: 6px; right: 10px;
+  background: none; border: none; color: var(--txt3);
+  font-size: 14px; line-height: 1; cursor: pointer;
+  padding: 4px;
+}
+.achievement-toast .toast-close:hover { color: var(--txt); }
+@keyframes toastSlide {
+  0%   { transform: translateX(120%); opacity: 0; }
+  4%   { transform: translateX(0);     opacity: 1; }
+  94%  { transform: translateX(0);     opacity: 1; }
+  100% { transform: translateX(120%); opacity: 0; }
+}
+
+/* ── Tier 2: Achievements grid + fact overlay ─────────── */
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  max-height: 60vh; overflow-y: auto;
+}
+.ach-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+}
+.ach-card:hover:not(.ach-locked) { border-color: var(--amber); transform: translateY(-2px); }
+.ach-card.ach-locked { opacity: 0.35; cursor: default; }
+.ach-card .emblem { font-size: 34px; line-height: 1; margin-bottom: 8px; }
+.ach-card.ach-locked .emblem { filter: grayscale(1); }
+.ach-card .ach-title { font-size: 12px; color: var(--txt); font-weight: 600; margin-bottom: 4px; }
+.ach-card .ach-unlock {
+  font-size: 9px; color: var(--txt3);
+  font-family: 'JetBrains Mono', monospace;
+}
+.ach-fact-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 150;
+  align-items: center; justify-content: center;
+  padding: 20px;
+}
+.ach-fact-overlay.open { display: flex; }
+.ach-fact-card {
+  background: #111827;
+  border: 1px solid var(--amber);
+  border-radius: 14px;
+  padding: 28px; max-width: 400px; text-align: center;
+}
+.ach-fact-card .emblem { font-size: 56px; margin-bottom: 14px; }
+.ach-fact-card .ach-title {
+  font-size: 20px; color: var(--amber); font-weight: 700;
+  margin-bottom: 12px;
+  font-family: 'Cormorant Garamond', serif;
+}
+.ach-fact-card .fact {
+  font-size: 14px; color: var(--txt); line-height: 1.6;
+  margin-bottom: 20px;
+  font-family: 'Cormorant Garamond', serif; font-style: italic;
+}
+.ach-fact-card .unlocked {
+  font-size: 11px; color: var(--txt3);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── Tier 2: Skins picker ─────────────────────────────── */
+.skins-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: 8px;
+}
+.skin-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s;
+}
+.skin-card:hover:not(.skin-locked) { border-color: var(--amber); }
+.skin-card.skin-locked { opacity: 0.3; cursor: not-allowed; }
+.skin-card.skin-active {
+  border-color: var(--amber);
+  background: rgba(245,166,35,0.1);
+}
+.skin-card .preview { font-size: 22px; margin-bottom: 4px; }
+.skin-card .skin-name {
+  font-size: 10px; color: var(--txt);
+  font-family: 'JetBrains Mono', monospace;
+}
+.skin-card.skin-locked .skin-name::before { content: '🔒 '; }
+
+/* ── Tier 3: Combo display ────────────────────────────── */
+#comboDisplay {
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 7; pointer-events: none; display: none;
+  text-align: center;
+  font-family: 'Cormorant Garamond', serif;
+  transition: opacity 0.3s;
+}
+.combo-count {
+  font-size: 42px; font-weight: 700;
+  background: linear-gradient(135deg, var(--amber-l), var(--orange));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(245,166,35,0.4);
+}
+.combo-mult {
+  font-size: 14px; font-weight: 600;
+  color: var(--amber);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 2px;
+  letter-spacing: .1em;
+}
+@keyframes comboPulse {
+  0%   { transform: translateX(-50%) scale(1.3); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+#comboDisplay.pulse { animation: comboPulse .25s ease-out; }
+
+/* ── Tier 3: Golden Moment + Frenzy banner ──────────────── */
+.golden-moment {
+  position: absolute;
+  width: 44px; height: 44px;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: goldenPulse 8s ease-in-out forwards;
+  filter: drop-shadow(0 0 12px rgba(251,191,36,0.8));
+  z-index: 7;
+}
+.golden-moment svg { width: 100%; height: 100%; }
+@keyframes goldenPulse {
+  0%   { transform: scale(0);   opacity: 0; }
+  6%   { transform: scale(1.3); opacity: 1; }
+  10%  { transform: scale(1); }
+  50%  { transform: scale(1.1); }
+  90%  { transform: scale(1);   opacity: 1; }
+  100% { transform: scale(0);   opacity: 0; }
+}
+#frenzyBanner {
+  display: none;
+  position: absolute; top: 10px; left: 10px; right: 10px;
+  z-index: 8; pointer-events: none;
+}
+.frenzy-bar {
+  background: linear-gradient(90deg, #fbbf24, #f97316, #fbbf24);
+  background-size: 200% 100%;
+  animation: frenzyShimmer 2s linear infinite;
+  color: #0b0f1a;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  box-shadow: 0 4px 20px rgba(251,191,36,0.5);
+  letter-spacing: .1em;
+}
+@keyframes frenzyShimmer {
+  0%   { background-position:   0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* ── Tier 3: Weekly leaderboard tabs ─────────────────────── */
+.lb-tabs { display: flex; gap: 4px; margin-left: auto; }
+.lb-tab {
+  padding: 3px 8px; font-size: 10px;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 5px; color: var(--txt2);
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer; transition: all .15s;
+}
+.lb-tab:hover { border-color: var(--amber); color: var(--amber); }
+.lb-tab.active {
+  background: var(--amber); color: #0b0f1a; border-color: var(--amber);
+}
+.lb-challenge-header {
+  padding: 8px; margin-bottom: 8px;
+  background: rgba(245,166,35,0.08);
+  border-left: 3px solid var(--amber);
+  border-radius: 4px;
+  font-size: 11px; color: var(--txt2);
+}
+.lb-challenge-header .ch-title {
+  font-weight: 700; color: var(--amber); font-size: 12px;
+  margin-bottom: 3px;
+}
+.lb-challenge-header .ch-countdown {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; color: var(--txt3);
+  margin-top: 4px;
+}
+.champion-badges {
+  margin-top: 6px; font-size: 14px;
+  letter-spacing: 2px;
+}
+
+/* ── Tier 3: Gallery (UX polish: larger tiles + readable captions) ── */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+.gallery-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all .2s;
+  position: relative;
+  display: flex; flex-direction: column;
+}
+.gallery-card:hover:not(.gallery-locked) {
+  border-color: var(--amber);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+}
+.gallery-card .img-wrap {
+  width: 100%; aspect-ratio: 4 / 3;
+  background: var(--bg);
+  overflow: hidden;
+  position: relative;
+}
+.gallery-card img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-card .caption {
+  padding: 10px 10px 12px;
+  font-size: 13px; color: var(--txt);
+  font-weight: 700; text-align: center;
+  font-family: 'Cormorant Garamond', serif;
+  line-height: 1.3;
+  min-height: 42px;
+  display: flex; align-items: center; justify-content: center;
+}
+.gallery-card.gallery-locked { cursor: default; }
+.gallery-card.gallery-locked .img-placeholder {
+  width: 100%; height: 100%;
+  background: var(--bg); display: flex;
+  align-items: center; justify-content: center;
+  font-size: 54px; opacity: 0.28; filter: grayscale(1);
+}
+.gallery-card.gallery-locked .caption {
+  color: var(--txt3);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 600;
+}
+.gallery-card .new-dot {
+  position: absolute; top: 8px; right: 8px;
+  width: 12px; height: 12px; background: var(--amber);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--amber);
+  z-index: 1;
+}
+
+/* ── Tier 4: Level-up fact card ──────────────────────── */
+.fact-card {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  width: 320px; max-width: calc(100vw - 40px);
+  background: #111827;
+  border: 1px solid var(--amber);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.5), 0 0 20px rgba(245,166,35,0.2);
+  z-index: 90;
+  animation: factSlide 7s ease-in-out forwards;
+  pointer-events: auto;
+}
+@keyframes factSlide {
+  0%   { transform: translateY(120%); opacity: 0; }
+  5%   { transform: translateY(0);    opacity: 1; }
+  90%  { transform: translateY(0);    opacity: 1; }
+  100% { transform: translateY(120%); opacity: 0; }
+}
+.fact-card-close {
+  position: absolute; top: 8px; right: 12px;
+  color: var(--txt3); cursor: pointer;
+  font-size: 14px; line-height: 1;
+}
+.fact-card-close:hover { color: var(--txt); }
+.fact-level {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--amber);
+  font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.fact-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 15px; color: var(--txt);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.fact-actions { display: flex; justify-content: flex-end; }
+.fact-link {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--amber);
+  text-decoration: none;
+  padding: 4px 10px;
+  border: 1px solid var(--amber);
+  border-radius: 5px;
+  transition: all .15s;
+  cursor: pointer;
+}
+.fact-link:hover { background: var(--amber); color: #0b0f1a; }
+@media (max-width: 640px) {
+  .fact-card {
+    bottom: 10px; right: 10px; left: 10px;
+    width: auto; max-width: none;
+  }
+}
+
+/* ── Tier 4: Classroom Challenge banner ──────────────── */
+.challenge-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(90deg, rgba(245,166,35,0.15), rgba(245,166,35,0.05));
+  border: 1px solid var(--amber);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--txt);
+  flex-shrink: 0;
+}
+.ch-banner-main { flex: 1; min-width: 0; }
+.ch-banner-title { font-weight: 600; }
+.ch-banner-code {
+  font-size: 10px; color: var(--txt2); margin-top: 2px;
+}
+.ch-banner-rank {
+  padding: 4px 10px;
+  background: var(--amber); color: #0b0f1a;
+  border-radius: 5px; font-weight: 700;
+  white-space: nowrap;
+}
+.ch-banner-end {
+  background: transparent; border: 1px solid var(--red);
+  color: var(--red); border-radius: 5px;
+  padding: 4px 8px; font-size: 10px; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+}
+.ch-banner-end:hover { background: var(--red); color: #0b0f1a; }
+.ch-banner-leave {
+  background: none; border: none; color: var(--txt3); cursor: pointer;
+  font-size: 14px; padding: 4px 8px;
+}
+.ch-banner-leave:hover { color: var(--txt); }
+@media (max-width: 640px) {
+  .challenge-banner { font-size: 10px; padding: 8px 10px; gap: 6px; }
+  .ch-banner-code { font-size: 9px; }
+  .ch-banner-rank { padding: 3px 6px; font-size: 10px; }
+}
+
 </style>
 </head>
 <body>
-<!-- Hidden Mona Lisa face crop for n=12 easter egg -->
-<!-- Mona Lisa for n=12 easter egg — drawn on canvas if loaded -->
-<img id="monaLisa" style="display:none"
-     src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/200px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg"
-     onerror="this.src=''" alt="">
+<!-- v3.2 crash-fix: removed the pre-Tier-3 hidden Mona Lisa easter-egg
+     <img>. The Tier 3 Gallery now owns that entry (F(12) → Mona Lisa).
+     Leaving the orphan <img> behind wasted an external image fetch on
+     every boot and kept the pre-Tier-3 canvas overlay code path reachable. -->
 
 <div class="shell">
 
   <!-- Top bar -->
   <div class="top-bar">
+    <!-- Tier 2: Daily streak badge -->
+    <div class="streak-badge streak-zero" id="streakBadge" title="Daily streak">
+      🔥 <span id="streakCount">0</span>
+    </div>
     <h1>Fibonacci Zoom</h1>
     <div class="top-bar-right">
       <button class="mobile-account-btn" id="mobileAccountBtn" title="Account & Leaderboard">
         <span id="mobileAccountLabel">Sign in</span>
       </button>
+      <!-- Tier 2: Achievements -->
+      <button class="icon-btn" id="achievementsBtn" title="Achievements">🏆</button>
+      <!-- Tier 3: Gallery -->
+      <button class="icon-btn" id="galleryBtn" title="Found in Nature">🖼️</button>
       <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
     </div>
+  </div>
+
+  <!-- Tier 4: Classroom Challenge banner (visible only while a challenge is active) -->
+  <div id="challengeBanner" class="challenge-banner" style="display:none;">
+    <div class="ch-banner-main">
+      <div class="ch-banner-title">
+        <span id="chBannerName">Class Challenge</span> ·
+        Target F(<span id="chBannerTarget">13</span>) ·
+        <span id="chBannerCountdown">--:--</span> left
+      </div>
+      <div class="ch-banner-code">Code: <strong id="chBannerCode">----</strong></div>
+    </div>
+    <div class="ch-banner-rank" id="chBannerRank">—</div>
+    <button class="ch-banner-end" id="chBannerEnd" style="display:none;" title="End challenge for everyone">End</button>
+    <button class="ch-banner-leave" id="chBannerLeave" title="Leave challenge">✕</button>
   </div>
 
   <!-- Unified Settings overlay -->
@@ -618,6 +1172,11 @@ html, body {
         <div class="toggle-item" data-key="showNegative">
           <div class="toggle-sw on"></div>
           <span class="toggle-lbl">Negative n coloring</span>
+        </div>
+        <!-- Tier 4: suppress level-up fact cards -->
+        <div class="toggle-item" data-key="suppressFacts">
+          <div class="toggle-sw"></div>
+          <span class="toggle-lbl">Hide "Did you know?" cards</span>
         </div>
       </div>
 
@@ -670,6 +1229,55 @@ html, body {
         </div>
       </div>
 
+      <!-- Tier 4: Classroom Challenge (admin only) -->
+      <div data-admin="true">
+        <div class="overlay-section" style="margin-top:16px;">
+          Classroom Challenge <span class="admin-badge" style="margin-left:6px;">ADMIN</span>
+        </div>
+        <div id="challengeAdminPanel">
+          <div id="challengeCreateForm">
+            <input type="text" id="challengeName" placeholder="Challenge name (optional)" maxlength="40" class="guest-name-input">
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <select id="challengeTarget" class="guest-name-input" style="flex:1">
+                <option value="8">F(8) = 21</option>
+                <option value="13" selected>F(13) = 233</option>
+                <option value="21">F(21) = 10,946</option>
+                <option value="34">F(34) = 5.7M</option>
+              </select>
+              <select id="challengeDuration" class="guest-name-input" style="flex:1">
+                <option value="5">5 min</option>
+                <option value="10" selected>10 min</option>
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">60 min</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" id="challengeCreateBtn" style="width:100%;margin-top:10px;">
+              Create Challenge
+            </button>
+          </div>
+          <div id="challengeActivePanel" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- v3.2 crash-fix: Memory diagnostic panel (admin only).
+           Live heap + rAF + particle + DOM stats; updates every 2 s while
+           the Settings overlay is open. Use this to verify the crash-fix
+           relief and catch any new leak that sneaks in. -->
+      <div data-admin="true">
+        <div class="overlay-section" style="margin-top:16px;">
+          Memory <span class="admin-badge" style="margin-left:6px;">ADMIN</span>
+        </div>
+        <div id="memPanel" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--txt2);line-height:1.6;background:var(--bg2);border-radius:6px;padding:10px 12px;">
+          <div id="memPanelBody">Open the panel to start metrics…</div>
+          <button class="btn btn-secondary" id="memStressBtn" style="margin-top:8px;width:100%;font-size:11px;padding:6px;">Stress test: 300 clicks over 3 s</button>
+        </div>
+      </div>
+
+      <!-- Tier 2: Skin picker -->
+      <div class="overlay-section" style="margin-top:16px;">Skin</div>
+      <div id="skinsList" class="skins-grid"></div>
+
       <div class="btn-row" style="padding-top:14px; margin-top:4px;">
         <button class="btn btn-secondary" id="resetBtn">Reset</button>
       </div>
@@ -708,8 +1316,27 @@ html, body {
     <!-- Sidebar -->
     <div class="sidebar">
 
-      <div class="card">
+      <div class="card card-hint">
         <div class="scroll-hint">Click to find the next<br>Fibonacci number</div>
+      </div>
+
+      <!-- UX polish: Always-visible Achievements panel on desktop (icon button
+           is hidden on desktop — clicking any emblem opens the fact card). -->
+      <div class="card sidebar-ach-card" id="sidebarAchCard">
+        <div class="card-title">
+          🏆 Achievements
+          <span class="card-title-count" id="sidebarAchCount">0 / 0</span>
+        </div>
+        <div id="sidebarAchGrid" class="sidebar-ach-grid"></div>
+      </div>
+
+      <!-- UX polish: Always-visible Found in Nature panel on desktop. -->
+      <div class="card sidebar-gallery-card" id="sidebarGalleryCard">
+        <div class="card-title">
+          🖼️ Found in Nature
+          <span class="card-title-count" id="sidebarGalleryCount">0 / 0</span>
+        </div>
+        <div id="sidebarGalleryGrid" class="sidebar-gallery-grid"></div>
       </div>
 
     </div><!-- /sidebar -->
@@ -727,6 +1354,17 @@ html, body {
         <canvas id="spiralCanvas"></canvas>
         <canvas id="confettiCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;"></canvas>
         <div id="flowerLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;z-index:6;pointer-events:none;"></div>
+        <!-- Tier 3: Combo counter + Frenzy banner -->
+        <div id="comboDisplay">
+          <div class="combo-count" id="comboCount">0</div>
+          <div class="combo-mult" id="comboMult">×1</div>
+        </div>
+        <div id="frenzyBanner">
+          <div class="frenzy-bar">
+            <span>⚡ FRENZY — ×7 clicks</span>
+            <span id="frenzyTimer">30s</span>
+          </div>
+        </div>
         <div class="canvas-footer">
           <span id="zoomLbl"></span>
         </div>
@@ -740,9 +1378,18 @@ html, body {
       <!-- Auth card -->
       <div class="card" id="authCard">
         <div class="card-title">Account</div>
-        <!-- Signed-out state (unauthenticated until n=8) -->
+        <!-- Signed-out state (pre-authentication) -->
         <div id="signedOut">
-          <div class="lb-status">Reach Fibonacci 21 to join<br>the leaderboard</div>
+          <div class="lb-status" style="margin-bottom:8px;">Playing as guest<br>Sign in to save progress</div>
+          <button class="auth-btn" id="guestSignInBtn">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;flex-shrink:0">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Sign in with Google
+          </button>
         </div>
         <!-- Signed-in state (both anonymous and Google users) -->
         <div id="signedIn" style="display:none">
@@ -763,6 +1410,10 @@ html, body {
             </svg>
             Sign in with Google
           </button>
+          <!-- Tier 4: Join Classroom Challenge -->
+          <button class="auth-btn" id="joinChallengeBtn" style="margin-top:6px;font-size:10px;padding:6px 8px;">
+            🏫 Join Challenge
+          </button>
           <button class="signout-btn" id="signOutBtn" style="display:none">sign out</button>
         </div>
       </div>
@@ -782,7 +1433,14 @@ html, body {
 
       <!-- Leaderboard card -->
       <div class="card">
-        <div class="card-title">🏆 Leaderboard</div>
+        <div class="card-title">
+          🏆 Leaderboard
+          <div class="lb-tabs">
+            <button class="lb-tab active" data-tab="alltime">All-time</button>
+            <button class="lb-tab" data-tab="weekly">Weekly</button>
+          </div>
+        </div>
+        <div class="lb-challenge-header" id="lbChallengeHeader" style="display:none;"></div>
         <div id="lbList"><div class="lb-empty">Loading…</div></div>
         <div class="lb-status" id="lbStatus"></div>
       </div>
@@ -799,7 +1457,16 @@ html, body {
     <div class="card" id="mobileAuthCard">
       <div class="card-title">Account</div>
       <div id="mobileSignedOut">
-        <div class="lb-status">Reach Fibonacci 21 to join<br>the leaderboard</div>
+        <div class="lb-status" style="margin-bottom:8px;">Playing as guest<br>Sign in to save progress</div>
+        <button class="auth-btn" id="mobileGuestSignInBtn">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;flex-shrink:0">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Sign in with Google
+        </button>
       </div>
       <div id="mobileSignedIn" style="display:none">
         <div class="user-row">
@@ -819,6 +1486,10 @@ html, body {
           </svg>
           Sign in with Google
         </button>
+        <!-- Tier 4: Join Classroom Challenge (mobile) -->
+        <button class="auth-btn" id="mobileJoinChallengeBtn" style="margin-top:6px;font-size:10px;padding:6px 8px;">
+          🏫 Join Challenge
+        </button>
         <button class="signout-btn" id="mobileSignOutBtn" style="display:none">sign out</button>
       </div>
     </div>
@@ -831,6 +1502,25 @@ html, body {
       <div id="mobileEngineStatus"></div>
       <div id="mobileEngineUpgrades"></div>
     </div>
+
+    <!-- UX polish: mobile always-visible Achievements panel in bottom sheet -->
+    <div class="card" id="mobileAchCard">
+      <div class="card-title">
+        🏆 Achievements
+        <span class="card-title-count" id="mobileAchCount">0 / 0</span>
+      </div>
+      <div id="mobileAchGrid" class="sidebar-ach-grid"></div>
+    </div>
+
+    <!-- UX polish: mobile always-visible Found in Nature panel in bottom sheet -->
+    <div class="card" id="mobileGalleryCard">
+      <div class="card-title">
+        🖼️ Found in Nature
+        <span class="card-title-count" id="mobileGalleryCount">0 / 0</span>
+      </div>
+      <div id="mobileGalleryGrid" class="sidebar-gallery-grid"></div>
+    </div>
+
     <div class="card">
       <div class="card-title">🏆 Leaderboard</div>
       <div id="mobileLbList"><div class="lb-empty">Loading…</div></div>
@@ -851,6 +1541,82 @@ html, body {
       <div style="font-size:11px;color:var(--txt3);margin-top:4px;" id="offlineDuration">away for 0s</div>
     </div>
     <button class="btn btn-primary" id="collectOfflineBtn" style="width:100%;padding:12px;">Collect</button>
+  </div>
+</div>
+
+<!-- Tier 2: Daily streak modal -->
+<div class="overlay-backdrop" id="streakModal">
+  <div class="overlay-panel">
+    <div class="overlay-title">🔥 Daily Streak</div>
+    <div id="streakModalBody"></div>
+    <button class="btn btn-primary" id="streakClaimBtn" style="width:100%;padding:12px;margin-top:16px;">Claim</button>
+  </div>
+</div>
+
+<!-- Tier 2: Achievements overlay -->
+<div class="overlay-backdrop" id="achievementsOverlay">
+  <div class="overlay-panel" style="width:480px;max-width:94vw;">
+    <button class="overlay-close" id="achievementsClose">✕</button>
+    <div class="overlay-title">🏆 Achievements · <span id="achievementsCount">0</span> / <span id="achievementsTotal">0</span></div>
+    <div id="achievementsGrid"></div>
+  </div>
+</div>
+
+<!-- Tier 2: Achievement toast container (also used by Tier 3 Gallery + Champion toasts) -->
+<div id="achievementToasts"></div>
+
+<!-- Tier 4: "Why Does This Matter?" level-up fact card -->
+<div id="factCard" class="fact-card" style="display:none;">
+  <div class="fact-card-close" id="factCardClose">✕</div>
+  <div class="fact-level" id="factLevel"></div>
+  <div class="fact-text" id="factText"></div>
+  <div class="fact-actions">
+    <a class="fact-link" id="factLearnMore" href="#">Learn more →</a>
+  </div>
+</div>
+
+<!-- Tier 4: Join Classroom Challenge modal -->
+<div class="overlay-backdrop" id="joinChallengeOverlay">
+  <div class="overlay-panel" style="width:320px;max-width:94vw;">
+    <button class="overlay-close" id="joinChallengeClose">✕</button>
+    <div class="overlay-title">🏫 Join Challenge</div>
+    <p style="font-size:12px;color:var(--txt2);margin-bottom:12px;">
+      Enter the 4-character code from your teacher.
+    </p>
+    <input type="text" id="challengeCodeInput" class="guest-name-input" maxlength="4"
+           placeholder="CODE" style="font-size:22px;text-align:center;letter-spacing:8px;text-transform:uppercase;">
+    <button class="btn btn-primary" id="challengeJoinBtn" style="width:100%;margin-top:12px;">
+      Join
+    </button>
+    <div id="joinChallengeError" style="color:var(--red);font-size:11px;margin-top:8px;min-height:14px;text-align:center;"></div>
+  </div>
+</div>
+
+<!-- Tier 3: Gallery grid overlay -->
+<div class="overlay-backdrop" id="galleryOverlay">
+  <div class="overlay-panel" style="width:580px;max-width:94vw;max-height:85vh;overflow-y:auto;">
+    <button class="overlay-close" id="galleryClose">✕</button>
+    <div class="overlay-title">🖼️ Found in Nature · <span id="galleryCount">0</span> / <span id="galleryTotal">0</span></div>
+    <p style="font-size:12px;color:var(--txt2);line-height:1.5;margin-bottom:16px;">
+      The Fibonacci sequence appears throughout the natural world. Reach new levels to unlock more.
+    </p>
+    <div id="galleryGrid"></div>
+  </div>
+</div>
+
+<!-- Tier 3: Gallery single-item viewer -->
+<div class="overlay-backdrop" id="galleryItemOverlay">
+  <div class="overlay-panel" style="width:600px;max-width:94vw;padding:0;overflow:hidden;">
+    <button class="overlay-close" id="galleryItemClose" style="background:rgba(0,0,0,0.5);border-radius:50%;width:30px;height:30px;">✕</button>
+    <img id="galleryItemImg" style="width:100%;display:block;max-height:60vh;object-fit:cover;" alt="">
+    <div style="padding:20px;">
+      <div id="galleryItemTitle" style="font-size:20px;font-weight:700;color:var(--amber);margin-bottom:10px;font-family:'Cormorant Garamond',serif;"></div>
+      <div id="galleryItemFact" style="font-size:14px;color:var(--txt);line-height:1.6;font-family:'Cormorant Garamond',serif;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap;">
+        <div id="galleryItemUnlock" style="font-size:10px;color:var(--txt3);font-family:'JetBrains Mono',monospace;"></div>
+        <a id="galleryItemWiki" href="#" target="_blank" rel="noopener" class="fact-link" style="display:none;">Read more on Wikipedia →</a>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -966,6 +1732,70 @@ const state = {
     lastTick:    0,             // performance.now() anchor
     enabled:     true,
   },
+
+  // ── v2.5 Tier 2: Daily Streak ────────────────────────────────────
+  streak: {
+    count:               0,
+    longestCount:        0,
+    lastDateStr:         '',
+    freezesLeft:         1,
+    lastFreezeRestoreWk: '',
+    todayClaimed:        false,   // transient; not persisted
+  },
+
+  // ── v2.5 Tier 2: Achievements ───────────────────────────────────
+  achievements:    {},            // { id: unlockedAtMillis }
+  lowestN:         1,              // mirror of highestAbsN for negative exploration
+  _dragExploredNs: null,           // lazy-initialised Set for "Explorer" achievement
+
+  // ── v2.5 Tier 2: Skins ───────────────────────────────────────────
+  activeSkin:       'classic',
+  _canvasBg:        '#0a0e1a',     // canvas clear color (overridden by skins)
+  _spiralStrokeCol: '#f1f5f9',     // spiral arc stroke for positive n (skin-overridden)
+  _negStrokeCol:    '#e05c5c',     // v3.2 cache: skin.palette.red, avoids per-frame getComputedStyle
+
+  // ── v3.0 Tier 3: Combo (session-only; not persisted) ─────────────
+  combo: {
+    count:       0,
+    lastClickAt: 0,
+    multTier:    1,
+    fadeTimer:   null,
+  },
+
+  // ── v3.0 Tier 3: Golden Moment + Frenzy (session-only) ───────────
+  goldenMoment: {
+    activeEl:    null,
+    frenzyUntil: 0,
+  },
+
+  // ── v3.0 Tier 3: Weekly Challenge ────────────────────────────────
+  weekly: {
+    currentWeekId:        '',
+    clickCountThisWeek:   0,
+    flowersThisWeek:      0,
+    tokensThisWeek:       0,
+    highestAbsNThisWeek:  0,
+    lowestNThisWeek:      1,
+    championBadges:       [],     // [{ weekId, rank, challenge, ts }]
+  },
+
+  // ── v3.0 Tier 3: Gallery viewed-flags ────────────────────────────
+  galleryViewed: {},               // { [atN]: true } — cleared after user opens the item
+
+  // ── v4.0 Tier 4: Level pop-ups ("Why Does This Matter?") ────────
+  factsShown:    {},               // { [n]: true } — fact already displayed for this n
+  suppressFacts: false,            // user preference toggle (Display section)
+
+  // ── v4.0 Tier 4: Classroom Challenge (session-only apart from auto-resume) ──
+  challenge: {
+    activeCode: null,
+    isCreator:  false,
+    doc:        null,   // cached challenge doc
+    unsubDoc:   null,
+    unsubList:  null,
+    startingN:  1,
+  },
+  _challengeTargetReached: false,  // session-only flag for first-time target celebration
 };
 
 // ─── Boost + Engine catalogs (v2.0 Tier 1) ───────────────────────
@@ -988,6 +1818,205 @@ const ENGINE_UPGRADES = [
 ];
 const ENGINE_MILESTONES = [13, 14, 15, 16, 17, 18, 19, 20, 21, 34, 55, 89, 144, 233];
 const OFFLINE_CAP_SECONDS = 8 * 3600;
+
+// ─── Tier 2: Achievements catalog ─────────────────────────────────
+const ACHIEVEMENTS = [
+  // Early progression
+  { id: 'sprout',       emblem: '🌱', title: 'Sprout',             unlock: 'Reach F(3)',
+    fact: 'A tree branches in Fibonacci patterns — one trunk splits into two, then three branches, then five. This is how trees maximize sunlight.' },
+  { id: 'sunflower',    emblem: '🌻', title: 'Sunflower',          unlock: 'Reach F(8)',
+    fact: 'Real sunflower heads have 21 spirals in one direction and 34 in the other — always consecutive Fibonacci numbers. This packs seeds most efficiently.' },
+  { id: 'nautilus',     emblem: '🐚', title: 'Nautilus',           unlock: 'Reach F(13)',
+    fact: 'The nautilus shell grows each chamber φ times larger than the last. This exact proportion appears in ferns, shells, and galaxies.' },
+  { id: 'hurricane',    emblem: '🌀', title: 'Hurricane',          unlock: 'Reach F(21)',
+    fact: 'Hurricane arms are logarithmic spirals — the same mathematical shape the Fibonacci spiral converges to. The closer you look, the more repeats.' },
+  { id: 'galaxy',       emblem: '🌌', title: 'Galaxy',             unlock: 'Reach F(34)',
+    fact: 'Spiral galaxies like the Milky Way have arms that follow logarithmic spirals. At galactic scale, φ still shows up.' },
+  { id: 'phi_master',   emblem: 'φ',  title: 'Phi Master',         unlock: 'Reach F(55)',
+    fact: 'φ = (1 + √5) / 2 ≈ 1.6180339887. It appears in human anatomy, the Parthenon, and Da Vinci paintings.' },
+  { id: 'transcendent', emblem: '∞',  title: 'Transcendent',       unlock: 'Reach F(89)',
+    fact: 'F(89) = 1,134,903,170. In 10 more steps F(99) surpasses the number of atoms in a human body. Growth is not linear.' },
+
+  // Negative exploration
+  { id: 'mirror',       emblem: '🪞', title: 'Through the Mirror', unlock: 'Reach F(-5)',
+    fact: 'Negafibonacci numbers follow F(-n) = (-1)^(n+1) · F(n). The sequence extends infinitely backward, alternating sign.' },
+  { id: 'antimatter',   emblem: '⚛️', title: 'Antimatter',         unlock: 'Reach F(-13)',
+    fact: 'Going backward in the Fibonacci sequence matches going forward in a mirrored universe — a pattern physicists call CPT symmetry.' },
+
+  // Engagement
+  { id: 'first_boost',  emblem: '⚡', title: 'First Boost',        unlock: 'Buy any boost upgrade',
+    fact: 'Compounding multipliers turn linear effort into exponential progress. This is how money in an investment account grows — and how your clicks work now.' },
+  { id: 'engine',       emblem: '⚙️', title: 'Autonomous',         unlock: 'Buy the Golden Ratio Engine',
+    fact: 'Automation is how humans turned the industrial revolution into the information age. Your spiral now grows on its own.' },
+  { id: 'phi_disciple', emblem: '🔥', title: 'Phi Disciple',       unlock: '13-day streak',
+    fact: 'You played 13 days in a row — F(7). Your persistence matches the sequence itself.' },
+  { id: 'dedicated',    emblem: '📅', title: 'Dedicated',          unlock: '34-day streak',
+    fact: 'Thirty-four days — F(9). Most players stop by day 7. You are in rare company.' },
+
+  // Oddities
+  { id: 'zero',         emblem: '⚪', title: 'The Zero Point',     unlock: 'Reach n=0',
+    fact: 'F(0) = 0. The sequence starts here — the void from which everything grows.' },
+  { id: 'explorer',     emblem: '🧭', title: 'Free Explorer',      unlock: 'Drag the number line to five different n values',
+    fact: 'Mathematicians often play with numbers just to see what happens. Curiosity is how discovery starts.' },
+  { id: 'collector',    emblem: '🏆', title: 'Completionist',      unlock: 'Unlock all other achievements',
+    fact: 'Every shape in nature is a compromise between growth and space. Same with achievements — you claimed them all.' },
+
+  // v3.0 Tier 3 — Combo + Golden Moment
+  { id: 'combo_21',     emblem: '⚡', title: 'Streaking',           unlock: 'Reach a 21-click combo',
+    fact: '21 clicks in under 21 seconds is F(8) worth of reflex. Jazz drummers know this rhythm.' },
+  { id: 'combo_55',     emblem: '🔥', title: 'Unstoppable',         unlock: 'Reach a 55-click combo',
+    fact: '55 straight clicks. Your dopamine loop just peaked.' },
+  { id: 'golden_touch', emblem: '✨', title: 'Seized the Moment',   unlock: 'Catch a Golden Moment',
+    fact: 'Variable-ratio reinforcement — not knowing when the next reward will come — is the most engaging pattern in psychology. You just experienced it.' },
+];
+
+// ─── Tier 3: Gallery ("Found in Nature") catalog ──────────────────
+// UX polish: URLs use Wikipedia's Special:FilePath which follows file
+// renames automatically. `wiki` slug links the full article for further reading.
+const GALLERY = [
+  { at: 3,  emblem: '🐚',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/NautilusCutawayLogarithmicSpiral.jpg?width=640',
+    wiki: 'Nautilus',
+    title: 'Nautilus Shell',
+    fact: 'The chambered nautilus grows each new section about φ times larger than the last. Cutting the shell in half reveals this perfect logarithmic spiral.' },
+  { at: 6,  emblem: '🌻',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Helianthus_whorl.JPG?width=640',
+    wiki: 'Fibonacci_sequence#Nature',
+    title: 'Sunflower Seed Head',
+    fact: 'Sunflower florets pack into two opposing spirals — typically 21 clockwise and 34 counter-clockwise, or 34/55, or 55/89. Always consecutive Fibonacci numbers.' },
+  { at: 9,  emblem: '🌀',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Hurricane_Isabel_from_ISS.jpg?width=640',
+    wiki: 'Hurricane_Isabel',
+    title: 'Hurricane Isabel',
+    fact: 'Seen from the International Space Station, hurricane arms trace a near-perfect logarithmic spiral — the limiting shape of the Fibonacci spiral.' },
+  { at: 12, emblem: '🖼️',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg?width=640',
+    wiki: 'Mona_Lisa',
+    title: 'Mona Lisa',
+    fact: "Leonardo da Vinci studied φ obsessively. The Mona Lisa's composition contains multiple golden-ratio rectangles — her face, the horizon line, the spiral of her hair." },
+  { at: 15, emblem: '🌌',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Messier_74_by_HST.jpg?width=640',
+    wiki: 'Messier_74',
+    title: 'Messier 74 Galaxy',
+    fact: 'M74, a "grand design" spiral galaxy, displays two prominent arms that follow a logarithmic curve — the same mathematics that shapes your spiral right now.' },
+  { at: 18, emblem: '🌿',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Fractal_Broccoli.jpg?width=640',
+    wiki: 'Romanesco_broccoli',
+    title: 'Romanesco Broccoli',
+    fact: 'Each bud on a Romanesco is itself composed of smaller buds in the same pattern — a natural fractal. Its spirals follow Fibonacci counts.' },
+  { at: 21, emblem: '🌲',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Pineconespiral.jpg?width=640',
+    wiki: 'Conifer_cone',
+    title: 'Pinecone Spirals',
+    fact: 'Pinecones have two families of spirals: typically 8 going one way and 13 going the other. Sometimes 5/8 on smaller cones. Always Fibonacci.' },
+  { at: 24, emblem: '🍍',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Pineapple_(4006).JPG?width=640',
+    wiki: 'Pineapple',
+    title: 'Pineapple',
+    fact: 'The hexagonal "eyes" of a pineapple form three spirals: 5, 8, and 13. Count them next time you eat one.' },
+  { at: 27, emblem: '🐌',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/Helix_aspersa_shell.jpg?width=640',
+    wiki: 'Cornu_aspersum',
+    title: 'Snail Shell',
+    fact: "Land snails grow by adding new chambers that are φ times larger. The shell is a record of the snail's entire life — each turn representing a growth phase." },
+  { at: 30, emblem: '🧬',
+    src: 'https://en.wikipedia.org/wiki/Special:FilePath/DNA_orbit_animated.gif?width=320',
+    wiki: 'DNA',
+    title: 'DNA Double Helix',
+    fact: 'The B-form DNA molecule is 21 Å wide and 34 Å per complete turn — F(8) and F(9). The ratio is φ. Life itself is Fibonacci.' },
+];
+
+// ─── Tier 3: Weekly challenge metadata ─────────────────────────────
+const WEEKLY_CHALLENGES = [
+  { key: 'highest', title: 'Highest Peak',  desc: 'Reach the highest F(n) this week',     unit: 'level'   },
+  { key: 'lowest',  title: 'Deepest Dive',  desc: 'Reach the most negative F(n)',         unit: 'depth'   },
+  { key: 'clicks',  title: 'Most Clicks',   desc: 'Rack up the most clicks',              unit: 'clicks'  },
+  { key: 'flowers', title: 'Flower Hunter', desc: 'Collect the most flowers',             unit: 'flowers' },
+  { key: 'tokens',  title: 'Token Magnate', desc: 'Earn the most Boost Tokens',           unit: 'tokens'  },
+];
+
+// ─── Tier 4: Level-up facts ("Why Does This Matter?") ──────────────
+const LEVEL_FACTS = {
+  3:  "F(3) = 2. Every flowering plant that puts out leaves in an alternating pattern does it with two leaves per cycle — the simplest Fibonacci arrangement.",
+  4:  "F(4) = 3. A clover has three leaves. A daisy family root has three main branches. Three is the first Fibonacci number that isn't 1 or 2.",
+  5:  "F(5) = 5. Apple cores have five seed pockets in a star. Starfish have five arms. Most flowers have five petals. This isn't coincidence.",
+  6:  "F(6) = 8. Octopi have eight arms. Spiders have eight legs. Many seashells coil in groups of eight bands.",
+  7:  "F(7) = 13. A year has roughly 13 lunar cycles. Many moth species lay eggs in groups of 13.",
+  8:  "F(8) = 21. Sunflowers have 21 seed spirals in one direction (and 34 in the other — next level).",
+  9:  "F(9) = 34. The other sunflower direction. Also the number of vertebrae in the average giraffe neck lineage.",
+  10: "F(10) = 55. The ratio F(10)/F(9) = 55/34 ≈ 1.6176. Already extremely close to φ ≈ 1.6180. The sequence converges.",
+  11: "F(11) = 89. Your spiral now contains 11 squares and 11 quarter-arcs. If you drew it life-size with F(1)=1 inch, your drawing would be 89 inches wide.",
+  12: "F(12) = 144 — a dozen dozen. Known since ancient times as a 'gross'. A completely coincidental but delightful alignment.",
+  13: "F(13) = 233. The Fibonacci sequence appears in Pascal's triangle: the shallow diagonals sum to Fibonacci numbers. Try it.",
+  14: "F(14) = 377. If you had F(14) pennies, stacked flat, the tower would be about as tall as a four-story building.",
+  15: "F(15) = 610. The ratio F(15)/F(14) = 610/377 ≈ 1.6180. Twelve decimal places of φ are now visible in this sequence.",
+  16: "F(16) = 987. A standard deck of cards shuffled 'perfectly' 8 times returns to its original order. Coincidence? Yes, but 8 is Fibonacci.",
+  17: "F(17) = 1,597. Leonardo of Pisa (1170–1250), nicknamed Fibonacci, introduced this sequence to Europe in 1202 as a puzzle about rabbit populations.",
+  18: "F(18) = 2,584. Honeybee family trees follow the Fibonacci sequence exactly: a male bee has 1 parent (the queen), a female has 2 (both queen and drone).",
+  19: "F(19) = 4,181. The Fibonacci numbers are the ONLY solutions to x² - x - 1 = 0 that grow discretely. This equation defines φ.",
+  20: "F(20) = 6,765. F(20) is also a Lucas number — part of another sequence that follows the same rule but starts 2, 1, 3, 4, 7...",
+  21: "F(21) = 10,946. You reached F(21) — a Fibonacci index that is itself Fibonacci. These are rare and called 'Fibonacci-in-index' numbers.",
+  34: "F(34) = 5,702,887. Grown past five million with just 34 steps. The sequence outpaces most polynomial growth from this point on.",
+  55: "F(55) = 139,583,862,445. Roughly the number of seconds in 4,400 years. Your click count crossed the boundary of recorded human history.",
+  89: "F(89) = 1,779,979,416,004,714,189. Nearly two billion billion. In base-10, F(n) has approximately n × 0.209 digits — a direct consequence of φ.",
+  144:"F(144) = 555,565,404,224,292,694,404,015,791,808. Written out, it's 30 digits. Somewhere in the middle of this number lives the string '144' again — entirely by chance.",
+};
+
+// ─── Tier 4: Classroom Challenge code alphabet (0/O/1/I removed) ───
+const CHALLENGE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+// ─── Tier 2: Skin catalog ─────────────────────────────────────────
+const SKINS = [
+  { id: 'classic',  name: 'Classic',   unlock: 0,  preview: '🌀',
+    palette: {
+      amber: '#f5a623', amberLight: '#fbbf24', orange: '#f97316',
+      red:   '#e05c5c', teal:       '#a8e6cf',
+      bg:    '#0b0f1a', bg2:        '#111827',
+      canvasBg: '#0a0e1a', spiralColor: '#f1f5f9',
+    }},
+  { id: 'nautilus', name: 'Nautilus',  unlock: 8,  preview: '🐚',
+    palette: {
+      amber: '#d4a574', amberLight: '#e8c39e', orange: '#a67653',
+      red:   '#8b4a3f', teal:       '#c9b99a',
+      bg:    '#1c1410', bg2:        '#28201a',
+      canvasBg: '#161108', spiralColor: '#e8ddc6',
+    }},
+  { id: 'sunflower', name: 'Sunflower', unlock: 13, preview: '🌻',
+    palette: {
+      amber: '#fbbf24', amberLight: '#fde047', orange: '#f59e0b',
+      red:   '#dc2626', teal:       '#86efac',
+      bg:    '#1e1a0e', bg2:        '#2d2818',
+      canvasBg: '#141006', spiralColor: '#fef3c7',
+    }},
+  { id: 'galaxy',   name: 'Galaxy',    unlock: 21, preview: '🌌',
+    palette: {
+      amber: '#a78bfa', amberLight: '#c4b5fd', orange: '#ec4899',
+      red:   '#f472b6', teal:       '#67e8f9',
+      bg:    '#050514', bg2:        '#0d0a24',
+      canvasBg: '#02010a', spiralColor: '#e0d7ff',
+    }},
+  { id: 'hurricane', name: 'Hurricane', unlock: 34, preview: '🌀',
+    palette: {
+      amber: '#94a3b8', amberLight: '#cbd5e1', orange: '#64748b',
+      red:   '#ef4444', teal:       '#7dd3fc',
+      bg:    '#0f172a', bg2:        '#1e293b',
+      canvasBg: '#0a1220', spiralColor: '#e2e8f0',
+    }},
+  { id: 'fern',     name: 'Fern',      unlock: 55, preview: '🌿',
+    palette: {
+      amber: '#84cc16', amberLight: '#a3e635', orange: '#65a30d',
+      red:   '#dc2626', teal:       '#bbf7d0',
+      bg:    '#0a1408', bg2:        '#141e10',
+      canvasBg: '#060b04', spiralColor: '#d9f99d',
+    }},
+  { id: 'cosmic',   name: 'Cosmic',    unlock: 89, preview: '✨',
+    palette: {
+      amber: '#f59e0b', amberLight: '#fcd34d', orange: '#ef4444',
+      red:   '#f43f5e', teal:       '#06b6d4',
+      bg:    '#000000', bg2:        '#0a0a0a',
+      canvasBg: '#000000', spiralColor: '#fef3c7',
+    }},
+];
 
 // ─── Colors ──────────────────────────────────────────────────────
 const COLORS = [
@@ -1061,7 +2090,16 @@ const cctx  = cc.getContext('2d');
 
 // Cap devicePixelRatio to limit canvas backing-store memory on high-DPI
 // Chromebooks (dpr 2.0 otherwise gives 4× backing store per canvas).
-const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+// v3.2 crash-fix: drop to 1.0 on low-memory / low-core machines (typical
+// classroom Chromebooks have deviceMemory ≤ 4 and hardwareConcurrency ≤ 4).
+// This roughly halves the GPU backing-store footprint across our three
+// canvases and is the single biggest relief on crash-prone devices.
+const LOW_MEM_DEVICE =
+  (typeof navigator !== 'undefined') && (
+    (navigator.deviceMemory && navigator.deviceMemory <= 4) ||
+    (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4)
+  );
+const DPR = Math.min(window.devicePixelRatio || 1, LOW_MEM_DEVICE ? 1.0 : 1.5);
 
 // rAF-coalesced draw scheduler. Bulk input handlers (flower/smiley combo ticks,
 // drag handlers, resize observer) can request many redraws per frame; this
@@ -1084,11 +2122,18 @@ let lastInputX = 0, lastInputY = 0;
 let lastInputSource = 'key'; // 'mouse' | 'touch' | 'key'
 
 // ─── Confetti particle system ────────────────────────────────────
+// v3.2 crash-fix: hard global cap (was per-click cap only; spam-clicking at
+// n=9 used to push thousands into the array since dead particles weren't
+// compacted out until every last one had faded). Dead entries are now
+// compacted every frame and new spawns over the cap are dropped.
+const CONFETTI_GLOBAL_CAP = 300;
 let confettiParticles = [];
 let confettiAnimating = false;
 
 function launchConfetti(x, y, count) {
-  const actual = Math.min(count, 150);
+  const perClickCap = Math.min(count, 150);
+  const headroom    = Math.max(0, CONFETTI_GLOBAL_CAP - confettiParticles.length);
+  const actual      = Math.min(perClickCap, headroom);
   for (let i = 0; i < actual; i++) {
     const [r,g,b] = COLORS[Math.floor(Math.random() * COLORS.length)];
     confettiParticles.push({
@@ -1113,14 +2158,16 @@ function launchConfetti(x, y, count) {
 function animateConfetti() {
   const W = state._sw, H = state._sh;
   cctx.clearRect(0, 0, W, H);
-  let alive = false;
+  // v3.2 crash-fix: compact dead particles out on every frame so the
+  // array doesn't grow unboundedly while the user is still spawning.
+  const live = [];
   for (const p of confettiParticles) {
     p.x += p.vx; p.y += p.vy;
     p.vy += 0.25;
     p.rotation += p.rv;
     p.alpha -= 0.005;
     if (p.alpha <= 0) continue;
-    alive = true;
+    live.push(p);
     cctx.save();
     cctx.globalAlpha = p.alpha;
     cctx.translate(p.x, p.y);
@@ -1129,10 +2176,10 @@ function animateConfetti() {
     cctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
     cctx.restore();
   }
-  if (alive) {
+  confettiParticles = live;
+  if (live.length > 0) {
     requestAnimationFrame(animateConfetti);
   } else {
-    confettiParticles = [];
     confettiAnimating = false;
     cctx.clearRect(0, 0, W, H);
   }
@@ -1181,6 +2228,9 @@ function spawnFlower() {
     e.stopPropagation();
     if (e.type === 'touchend') e.preventDefault();
     bulkTick(+1, 5);
+    // v3.0 Tier 3 — weekly flower-hunter metric
+    state.weekly.flowersThisWeek++;
+    maybeUpdateWeeklyScore();
     const rect = el.getBoundingClientRect();
     const boxRect = cc.getBoundingClientRect();
     launchConfetti(rect.left - boxRect.left + 22, rect.top - boxRect.top + 22, 20);
@@ -1470,7 +2520,7 @@ function drawSpiral() {
   const W = state._sw, H = state._sh;
   const n = state.n;
 
-  ctx.fillStyle = '#0a0e1a';
+  ctx.fillStyle = state._canvasBg || '#0a0e1a';
   ctx.fillRect(0, 0, W, H);
 
   if (n === 0 && state.subStep === 0) {
@@ -1626,7 +2676,9 @@ function drawSpiral() {
 
   // ── Fibonacci spiral arcs (committed) ────────────────────────────
   if (state.showFibSpiral) {
-    ctx.strokeStyle = isNeg ? '#e05c5c' : '#f1f5f9';
+    ctx.strokeStyle = isNeg
+      ? (state._negStrokeCol    || '#e05c5c')
+      : (state._spiralStrokeCol || '#f1f5f9');
     ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.setLineDash([]);
     squares.forEach((sq, i) => {
       const { ax, ay, sa } = arcParams(sq, i);
@@ -1659,25 +2711,10 @@ function drawSpiral() {
     });
   }
 
-  // ── Mona Lisa easter egg on k=12 square ──────────────────────────
-  if (absN >= 12) {
-    const mlImg = document.getElementById('monaLisa');
-    if (mlImg && mlImg.complete && mlImg.naturalWidth > 0) {
-      const sq12 = squares.find(sq => sq.k === 12);
-      if (sq12 && sq12.size > 8) {
-        const cx = sq12.x + sq12.size / 2;
-        const cy = sq12.y + sq12.size / 2;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(-rotAngle);
-        const drawSz = sq12.size * 0.9;
-        ctx.globalAlpha = 0.85;
-        ctx.drawImage(mlImg, -drawSz/2, -drawSz/2, drawSz, drawSz);
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      }
-    }
-  }
+  // v3.2 crash-fix: the pre-Tier-3 Mona Lisa easter-egg drawImage call
+  // was removed — the Tier 3 Gallery covers this (F(12) entry with the
+  // full painting + the "Did you know?" fact). Skipping this block on
+  // every draw frame saves a getElementById + getContextualAttribute read.
 
   ctx.restore();
   updateFooter();
@@ -1778,6 +2815,19 @@ function tickInput(dir) {
   state.nlIndAlpha = 1.0;
   state.clickCounter++;
 
+  // v3.0 Tier 3 — combo tracking (human clicks only; engine loop bypasses tickInput)
+  const now = performance.now();
+  if (now - state.combo.lastClickAt < 1000) state.combo.count++;
+  else                                       state.combo.count = 1;
+  state.combo.lastClickAt = now;
+  state.combo.multTier    = comboMultiplier(state.combo.count);
+  updateComboDisplay();
+  scheduleComboFade();
+
+  // v3.0 Tier 3 — weekly click-count tracking + light-rate Firestore write
+  state.weekly.clickCountThisWeek++;
+  if (state.weekly.clickCountThisWeek % 10 === 0) maybeUpdateWeeklyScore();
+
   if (state.mode === 'standard') {
     commitN(state.n + dir);
     return;
@@ -1791,7 +2841,9 @@ function tickInput(dir) {
   }
 
   // v2.0 Tier 1 — compute ticks for this click from multipliers
-  let ticksThisClick = clickMultiplier();
+  // v3.0 Tier 3 — stack Frenzy × Combo × ClickMultiplier
+  let ticksThisClick = clickMultiplier() * state.combo.multTier;
+  if (performance.now() < state.goldenMoment.frenzyUntil) ticksThisClick *= 7;
 
   // Periodic bonuses: Fibonacci Fingers (F(5)=5 every 5th click)
   if (state.boostUpgrades.fingers && state.clickCounter % 5 === 0) {
@@ -1845,7 +2897,38 @@ function commitN(newN) {
     // Re-render boosts/engine in case this unlocks something
     renderBoosts();
     renderEngine();
+    // v2.5 Tier 2 — skin unlock toast if this exact |n| unlocks a skin
+    SKINS.forEach(s => {
+      if (s.unlock > 0 && state.highestAbsN === s.unlock) showSkinUnlockToast(s);
+    });
+    renderSkins();
+    // v3.0 Tier 3 — gallery unlock toast at F(3), F(6), F(9)…
+    GALLERY.forEach(g => {
+      if (state.highestAbsN === g.at) showGalleryUnlockToast(g);
+    });
+    // UX polish: refresh the always-visible sidebar gallery panel.
+    renderSidebarGallery();
+    // v3.0 Tier 3 — kick off Golden Moments at F(5)
+    if (state.highestAbsN === 5 && typeof goldenTimer !== 'undefined' && !goldenTimer) {
+      initGoldenMoment();
+    }
+    // v3.0 Tier 3 — weekly "Highest Peak" metric
+    if (state.highestAbsN > state.weekly.highestAbsNThisWeek) {
+      state.weekly.highestAbsNThisWeek = state.highestAbsN;
+      maybeUpdateWeeklyScore();
+    }
   }
+  // v2.5 Tier 2 — track lowest n for negative-exploration achievements
+  if (typeof newN === 'number' && newN < (state.lowestN ?? 1)) {
+    state.lowestN = newN;
+    // v3.0 Tier 3 — weekly "Deepest Dive" metric
+    if (state.lowestN < state.weekly.lowestNThisWeek) {
+      state.weekly.lowestNThisWeek = state.lowestN;
+      maybeUpdateWeeklyScore();
+    }
+  }
+  // v2.5 Tier 2 — evaluate achievements on every commit (cheap)
+  checkAchievements();
   animateNlToN(newN);
   requestDrawSpiral();
   requestDrawNumberLine();
@@ -1860,6 +2943,15 @@ function commitN(newN) {
 
   maybeSaveScore(newN);
   debouncedSaveProgress();
+
+  // v4.0 Tier 4 — "Why Does This Matter?" fact card on every new high
+  if (isNewHigh) {
+    showLevelFact(Math.abs(newN));
+  }
+  // v4.0 Tier 4 — report progress to active Classroom Challenge (debounced)
+  if (state.challenge.activeCode) {
+    reportChallengeProgress(newN);
+  }
 
   // Celebration: zoom-through animation on new high score (n >= 8)
   if (isNewHigh && Math.abs(newN) >= 8) {
@@ -1945,6 +3037,9 @@ function awardBoostTokens(absN) {
   const total = base + bonus;
   state.boostTokens         += total;
   state.boostTokensLifetime += total;
+  // v3.0 Tier 3 — weekly token-magnate metric
+  state.weekly.tokensThisWeek += total;
+  maybeUpdateWeeklyScore();
   updateTokenDisplay();
   if (total > 0) {
     // Token popup near top-right of canvas
@@ -1962,6 +3057,16 @@ function updateTokenDisplay() {
   if (mel) mel.textContent = bal;
   renderBoosts();
   renderEngine();
+  // UX polish: pulse the Boosts card when an unlocked upgrade is affordable
+  const card = document.getElementById('boostsCard');
+  if (card) {
+    const ready = BOOST_UPGRADES.some(up =>
+      !state.boostUpgrades[up.id] &&
+      state.highestAbsN >= up.unlock &&
+      state.boostTokens >= up.cost
+    );
+    card.classList.toggle('boosts-ready', ready);
+  }
 }
 
 // ── Boosts UI render ─────────────────────────────────────────────
@@ -2025,6 +3130,7 @@ function buyBoost(id) {
       boostTokensLifetime: state.boostTokensLifetime,
     }, { merge: true }).catch(err => console.error('❌ Boost save error:', err.message));
   }
+  checkAchievements();
 }
 
 // ── Golden Ratio Engine ──────────────────────────────────────────
@@ -2116,6 +3222,7 @@ function buyEngine() {
   updateTokenDisplay();
   startEngineLoop();
   debouncedSaveProgress();
+  checkAchievements();
 }
 
 function buyEngineUpgrade(id) {
@@ -2133,22 +3240,19 @@ function buyEngineUpgrade(id) {
 }
 
 let engineAF = null;
-// Cancel the engine rAF and null the handle. Paired with startEngineLoop() via
-// the visibilitychange listener below — Chrome pauses rAF for hidden tabs, so
-// without this pause the first rAF callback after unhiding sees a dt equal to
-// the full hidden duration (possibly minutes) and floods commitN with thousands
-// of ticks in one frame, which previously crashed classroom Chromebooks.
 function stopEngineLoop() {
-  if (engineAF !== null) {
-    cancelAnimationFrame(engineAF);
-    engineAF = null;
-  }
+  // v3.2 crash-fix: explicit teardown so state.engine.enabled=false,
+  // tab-hide, or sign-out fully stops the loop rather than leaving a
+  // zombie rAF chain that re-runs its early-return every frame.
+  if (engineAF) { cancelAnimationFrame(engineAF); engineAF = null; }
 }
 function startEngineLoop() {
   if (engineAF) return;
+  if (!state.engine.owned) return;
   state.engine.lastTick = performance.now();
   function tick(now) {
-    if (!state.engine.owned) { engineAF = null; return; }
+    if (!state.engine.owned)          { engineAF = null; return; }
+    if (document.hidden)              { engineAF = null; return; } // v3.2 pause on hidden tab
     if (!state.engine.enabled || celebrationAF) {
       state.engine.lastTick = now;
       engineAF = requestAnimationFrame(tick);
@@ -2161,12 +3265,15 @@ function startEngineLoop() {
     const whole = Math.floor(state.engine.accumulator);
     if (whole > 0) {
       state.engine.accumulator -= whole;
+      // v3.0 Tier 3 — Frenzy shares with the engine (combo does NOT)
+      const frenzyActive = performance.now() < state.goldenMoment.frenzyUntil;
+      const effective    = frenzyActive ? whole * 7 : whole;
       if (state.mode === 'standard') {
         // In standard mode each tick = 1 commit (not F(|n|) ticks)
-        for (let i = 0; i < whole; i++) commitN(state.n + 1);
+        for (let i = 0; i < effective; i++) commitN(state.n + 1);
       } else {
         if (state.stepDir !== 1) { state.stepDir = 1; state.subStep = 0; }
-        applyTicks(whole);
+        applyTicks(effective);
       }
       updateModeInfo();
       if (state.engine.upgrades.interest) {
@@ -2198,7 +3305,1351 @@ function showOfflineWelcomeModal(ticks, cappedSec, wasCapped) {
     applyTicks(ticks);
     updateModeInfo();
     console.log(`✅ Collected ${ticks} offline ticks`);
+    // Tier 2: streak evaluation sequences AFTER offline collect
+    evaluateStreak();
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ═══  v2.5 Tier 2: Daily Streak + Achievements + Skins   ══════════
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Date helpers ─────────────────────────────────────────────────
+function localDateStr(d = new Date()) {
+  const y   = d.getFullYear();
+  const mo  = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${day}`;
+}
+
+function isoWeekStr(d = new Date()) {
+  const target = new Date(d.valueOf());
+  const dayNr  = (d.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  const wk = 1 + Math.ceil((firstThursday - target) / 604800000);
+  return `${d.getFullYear()}-W${String(wk).padStart(2, '0')}`;
+}
+
+function daysBetween(a, b) {
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  return Math.round((parse(b) - parse(a)) / 86400000);
+}
+
+function streakReward(dayNum) {
+  const capped = Math.min(Math.max(1, dayNum), 14);
+  return Number(fibPos(capped));
+}
+
+// ── Streak evaluation ────────────────────────────────────────────
+function evaluateStreak() {
+  const today    = localDateStr();
+  const thisWeek = isoWeekStr();
+
+  // Weekly freeze restore — once per ISO week, back to (at most) 1
+  if (state.streak.lastFreezeRestoreWk !== thisWeek) {
+    state.streak.freezesLeft = Math.max(state.streak.freezesLeft, 1);
+    state.streak.lastFreezeRestoreWk = thisWeek;
+  }
+
+  // First-ever claim
+  if (!state.streak.lastDateStr) {
+    state.streak.count        = 1;
+    state.streak.lastDateStr  = today;
+    state.streak.longestCount = Math.max(state.streak.longestCount, 1);
+    state.streak.todayClaimed = false;
+    showStreakClaimModal();
+    updateStreakBadge();
+    return;
+  }
+
+  const gap = daysBetween(state.streak.lastDateStr, today);
+
+  if (gap === 0) {
+    state.streak.todayClaimed = true;
+    updateStreakBadge();
+    return;
+  }
+
+  if (gap === 1) {
+    state.streak.count++;
+    state.streak.lastDateStr  = today;
+    state.streak.longestCount = Math.max(state.streak.longestCount, state.streak.count);
+    state.streak.todayClaimed = false;
+    showStreakClaimModal(false, false);
+    updateStreakBadge();
+    checkAchievements();
+    return;
+  }
+
+  if (gap === 2 && state.streak.freezesLeft > 0) {
+    state.streak.freezesLeft--;
+    state.streak.count++;
+    state.streak.lastDateStr  = today;
+    state.streak.longestCount = Math.max(state.streak.longestCount, state.streak.count);
+    state.streak.todayClaimed = false;
+    console.log('✅ Freeze used — streak preserved');
+    showStreakClaimModal(true, false);
+    updateStreakBadge();
+    checkAchievements();
+    return;
+  }
+
+  console.log(`⚠️  Streak broken (gap of ${gap} days) — resetting`);
+  state.streak.count        = 1;
+  state.streak.lastDateStr  = today;
+  state.streak.todayClaimed = false;
+  showStreakClaimModal(false, true);
+  updateStreakBadge();
+}
+
+function streakModalBodyHtml(freezeUsed, wasReset) {
+  const reward = streakReward(state.streak.count);
+  let html = '';
+  if (wasReset) {
+    html += `<p style="color:var(--red);font-size:12px;margin-bottom:12px;">Your streak reset. Welcome back — let's start a new one!</p>`;
+  }
+  if (freezeUsed) {
+    html += `<p style="color:var(--teal);font-size:12px;margin-bottom:12px;">❄️ Freeze used — your streak is safe.</p>`;
+  }
+  const freezeStr = state.streak.freezesLeft > 0 ? '❄️'.repeat(state.streak.freezesLeft) : '—';
+  html += `
+    <div style="text-align:center;padding:20px;background:var(--bg2);border-radius:10px;margin-bottom:16px;">
+      <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;">Day</div>
+      <div style="font-size:44px;color:var(--amber);font-weight:700;font-family:'Cormorant Garamond',serif;">${state.streak.count}</div>
+      <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;margin-top:6px;">F(${Math.min(state.streak.count, 14)}) = ${reward}</div>
+      <div style="font-size:28px;color:var(--amber);font-weight:600;font-family:'JetBrains Mono',monospace;margin-top:10px;">+${reward} 🪙</div>
+    </div>
+    <div style="font-size:11px;color:var(--txt3);font-family:'JetBrains Mono',monospace;text-align:center;">
+      Freezes: ${freezeStr} &nbsp;·&nbsp; Longest: ${state.streak.longestCount}
+    </div>`;
+  return html;
+}
+
+function showStreakClaimModal(freezeUsed = false, wasReset = false) {
+  const reward = streakReward(state.streak.count);
+  const body   = document.getElementById('streakModalBody');
+  body.innerHTML = streakModalBodyHtml(freezeUsed, wasReset);
+  document.getElementById('streakClaimBtn').style.display = '';
+  document.getElementById('streakClaimBtn').textContent    = 'Claim';
+  document.getElementById('streakModal').classList.add('open');
+
+  document.getElementById('streakClaimBtn').onclick = () => {
+    document.getElementById('streakModal').classList.remove('open');
+    state.boostTokens         += reward;
+    state.boostTokensLifetime += reward;
+    state.streak.todayClaimed  = true;
+    updateTokenDisplay();
+    if (currentUser && fbDb) saveProgress();
+    console.log(`✅ Claimed streak day ${state.streak.count}: +${reward} tokens`);
+    if (state.streak.count === 13) playStreak13Celebration();
+    checkAchievements();
+  };
+}
+
+function showStreakInfoModal() {
+  // Read-only view of the current streak status (no claim)
+  const body = document.getElementById('streakModalBody');
+  const reward = streakReward(state.streak.count);
+  const freezeStr = state.streak.freezesLeft > 0 ? '❄️'.repeat(state.streak.freezesLeft) : '—';
+  body.innerHTML = `
+    <div style="text-align:center;padding:20px;background:var(--bg2);border-radius:10px;margin-bottom:16px;">
+      <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;">Current streak</div>
+      <div style="font-size:44px;color:var(--amber);font-weight:700;font-family:'Cormorant Garamond',serif;">${state.streak.count}</div>
+      <div style="font-size:12px;color:var(--txt3);font-family:'JetBrains Mono',monospace;margin-top:6px;">Today's reward would be F(${Math.min(Math.max(1,state.streak.count),14)}) = ${reward} 🪙</div>
+    </div>
+    <div style="font-size:11px;color:var(--txt3);font-family:'JetBrains Mono',monospace;text-align:center;line-height:1.8;">
+      Freezes: ${freezeStr}<br>
+      Longest: ${state.streak.longestCount}<br>
+      Last claim: ${state.streak.lastDateStr || '—'}
+    </div>`;
+  document.getElementById('streakClaimBtn').style.display = 'none';
+  document.getElementById('streakModal').classList.add('open');
+}
+
+function playStreak13Celebration() {
+  for (let i = 0; i < 5; i++) {
+    setTimeout(() => {
+      launchConfetti(state._sw / 2, state._sh / 2, 150);
+    }, i * 400);
+  }
+  if (!state.achievements.phi_disciple) {
+    state.achievements.phi_disciple = Date.now();
+    showAchievementToast('phi_disciple');
+    if (currentUser && fbDb) saveProgress();
+  }
+}
+
+function updateStreakBadge() {
+  const badge = document.getElementById('streakBadge');
+  const count = document.getElementById('streakCount');
+  if (!badge || !count) return;
+  count.textContent = state.streak.count;
+  badge.classList.toggle('streak-zero', state.streak.count === 0);
+}
+
+// ── Achievements ────────────────────────────────────────────────
+function checkAchievements() {
+  const unlocks = [];
+  const has    = id => !!state.achievements[id];
+  const unlock = id => { if (!has(id)) { state.achievements[id] = Date.now(); unlocks.push(id); } };
+
+  if (state.highestAbsN >= 3)  unlock('sprout');
+  if (state.highestAbsN >= 8)  unlock('sunflower');
+  if (state.highestAbsN >= 13) unlock('nautilus');
+  if (state.highestAbsN >= 21) unlock('hurricane');
+  if (state.highestAbsN >= 34) unlock('galaxy');
+  if (state.highestAbsN >= 55) unlock('phi_master');
+  if (state.highestAbsN >= 89) unlock('transcendent');
+
+  const low = state.lowestN ?? 1;
+  if (low <= -5)  unlock('mirror');
+  if (low <= -13) unlock('antimatter');
+
+  if (Object.keys(state.boostUpgrades).length >= 1) unlock('first_boost');
+  if (state.engine && state.engine.owned)           unlock('engine');
+
+  if (state.streak.longestCount >= 13) unlock('phi_disciple');
+  if (state.streak.longestCount >= 34) unlock('dedicated');
+
+  if (state.n === 0) unlock('zero');
+  if (state._dragExploredNs && state._dragExploredNs.size >= 5) unlock('explorer');
+
+  // Completionist — all OTHER achievements owned
+  const others = ACHIEVEMENTS.filter(a => a.id !== 'collector');
+  if (others.every(a => has(a.id))) unlock('collector');
+
+  unlocks.forEach(id => showAchievementToast(id));
+  if (unlocks.length > 0) {
+    // UX polish: always refresh the always-visible sidebar panel on desktop.
+    renderSidebarAchievements();
+    // Refresh modal grid if it's open.
+    if (document.getElementById('achievementsOverlay').classList.contains('open')) {
+      renderAchievementsGrid();
+    }
+    if (currentUser && fbDb) debouncedSaveProgress();
+  }
+}
+
+// v3.2 crash-fix: hard-cap live toasts at 3. Rapid bursts (e.g. reaching
+// F(13) which simultaneously unlocks Nautilus + Golden Touch boost +
+// Sunflower skin + gallery entry + level fact + streak claim) used to
+// stack 5–6 toast nodes for 12 s each. The oldest gets dropped immediately
+// on the 4th spawn so DOM doesn't balloon during milestone crossings.
+const TOAST_MAX = 3;
+function appendCappedToast(container, toast) {
+  if (!container) return;
+  while (container.children.length >= TOAST_MAX) {
+    container.firstElementChild.remove();
+  }
+  container.appendChild(toast);
+}
+
+function showAchievementToast(achievementId) {
+  const ach = ACHIEVEMENTS.find(a => a.id === achievementId);
+  if (!ach) return;
+  const container = document.getElementById('achievementToasts');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.innerHTML = `
+    <button class="toast-close" aria-label="Dismiss">✕</button>
+    <div class="emblem">${ach.emblem}</div>
+    <div class="ach-body">
+      <div class="ach-label">Achievement unlocked</div>
+      <div class="ach-title">${escHtml(ach.title)}</div>
+      <div class="ach-fact">${escHtml(ach.fact || '')}</div>
+    </div>`;
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) closeBtn.addEventListener('click', e => { e.stopPropagation(); toast.remove(); });
+  toast.addEventListener('click', () => {
+    toast.remove();
+    openAchievementsModal(achievementId);
+  });
+  appendCappedToast(container, toast);  // v3.2 crash-fix: drop oldest if >3 live
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
+  console.log(`✅ Achievement unlocked: ${ach.title}`);
+}
+
+function openAchievementsModal(scrollToId) {
+  renderAchievementsGrid();
+  document.getElementById('achievementsOverlay').classList.add('open');
+  if (scrollToId) {
+    setTimeout(() => {
+      const el = document.querySelector(`.ach-card[data-id="${scrollToId}"]`);
+      if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 100);
+  }
+}
+
+function renderAchievementsGrid() {
+  const grid  = document.getElementById('achievementsGrid');
+  const count = document.getElementById('achievementsCount');
+  const total = document.getElementById('achievementsTotal');
+  if (!grid || !count || !total) return;
+  const owned = ACHIEVEMENTS.filter(a => state.achievements[a.id]).length;
+  count.textContent = owned;
+  total.textContent = ACHIEVEMENTS.length;
+  grid.innerHTML = '<div class="ach-grid">' + ACHIEVEMENTS.map(a => {
+    const unlocked = !!state.achievements[a.id];
+    return `
+      <div class="ach-card ${unlocked ? '' : 'ach-locked'}" data-id="${a.id}">
+        <div class="emblem">${a.emblem}</div>
+        <div class="ach-title">${unlocked ? a.title : '???'}</div>
+        <div class="ach-unlock">${unlocked ? 'Unlocked' : a.unlock}</div>
+      </div>`;
+  }).join('') + '</div>';
+  grid.querySelectorAll('.ach-card:not(.ach-locked)').forEach(card => {
+    card.addEventListener('click', () => showAchievementFact(card.dataset.id));
+  });
+}
+
+// UX polish: compact Achievements grid — rendered in both the desktop left
+// sidebar and the mobile bottom sheet so the content is always visible.
+// Emblems only; clicking an unlocked emblem opens the full fact card.
+function renderSidebarAchievements() {
+  const owned = ACHIEVEMENTS.filter(a => state.achievements[a.id]).length;
+  const countText = `${owned} / ${ACHIEVEMENTS.length}`;
+  const html = ACHIEVEMENTS.map(a => {
+    const unlocked = !!state.achievements[a.id];
+    const cls = unlocked ? 'sidebar-ach-emblem' : 'sidebar-ach-emblem locked';
+    const tip = unlocked ? `${a.title} — click for the fact` : `??? · ${a.unlock}`;
+    return `<div class="${cls}" data-id="${a.id}" title="${escHtml(tip)}">${a.emblem}</div>`;
+  }).join('');
+  for (const [gridId, countId] of [['sidebarAchGrid', 'sidebarAchCount'], ['mobileAchGrid', 'mobileAchCount']]) {
+    const grid  = document.getElementById(gridId);
+    const count = document.getElementById(countId);
+    if (!grid || !count) continue;
+    count.textContent = countText;
+    grid.innerHTML = html;
+    grid.querySelectorAll('.sidebar-ach-emblem:not(.locked)').forEach(el => {
+      el.addEventListener('click', () => showAchievementFact(el.dataset.id));
+    });
+  }
+}
+
+function showAchievementFact(id) {
+  const ach = ACHIEVEMENTS.find(a => a.id === id);
+  if (!ach) return;
+  const ts   = state.achievements[id];
+  const date = ts ? new Date(ts).toLocaleDateString() : '';
+  const overlay = document.createElement('div');
+  overlay.className = 'ach-fact-overlay open';
+  overlay.innerHTML = `
+    <div class="ach-fact-card">
+      <div class="emblem">${ach.emblem}</div>
+      <div class="ach-title">${ach.title}</div>
+      <div class="fact">${ach.fact}</div>
+      <div class="unlocked">Unlocked ${date}</div>
+    </div>`;
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+}
+
+// ── Skins ───────────────────────────────────────────────────────
+function applySkin(skinId) {
+  const skin = SKINS.find(s => s.id === skinId);
+  if (!skin) { console.warn('⚠️  Unknown skin:', skinId); return; }
+  const root = document.documentElement.style;
+  root.setProperty('--amber',   skin.palette.amber);
+  root.setProperty('--amber-l', skin.palette.amberLight);
+  root.setProperty('--orange',  skin.palette.orange);
+  root.setProperty('--red',     skin.palette.red);
+  root.setProperty('--teal',    skin.palette.teal);
+  root.setProperty('--bg',      skin.palette.bg);
+  root.setProperty('--bg2',     skin.palette.bg2);
+  state.activeSkin       = skinId;
+  state._canvasBg        = skin.palette.canvasBg;
+  state._spiralStrokeCol = skin.palette.spiralColor;
+  // v3.2 crash-fix: cache the skin's red so drawSpiral doesn't call
+  // getComputedStyle('--red') every frame during celebration / smooth zoom.
+  state._negStrokeCol    = skin.palette.red || '#e05c5c';
+  requestDrawSpiral();
+  requestDrawNumberLine();
+  console.log(`✅ Skin applied: ${skin.name}`);
+}
+
+function renderSkins() {
+  const list = document.getElementById('skinsList');
+  if (!list) return;
+  list.innerHTML = SKINS.map(s => {
+    const locked = state.highestAbsN < s.unlock;
+    const active = state.activeSkin === s.id;
+    let cls = 'skin-card';
+    if (locked) cls += ' skin-locked';
+    if (active) cls += ' skin-active';
+    const title = locked ? `Unlocks at F(${s.unlock})` : s.name;
+    return `
+      <div class="${cls}" data-skin="${s.id}" title="${title}">
+        <div class="preview">${s.preview}</div>
+        <div class="skin-name">${s.name}</div>
+      </div>`;
+  }).join('');
+  list.querySelectorAll('.skin-card:not(.skin-locked)').forEach(card => {
+    card.addEventListener('click', () => {
+      applySkin(card.dataset.skin);
+      renderSkins();
+      debouncedSaveProgress();
+    });
+  });
+}
+
+function showSkinUnlockToast(skin) {
+  const container = document.getElementById('achievementToasts');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.innerHTML = `
+    <button class="toast-close" aria-label="Dismiss">✕</button>
+    <div class="emblem">${skin.preview}</div>
+    <div class="ach-body">
+      <div class="ach-label">New skin unlocked</div>
+      <div class="ach-title">${escHtml(skin.name)}</div>
+      <div class="ach-fact">Open Settings to try it on.</div>
+    </div>`;
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) closeBtn.addEventListener('click', e => { e.stopPropagation(); toast.remove(); });
+  toast.addEventListener('click', () => {
+    toast.remove();
+    openOverlay('settingsOverlay');
+    setTimeout(() => {
+      const el = document.querySelector(`.skin-card[data-skin="${skin.id}"]`);
+      if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 100);
+  });
+  appendCappedToast(container, toast);  // v3.2 crash-fix
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ═══  v3.0 Tier 3: Combo + Golden Moment + Gallery + Weekly   ═════
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Feature 9: Combo ─────────────────────────────────────────────
+function comboMultiplier(count) {
+  if (count >= 55) return 5;
+  if (count >= 21) return 3;
+  if (count >= 10) return 2;
+  if (count >= 5)  return 1.5;
+  return 1;
+}
+
+function updateComboDisplay() {
+  const el      = document.getElementById('comboDisplay');
+  const countEl = document.getElementById('comboCount');
+  const multEl  = document.getElementById('comboMult');
+  if (!el || !countEl || !multEl) return;
+  if (state.combo.count < 2) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = '';
+  el.style.opacity = '1';
+  el.style.transition = '';
+  countEl.textContent = state.combo.count;
+  multEl.textContent  = '×' + state.combo.multTier;
+  if ([5, 10, 21, 55].includes(state.combo.count)) {
+    el.classList.remove('pulse');
+    void el.offsetWidth; // force reflow
+    el.classList.add('pulse');
+  }
+  // Combo achievements (non-persisted combo state, but achievements persist)
+  if (state.combo.count >= 21 && !state.achievements.combo_21) {
+    state.achievements.combo_21 = Date.now();
+    showAchievementToast('combo_21');
+    if (currentUser && fbDb) debouncedSaveProgress();
+  }
+  if (state.combo.count >= 55 && !state.achievements.combo_55) {
+    state.achievements.combo_55 = Date.now();
+    showAchievementToast('combo_55');
+    if (currentUser && fbDb) debouncedSaveProgress();
+  }
+}
+
+function scheduleComboFade() {
+  if (state.combo.fadeTimer) clearTimeout(state.combo.fadeTimer);
+  state.combo.fadeTimer = setTimeout(() => {
+    const el = document.getElementById('comboDisplay');
+    if (!el) return;
+    el.style.transition = 'opacity 0.4s';
+    el.style.opacity    = '0';
+    setTimeout(() => {
+      state.combo.count    = 0;
+      state.combo.multTier = 1;
+      el.style.display     = 'none';
+      el.style.transition  = '';
+    }, 400);
+  }, 1100);
+}
+
+// ── Feature 10: Golden Moment ────────────────────────────────────
+let goldenTimer = null;
+function initGoldenMoment() {
+  scheduleNextGolden();
+  if (!initGoldenMoment._vchHooked) {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') scheduleNextGolden();
+      else clearGoldenTimer();
+    });
+    initGoldenMoment._vchHooked = true;
+  }
+}
+function scheduleNextGolden() {
+  clearGoldenTimer();
+  const delay = 120000 + Math.random() * 180000; // 2–5 min
+  goldenTimer = setTimeout(spawnGolden, delay);
+}
+function clearGoldenTimer() {
+  if (goldenTimer) { clearTimeout(goldenTimer); goldenTimer = null; }
+}
+
+function spawnGolden() {
+  if (celebrationAF)                           { scheduleNextGolden(); return; }
+  if (document.visibilityState !== 'visible')  { scheduleNextGolden(); return; }
+  const layer = document.getElementById('flowerLayer');
+  if (!layer) { scheduleNextGolden(); return; }
+  const box = layer.getBoundingClientRect();
+  if (box.width < 100 || box.height < 100)     { scheduleNextGolden(); return; }
+
+  const el = document.createElement('div');
+  el.className = 'golden-moment';
+  el.innerHTML = `
+    <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="gg" cx="50%" cy="50%">
+          <stop offset="0%" stop-color="#fff8dc"/>
+          <stop offset="50%" stop-color="#fbbf24"/>
+          <stop offset="100%" stop-color="#b45309"/>
+        </radialGradient>
+      </defs>
+      <circle cx="22" cy="22" r="18" fill="url(#gg)" stroke="#fbbf24" stroke-width="1.5"/>
+      <path d="M 22,8 Q 32,14 32,22 Q 32,30 22,30 Q 14,30 14,22" fill="none" stroke="#78350f" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
+  el.style.left = (30 + Math.random() * (box.width  - 72)) + 'px';
+  el.style.top  = (30 + Math.random() * (box.height - 72)) + 'px';
+  el.style.pointerEvents = 'auto';
+
+  el.addEventListener('click',    collectGolden);
+  el.addEventListener('touchend', e => { e.preventDefault(); collectGolden(e); }, { passive: false });
+
+  layer.appendChild(el);
+  state.goldenMoment.activeEl = el;
+
+  // Auto-remove after 8s
+  setTimeout(() => {
+    if (el.parentNode) el.remove();
+    if (state.goldenMoment.activeEl === el) state.goldenMoment.activeEl = null;
+    scheduleNextGolden();
+  }, 8000);
+}
+
+function collectGolden(e) {
+  if (e) e.stopPropagation();
+  const el = state.goldenMoment.activeEl;
+  if (!el) return;
+  const rect    = el.getBoundingClientRect();
+  const boxRect = document.getElementById('flowerLayer').getBoundingClientRect();
+  const x = rect.left - boxRect.left + 22;
+  const y = rect.top  - boxRect.top  + 22;
+  el.remove();
+  state.goldenMoment.activeEl = null;
+
+  const roll = Math.random();
+  if (roll < 0.5) {
+    // +F(highestAbsN) ticks
+    const ticks = Number(fibPos(Math.max(1, state.highestAbsN)));
+    if (state.mode !== 'standard' && state.stepDir !== 1) {
+      state.stepDir = 1; state.subStep = 0;
+    }
+    applyTicks(ticks);
+    launchConfetti(x, y, 40);
+    showPointsAnimation(x, y - 20, `F(${state.highestAbsN})`);
+  } else if (roll < 0.85) {
+    // Token bonus
+    const choices = [5, 8, 13, 21, 34];
+    const tokens  = choices[Math.floor(Math.random() * choices.length)];
+    state.boostTokens         += tokens;
+    state.boostTokensLifetime += tokens;
+    state.weekly.tokensThisWeek += tokens;
+    maybeUpdateWeeklyScore();
+    updateTokenDisplay();
+    launchConfetti(x, y, 30);
+    showPointsAnimation(x, y - 20, `${tokens} 🪙`);
+  } else {
+    // Frenzy!
+    state.goldenMoment.frenzyUntil = performance.now() + 30000;
+    launchConfetti(x, y, 80);
+    showFrenzyBanner();
+  }
+
+  if (!state.achievements.golden_touch) {
+    state.achievements.golden_touch = Date.now();
+    showAchievementToast('golden_touch');
+    if (currentUser && fbDb) debouncedSaveProgress();
+  }
+
+  scheduleNextGolden();
+}
+
+let frenzyBannerAF = null;
+function showFrenzyBanner() {
+  const banner = document.getElementById('frenzyBanner');
+  if (!banner) return;
+  banner.style.display = '';
+  const end = state.goldenMoment.frenzyUntil;
+  function tick(now) {
+    const remaining = Math.max(0, end - now);
+    const timerEl   = document.getElementById('frenzyTimer');
+    if (timerEl) timerEl.textContent = Math.ceil(remaining / 1000) + 's';
+    if (remaining > 0) {
+      frenzyBannerAF = requestAnimationFrame(tick);
+    } else {
+      banner.style.display = 'none';
+      frenzyBannerAF = null;
+    }
+  }
+  if (frenzyBannerAF) cancelAnimationFrame(frenzyBannerAF);
+  frenzyBannerAF = requestAnimationFrame(tick);
+}
+
+// ── Feature 8: Gallery ("Found in Nature") ──────────────────────
+function openGalleryModal() {
+  renderGalleryGrid();
+  document.getElementById('galleryOverlay').classList.add('open');
+}
+
+function renderGalleryGrid() {
+  const grid  = document.getElementById('galleryGrid');
+  const count = document.getElementById('galleryCount');
+  const total = document.getElementById('galleryTotal');
+  if (!grid || !count || !total) return;
+  const unlocked = GALLERY.filter(g => state.highestAbsN >= g.at).length;
+  count.textContent = unlocked;
+  total.textContent = GALLERY.length;
+
+  grid.innerHTML = '<div class="gallery-grid">' + GALLERY.map(g => {
+    const locked = state.highestAbsN < g.at;
+    const isNew  = !locked && !state.galleryViewed[g.at];
+    let cls = 'gallery-card';
+    if (locked) cls += ' gallery-locked';
+    // UX polish: wrap image in .img-wrap (fixed 4:3 area) so broken images
+    // fall back to a full-size emblem rather than collapsing the card.
+    const imgHtml = locked
+      ? `<div class="img-placeholder">${g.emblem}</div>`
+      : `<img src="${g.src}" alt="${escHtml(g.title)}" loading="lazy" onerror="this.outerHTML='<div class=\\'img-placeholder\\'>${g.emblem}</div>'">`;
+    return `
+      <div class="${cls}" data-at="${g.at}">
+        ${isNew ? '<div class="new-dot"></div>' : ''}
+        <div class="img-wrap">${imgHtml}</div>
+        <div class="caption">${locked ? `F(${g.at})` : escHtml(g.title)}</div>
+      </div>`;
+  }).join('') + '</div>';
+
+  grid.querySelectorAll('.gallery-card:not(.gallery-locked)').forEach(card => {
+    card.addEventListener('click', () => openGalleryItem(parseInt(card.dataset.at, 10)));
+  });
+}
+
+// UX polish: compact "Found in Nature" grid — rendered in both the desktop
+// left sidebar and the mobile bottom sheet so the content is always visible.
+// Clicking opens the full gallery-item modal with fact + "Read more on
+// Wikipedia" link.
+function renderSidebarGallery() {
+  const unlocked = GALLERY.filter(g => state.highestAbsN >= g.at).length;
+  const countText = `${unlocked} / ${GALLERY.length}`;
+  const html = GALLERY.map(g => {
+    const locked = state.highestAbsN < g.at;
+    const isNew  = !locked && !state.galleryViewed[g.at];
+    let cls = 'sidebar-gallery-tile';
+    if (locked) cls += ' locked';
+    if (isNew)  cls += ' new';
+    const body = locked
+      ? `<div class="emblem-placeholder">${g.emblem}</div>`
+      : `<img src="${g.src}" alt="${escHtml(g.title)}" loading="lazy" onerror="this.outerHTML='<div class=\\'emblem-placeholder\\'>${g.emblem}</div>'">`;
+    const tip = locked ? `Unlocks at F(${g.at})` : g.title;
+    return `<div class="${cls}" data-at="${g.at}" title="${escHtml(tip)}">${body}</div>`;
+  }).join('');
+  for (const [gridId, countId] of [['sidebarGalleryGrid', 'sidebarGalleryCount'], ['mobileGalleryGrid', 'mobileGalleryCount']]) {
+    const grid  = document.getElementById(gridId);
+    const count = document.getElementById(countId);
+    if (!grid || !count) continue;
+    count.textContent = countText;
+    grid.innerHTML = html;
+    grid.querySelectorAll('.sidebar-gallery-tile:not(.locked)').forEach(tile => {
+      tile.addEventListener('click', () => openGalleryItem(parseInt(tile.dataset.at, 10)));
+    });
+  }
+}
+
+function openGalleryItem(atN) {
+  const item = GALLERY.find(g => g.at === atN);
+  if (!item) return;
+  const img = document.getElementById('galleryItemImg');
+  img.src   = item.src;
+  img.alt   = item.title;
+  // UX polish: if the Wikipedia thumb fails, hide the broken <img>
+  // so the modal still looks clean (the fact + wiki link carry the value).
+  img.onerror = () => { img.style.display = 'none'; };
+  img.onload  = () => { img.style.display = ''; };
+  img.style.display = '';
+  document.getElementById('galleryItemTitle').textContent  = item.title;
+  document.getElementById('galleryItemFact').textContent   = item.fact;
+  document.getElementById('galleryItemUnlock').textContent =
+    `Unlocked at F(${item.at}) = ${fmt(fib(item.at))}`;
+  const wikiLink = document.getElementById('galleryItemWiki');
+  if (wikiLink) {
+    if (item.wiki) {
+      wikiLink.href = `https://en.wikipedia.org/wiki/${item.wiki}`;
+      wikiLink.style.display = '';
+    } else {
+      wikiLink.style.display = 'none';
+    }
+  }
+  document.getElementById('galleryItemOverlay').classList.add('open');
+  // Mark viewed + clear NEW dot
+  state.galleryViewed[atN] = true;
+  if (currentUser && fbDb) debouncedSaveProgress();
+  renderGalleryGrid();
+  renderSidebarGallery();   // UX polish: also clear dot in the always-visible sidebar panel
+}
+
+function showGalleryUnlockToast(item) {
+  const container = document.getElementById('achievementToasts');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.innerHTML = `
+    <button class="toast-close" aria-label="Dismiss">✕</button>
+    <div class="emblem">${item.emblem}</div>
+    <div class="ach-body">
+      <div class="ach-label">Found in Nature</div>
+      <div class="ach-title">${escHtml(item.title)}</div>
+      <div class="ach-fact">${escHtml(item.fact || '')}</div>
+    </div>`;
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) closeBtn.addEventListener('click', e => { e.stopPropagation(); toast.remove(); });
+  toast.addEventListener('click', () => {
+    toast.remove();
+    openGalleryModal();
+    setTimeout(() => openGalleryItem(item.at), 200);
+  });
+  appendCappedToast(container, toast);  // v3.2 crash-fix
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
+}
+
+// ── Feature 7: Weekly Class Challenge ────────────────────────────
+function currentChallengeType(weekId = state.weekly.currentWeekId) {
+  if (!weekId) return 0;
+  const weekNum = parseInt(weekId.split('-W')[1], 10);
+  if (!Number.isFinite(weekNum)) return 0;
+  return weekNum % WEEKLY_CHALLENGES.length;
+}
+function currentChallengeMeta(weekId) {
+  return WEEKLY_CHALLENGES[currentChallengeType(weekId)];
+}
+
+function currentWeeklyMetric() {
+  const ch = currentChallengeMeta();
+  switch (ch.key) {
+    case 'highest': return state.weekly.highestAbsNThisWeek;
+    case 'lowest':  return Math.abs(state.weekly.lowestNThisWeek);
+    case 'clicks':  return state.weekly.clickCountThisWeek;
+    case 'flowers': return state.weekly.flowersThisWeek;
+    case 'tokens':  return state.weekly.tokensThisWeek;
+  }
+  return 0;
+}
+
+let _weeklyWriteTimer = 0;
+function maybeUpdateWeeklyScore() {
+  if (!currentUser || !fbDb) return;
+  const weekId = state.weekly.currentWeekId;
+  if (!weekId) return;
+  clearTimeout(_weeklyWriteTimer);
+  _weeklyWriteTimer = setTimeout(async () => {
+    const ch = currentChallengeMeta();
+    const metric = currentWeeklyMetric();
+    try {
+      await fbDb.collection('weeklyScores').doc(weekId).collection('entries').doc(currentUser.uid).set({
+        uid:         currentUser.uid,
+        displayName: currentUser.displayName || currentUser.email || 'Guest',
+        photoURL:    currentUser.photoURL || '',
+        metricKey:   ch.key,
+        metric,
+        updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (err) {
+      console.error('❌ Weekly score write error:', err.message);
+    }
+  }, 2000);
+}
+
+function evaluateWeekly() {
+  const thisWeek = isoWeekStr();
+  if (state.weekly.currentWeekId === thisWeek) return;
+
+  const oldWeek = state.weekly.currentWeekId;
+  state.weekly.currentWeekId       = thisWeek;
+  state.weekly.clickCountThisWeek  = 0;
+  state.weekly.flowersThisWeek     = 0;
+  state.weekly.tokensThisWeek      = 0;
+  state.weekly.highestAbsNThisWeek = state.highestAbsN;
+  state.weekly.lowestNThisWeek     = state.lowestN ?? 1;
+
+  if (oldWeek) checkLastWeekChampion(oldWeek);
+  if (currentUser && fbDb) debouncedSaveProgress();
+  // Re-render challenge header if user is on Weekly tab
+  if (activeLbTab === 'weekly') renderChallengeHeader();
+}
+
+async function checkLastWeekChampion(lastWeekId) {
+  if (!currentUser || !fbDb) return;
+  try {
+    const snap = await fbDb.collection('weeklyScores').doc(lastWeekId)
+      .collection('entries').orderBy('metric', 'desc').limit(3).get();
+    const rows  = snap.docs.map(d => d.data());
+    const myIdx = rows.findIndex(r => r.uid === currentUser.uid);
+    if (myIdx === -1) return;
+    const rank      = myIdx + 1;
+    const challenge = currentChallengeType(lastWeekId);
+    const badge = { weekId: lastWeekId, rank, challenge, ts: Date.now() };
+    state.weekly.championBadges = state.weekly.championBadges || [];
+    state.weekly.championBadges.push(badge);
+    if (currentUser && fbDb) debouncedSaveProgress();
+    showChampionToast(badge);
+    renderChampionBadges();
+  } catch (err) {
+    console.error('❌ Champion check error:', err.message);
+  }
+}
+
+function showChampionToast(badge) {
+  const medals = ['🥇','🥈','🥉'];
+  const container = document.getElementById('achievementToasts');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.innerHTML = `
+    <button class="toast-close" aria-label="Dismiss">✕</button>
+    <div class="emblem">${medals[badge.rank - 1] || '🏅'}</div>
+    <div class="ach-body">
+      <div class="ach-label">Weekly Champion</div>
+      <div class="ach-title">${badge.weekId} · Rank ${badge.rank}</div>
+      <div class="ach-fact">Your medal is pinned to your Account card.</div>
+    </div>`;
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => toast.remove());
+  appendCappedToast(container, toast);  // v3.2 crash-fix
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 12200);
+}
+
+function renderChampionBadges() {
+  const badges = state.weekly.championBadges || [];
+  const medals = ['🥇','🥈','🥉'];
+  const recent = badges.slice(-5).map(b => medals[b.rank - 1] || '🏅').join(' ');
+  // Desktop
+  let desk = document.getElementById('championBadges');
+  const deskAnchor = document.getElementById('userBestScore');
+  if (deskAnchor) {
+    if (!desk) {
+      desk = document.createElement('div');
+      desk.id = 'championBadges';
+      desk.className = 'champion-badges';
+      deskAnchor.parentNode.insertBefore(desk, deskAnchor.nextSibling);
+    }
+    desk.textContent = recent;
+    desk.style.display = recent ? '' : 'none';
+  }
+  // Mobile mirror
+  let mobi = document.getElementById('mobileChampionBadges');
+  const mobiAnchor = document.getElementById('mobileUserBestScore');
+  if (mobiAnchor) {
+    if (!mobi) {
+      mobi = document.createElement('div');
+      mobi.id = 'mobileChampionBadges';
+      mobi.className = 'champion-badges';
+      mobiAnchor.parentNode.insertBefore(mobi, mobiAnchor.nextSibling);
+    }
+    mobi.textContent = recent;
+    mobi.style.display = recent ? '' : 'none';
+  }
+}
+
+// ── Weekly leaderboard tab + listener ───────────────────────────
+let activeLbTab = 'alltime';
+
+function formatTimeUntilMonday() {
+  const now = new Date();
+  const nextMonday = new Date(now);
+  const dayNr = (now.getDay() + 6) % 7; // 0 = Monday
+  nextMonday.setDate(now.getDate() + (7 - dayNr));
+  nextMonday.setHours(0, 0, 0, 0);
+  const ms = nextMonday - now;
+  const days = Math.floor(ms / 86400000);
+  const hrs  = Math.floor((ms % 86400000) / 3600000);
+  return days > 0 ? `${days}d ${hrs}h` : `${hrs}h`;
+}
+
+function renderChallengeHeader() {
+  const header = document.getElementById('lbChallengeHeader');
+  if (!header) return;
+  const weekId    = state.weekly.currentWeekId || isoWeekStr();
+  const ch        = currentChallengeMeta(weekId);
+  const countdown = formatTimeUntilMonday();
+  header.innerHTML = `
+    <div class="ch-title">This Week: ${ch.title}</div>
+    <div>${ch.desc}</div>
+    <div class="ch-countdown">${weekId} · resets in ${countdown}</div>`;
+}
+
+function formatWeeklyMetric(key, value) {
+  if (key === 'highest' || key === 'lowest') return `F(${value})`;
+  if (value == null) return '—';
+  try { return fmt(BigInt(Math.round(value))); }
+  catch (e) { return String(value); }
+}
+
+function startWeeklyLeaderboardListener() {
+  const weekId = state.weekly.currentWeekId || isoWeekStr();
+  if (!fbDb || !weekId) return;
+  lbUnsub = fbDb.collection('weeklyScores').doc(weekId).collection('entries')
+    .orderBy('metric', 'desc')
+    .limit(10)
+    .onSnapshot(snap => {
+      renderWeeklyLeaderboard(snap.docs.map(d => d.data()));
+    }, err => {
+      console.error('❌ Weekly LB error:', err.message);
+      const list = document.getElementById('lbList');
+      if (list) list.innerHTML = '<div class="lb-empty">Could not load weekly leaderboard</div>';
+    });
+}
+
+function renderWeeklyLeaderboard(rows) {
+  const ch   = currentChallengeMeta();
+  const list = document.getElementById('lbList');
+  if (!list) return;
+  if (!rows.length) {
+    const emptyHtml = '<div class="lb-empty">No entries yet — be first!</div>';
+    list.innerHTML = emptyHtml;
+    syncMobileLeaderboard(emptyHtml, '');
+    document.getElementById('lbStatus').textContent = '';
+    return;
+  }
+  const rankClass = i => i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
+  const medal     = i => ['🥇','🥈','🥉'][i] ?? `${i+1}.`;
+  const isMe      = row => currentUser && row.uid === currentUser.uid;
+  list.innerHTML = rows.map((row, i) => `
+    <div class="lb-row">
+      <div class="lb-rank ${rankClass(i)}">${medal(i)}</div>
+      ${row.photoURL
+        ? `<img class="lb-avatar" src="${row.photoURL}" alt="" referrerpolicy="no-referrer">`
+        : `<div class="lb-avatar"></div>`}
+      <div class="lb-name ${isMe(row) ? 'is-me' : ''}">${escHtml(row.displayName || 'Anonymous')}</div>
+      <div class="lb-score">${formatWeeklyMetric(ch.key, row.metric)}</div>
+    </div>`).join('');
+  const statusText = `${rows.length} player${rows.length !== 1 ? 's' : ''}`;
+  document.getElementById('lbStatus').textContent = statusText;
+  syncMobileLeaderboard(list.innerHTML, statusText);
+}
+
+function restartLeaderboardListener() {
+  if (lbUnsub) { lbUnsub(); lbUnsub = null; }
+  const header = document.getElementById('lbChallengeHeader');
+  if (activeLbTab === 'alltime') {
+    if (header) header.style.display = 'none';
+    startLeaderboardListener();
+  } else {
+    if (header) header.style.display = '';
+    renderChallengeHeader();
+    startWeeklyLeaderboardListener();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ═══  v4.0 Tier 4: Level Facts + Classroom Challenge       ════════
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Feature 11: "Why Does This Matter?" level pop-ups ────────────
+function showLevelFact(n) {
+  if (state.suppressFacts)   return;
+  if (state.factsShown[n])   return;
+  const fact = LEVEL_FACTS[n];
+  if (!fact) return;
+
+  state.factsShown[n] = true;
+  if (currentUser && fbDb) debouncedSaveProgress();
+
+  const card    = document.getElementById('factCard');
+  const levelEl = document.getElementById('factLevel');
+  const textEl  = document.getElementById('factText');
+  const linkEl  = document.getElementById('factLearnMore');
+  if (!card || !levelEl || !textEl || !linkEl) return;
+
+  levelEl.textContent = `F(${n}) = ${fmt(fib(n))}`;
+  textEl.textContent  = fact;
+
+  // Restart animation
+  card.style.display   = 'none';
+  card.style.animation = 'none';
+  void card.offsetWidth;          // force reflow
+  card.style.animation = '';
+  card.style.display   = 'block';
+
+  // "Learn more" links to the Tier 3 Gallery entry if one exists at this n
+  const hasGallery = typeof GALLERY !== 'undefined' && GALLERY.some(g => g.at === n);
+  if (hasGallery) {
+    linkEl.style.display = '';
+    linkEl.onclick = e => {
+      e.preventDefault();
+      card.style.display = 'none';
+      if (typeof openGalleryModal === 'function') {
+        openGalleryModal();
+        setTimeout(() => openGalleryItem(n), 200);
+      }
+    };
+  } else {
+    linkEl.style.display = 'none';
+  }
+
+  // Auto-dismiss after animation completes (7s + 100ms grace)
+  setTimeout(() => { if (card.style.display !== 'none') card.style.display = 'none'; }, 7100);
+}
+
+// ── Feature 12: Classroom Challenge ──────────────────────────────
+function generateChallengeCode() {
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += CHALLENGE_CODE_CHARS[Math.floor(Math.random() * CHALLENGE_CODE_CHARS.length)];
+  }
+  return code;
+}
+
+async function createChallenge() {
+  if (!isAdmin || !currentUser || !fbDb) return;
+  const name     = document.getElementById('challengeName').value.trim() || 'Class Challenge';
+  const targetN  = parseInt(document.getElementById('challengeTarget').value, 10);
+  const duration = parseInt(document.getElementById('challengeDuration').value, 10);
+  const code     = generateChallengeCode();
+
+  const now   = firebase.firestore.FieldValue.serverTimestamp();
+  const endMs = Date.now() + duration * 60_000;
+  const endTs = firebase.firestore.Timestamp.fromMillis(endMs);
+
+  try {
+    await fbDb.collection('challenges').doc(code).set({
+      code, name,
+      creatorUid:  currentUser.uid,
+      creatorName: currentUser.displayName || 'Admin',
+      targetN,
+      startTs:     now,
+      endTs,
+      endedEarly:  false,
+      status:      'active',
+    });
+    console.log(`✅ Challenge ${code} created (${name}, target F(${targetN}), ${duration}m)`);
+    state.challenge.isCreator = true;
+    state._challengeTargetReached = false;
+    await joinChallenge(code, true);
+    renderAdminChallengePanel();
+  } catch (err) {
+    console.error('❌ Challenge create error:', err.message);
+  }
+}
+
+async function submitJoinChallenge() {
+  if (!fbDb) return;
+  const code  = document.getElementById('challengeCodeInput').value.trim().toUpperCase();
+  const errEl = document.getElementById('joinChallengeError');
+  errEl.textContent = '';
+  if (code.length !== 4) { errEl.textContent = 'Code must be 4 characters'; return; }
+  try {
+    const doc = await fbDb.collection('challenges').doc(code).get();
+    if (!doc.exists)                              { errEl.textContent = 'No challenge with that code'; return; }
+    const data = doc.data();
+    if (data.status !== 'active')                 { errEl.textContent = 'This challenge has ended';   return; }
+    if (data.endTs && data.endTs.toMillis && data.endTs.toMillis() < Date.now()) {
+      errEl.textContent = 'This challenge has expired'; return;
+    }
+    closeOverlay('joinChallengeOverlay');
+    await joinChallenge(code, false);
+  } catch (err) {
+    errEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+async function joinChallenge(code, asCreator) {
+  if (!currentUser || !fbDb) return;
+  try {
+    await fbDb.collection('challenges').doc(code).collection('participants').doc(currentUser.uid).set({
+      uid:             currentUser.uid,
+      displayName:     currentUser.displayName || 'Guest',
+      photoURL:        currentUser.photoURL || '',
+      currentN:        state.n,
+      reachedTargetTs: null,
+      joinedTs:        firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt:       firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    state.challenge.activeCode = code;
+    state.challenge.startingN  = state.n;
+    if (asCreator) state.challenge.isCreator = true;
+    subscribeToChallenge(code);
+    console.log(`✅ Joined challenge ${code}`);
+  } catch (err) {
+    console.error('❌ Challenge join error:', err.message);
+  }
+}
+
+function subscribeToChallenge(code) {
+  if (!fbDb) return;
+  if (state.challenge.unsubDoc)  state.challenge.unsubDoc();
+  if (state.challenge.unsubList) state.challenge.unsubList();
+
+  state.challenge.unsubDoc = fbDb.collection('challenges').doc(code)
+    .onSnapshot(snap => {
+      if (!snap.exists) { endChallengeSession(); return; }
+      state.challenge.doc = snap.data();
+      renderChallengeBanner();
+      if (state.challenge.doc.status === 'ended') {
+        // Final results fire for everyone when admin ends or timer expires
+        showChallengeResultsModal();
+      }
+    }, err => console.error('❌ Challenge doc listener error:', err.message));
+
+  state.challenge.unsubList = fbDb.collection('challenges').doc(code)
+    .collection('participants').orderBy('currentN', 'desc').limit(20)
+    .onSnapshot(snap => {
+      renderChallengeLeaderboard(snap.docs.map(d => d.data()));
+    }, err => console.error('❌ Challenge participants listener error:', err.message));
+}
+
+let challengeCountdownTimer = null;
+function renderChallengeBanner() {
+  const b   = document.getElementById('challengeBanner');
+  const doc = state.challenge.doc;
+  if (!b) return;
+  if (!doc || doc.status === 'ended') { b.style.display = 'none'; return; }
+  b.style.display = 'flex';
+  document.getElementById('chBannerName').textContent   = doc.name || 'Class Challenge';
+  document.getElementById('chBannerTarget').textContent = doc.targetN;
+  document.getElementById('chBannerCode').textContent   = doc.code;
+  document.getElementById('chBannerEnd').style.display  =
+    state.challenge.isCreator ? '' : 'none';
+
+  if (challengeCountdownTimer) clearInterval(challengeCountdownTimer);
+  function updateCountdown() {
+    const end    = doc.endTs && doc.endTs.toMillis ? doc.endTs.toMillis() : Date.now();
+    const msLeft = Math.max(0, end - Date.now());
+    const mm = Math.floor(msLeft / 60000);
+    const ss = Math.floor((msLeft % 60000) / 1000);
+    const el = document.getElementById('chBannerCountdown');
+    if (el) el.textContent = `${mm}:${String(ss).padStart(2, '0')}`;
+    if (msLeft <= 0) {
+      clearInterval(challengeCountdownTimer);
+      challengeCountdownTimer = null;
+      handleChallengeEnd();
+    }
+  }
+  updateCountdown();
+  challengeCountdownTimer = setInterval(updateCountdown, 1000);
+}
+
+function renderChallengeLeaderboard(participants) {
+  const rankEl = document.getElementById('chBannerRank');
+  if (!rankEl) return;
+  const myIdx = participants.findIndex(p => p.uid === (currentUser && currentUser.uid));
+  rankEl.textContent = myIdx >= 0
+    ? `You: F(${participants[myIdx].currentN}) · ${myIdx + 1}/${participants.length}`
+    : 'Not ranked';
+}
+
+let challengeReportTimer = 0;
+function reportChallengeProgress(n) {
+  if (!state.challenge.activeCode || !currentUser || !fbDb) return;
+  clearTimeout(challengeReportTimer);
+  challengeReportTimer = setTimeout(async () => {
+    const update = {
+      currentN:  n,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    const target = state.challenge.doc && state.challenge.doc.targetN;
+    if (target && Math.abs(n) >= target && !state._challengeTargetReached) {
+      update.reachedTargetTs = firebase.firestore.FieldValue.serverTimestamp();
+      state._challengeTargetReached = true;
+      showChallengeCompleteBanner();
+    }
+    try {
+      await fbDb.collection('challenges').doc(state.challenge.activeCode)
+        .collection('participants').doc(currentUser.uid).set(update, { merge: true });
+    } catch (err) {
+      console.error('❌ Challenge progress error:', err.message);
+    }
+  }, 500);
+}
+
+function showChallengeCompleteBanner() {
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => launchConfetti(state._sw / 2, state._sh / 2, 100), i * 300);
+  }
+  const target = state.challenge.doc ? state.challenge.doc.targetN : '?';
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay-backdrop open';
+  overlay.innerHTML = `
+    <div class="overlay-panel" style="text-align:center;">
+      <div style="font-size:60px;margin-bottom:10px;">🎉</div>
+      <div style="font-size:22px;font-weight:700;color:var(--amber);margin-bottom:8px;font-family:'Cormorant Garamond',serif;">You reached F(${target})!</div>
+      <p style="color:var(--txt2);font-size:13px;">The challenge continues — keep climbing to stay at the top.</p>
+      <button class="btn btn-primary" id="chCompleteOk" style="margin-top:16px;">Nice</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const btn = overlay.querySelector('#chCompleteOk');
+  if (btn) btn.addEventListener('click', () => overlay.remove());
+  setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 7000);
+}
+
+async function handleChallengeEnd() {
+  const code = state.challenge.activeCode;
+  if (!code || !fbDb) return;
+  // Admin commits the final ended status once
+  if (state.challenge.isCreator && state.challenge.doc && state.challenge.doc.status === 'active') {
+    try {
+      await fbDb.collection('challenges').doc(code).set({ status: 'ended' }, { merge: true });
+      console.log(`✅ Challenge ${code} ended`);
+    } catch (err) { console.error('❌ End challenge error:', err.message); }
+  }
+  // (Results modal fires via the onSnapshot listener seeing status === 'ended')
+}
+
+let _resultsShownForCode = null;
+function showChallengeResultsModal() {
+  const code = state.challenge.activeCode;
+  if (!code || !fbDb) return;
+  if (_resultsShownForCode === code) return;
+  _resultsShownForCode = code;
+
+  fbDb.collection('challenges').doc(code).collection('participants')
+    .orderBy('currentN', 'desc').limit(20).get()
+    .then(snap => {
+      const rows = snap.docs.map(d => d.data());
+      const myIdx = rows.findIndex(r => r.uid === (currentUser && currentUser.uid));
+      const myRank = myIdx >= 0 ? myIdx + 1 : null;
+      const me = myIdx >= 0 ? rows[myIdx] : null;
+      const targetN = state.challenge.doc ? state.challenge.doc.targetN : '?';
+      const name    = state.challenge.doc ? state.challenge.doc.name    : 'Class Challenge';
+
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay-backdrop open';
+      const rankLine = myRank
+        ? `<div style="font-size:36px;color:var(--amber);font-weight:700;font-family:'Cormorant Garamond',serif;">${myRank} of ${rows.length}</div><div style="font-size:11px;color:var(--txt2);font-family:'JetBrains Mono',monospace;">Reached F(${me.currentN})</div>`
+        : `<div style="font-size:16px;color:var(--txt2);">You did not score</div>`;
+      overlay.innerHTML = `
+        <div class="overlay-panel" style="width:420px;max-width:94vw;">
+          <div class="overlay-title">🏁 Challenge Ended</div>
+          <p style="color:var(--txt2);font-size:12px;margin-bottom:12px;">
+            ${escHtml(name)} · Target F(${targetN})
+          </p>
+          <div style="background:var(--bg2);border-radius:8px;padding:14px;margin-bottom:14px;text-align:center;">
+            <div style="font-size:10px;color:var(--txt3);font-family:'JetBrains Mono',monospace;">Your final rank</div>
+            ${rankLine}
+          </div>
+          <div class="overlay-section">Final Standings</div>
+          <div style="max-height:240px;overflow-y:auto;">${rows.slice(0, 10).map((r, i) => `
+            <div class="lb-row">
+              <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${['🥇','🥈','🥉'][i] || `${i+1}.`}</div>
+              <div class="lb-name ${currentUser && r.uid===currentUser.uid?'is-me':''}">${escHtml(r.displayName || 'Anonymous')}</div>
+              <div class="lb-score">F(${r.currentN})</div>
+            </div>`).join('')}
+          </div>
+          <button class="btn btn-primary" style="width:100%;margin-top:14px;" id="chResultsOk">Close</button>
+        </div>`;
+      document.body.appendChild(overlay);
+      const ok = overlay.querySelector('#chResultsOk');
+      if (ok) ok.addEventListener('click', () => {
+        overlay.remove();
+        endChallengeSession();
+      });
+    })
+    .catch(err => console.error('❌ Results fetch error:', err.message));
+}
+
+function endChallengeSession() {
+  if (state.challenge.unsubDoc)  state.challenge.unsubDoc();
+  if (state.challenge.unsubList) state.challenge.unsubList();
+  state.challenge = {
+    activeCode: null, isCreator: false, doc: null,
+    unsubDoc: null, unsubList: null, startingN: 1,
+  };
+  state._challengeTargetReached = false;
+  _resultsShownForCode = null;
+  const b = document.getElementById('challengeBanner');
+  if (b) b.style.display = 'none';
+  if (challengeCountdownTimer) { clearInterval(challengeCountdownTimer); challengeCountdownTimer = null; }
+  renderAdminChallengePanel();
+}
+
+async function resumeActiveChallenge() {
+  // Called on sign-in. Finds any participants/{uid} entry under any active
+  // challenge and re-subscribes. Requires a Firestore composite index on
+  // collection group "participants" with field "uid" (Firebase will prompt
+  // to create it on first run).
+  if (!currentUser || !fbDb) return;
+  if (state.challenge.activeCode) return; // already in a session (unlikely)
+  try {
+    const q = await fbDb.collectionGroup('participants')
+      .where('uid', '==', currentUser.uid).get();
+    for (const doc of q.docs) {
+      const parent = doc.ref.parent.parent;
+      if (!parent) continue;
+      const code = parent.id;
+      const chSnap = await fbDb.collection('challenges').doc(code).get();
+      if (!chSnap.exists) continue;
+      const data = chSnap.data();
+      if (data.status !== 'active') continue;
+      if (data.endTs && data.endTs.toMillis && data.endTs.toMillis() <= Date.now()) continue;
+      state.challenge.activeCode = code;
+      state.challenge.isCreator  = data.creatorUid === currentUser.uid;
+      state._challengeTargetReached =
+        data.targetN && Math.abs(state.highestAbsN) >= data.targetN;
+      subscribeToChallenge(code);
+      console.log(`✅ Resumed active challenge ${code}`);
+      break;
+    }
+  } catch (err) {
+    console.warn('⚠️  Resume-challenge lookup skipped:', err.message);
+  }
+}
+
+function renderAdminChallengePanel() {
+  const createForm = document.getElementById('challengeCreateForm');
+  const active     = document.getElementById('challengeActivePanel');
+  if (!createForm || !active) return;
+  if (state.challenge.activeCode && state.challenge.isCreator) {
+    createForm.style.display = 'none';
+    active.style.display = '';
+    active.innerHTML = `
+      <div style="text-align:center;padding:14px;background:var(--bg2);border-radius:8px;">
+        <div style="font-size:10px;color:var(--txt3);font-family:'JetBrains Mono',monospace;">Share this code</div>
+        <div style="font-size:44px;color:var(--amber);font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:8px;">${state.challenge.activeCode}</div>
+      </div>
+      <button class="btn btn-secondary" id="chEndEarlyBtn" style="width:100%;margin-top:10px;">End Challenge Now</button>`;
+    const endBtn = document.getElementById('chEndEarlyBtn');
+    if (endBtn) {
+      endBtn.addEventListener('click', async () => {
+        if (!confirm('End this challenge now for all participants?')) return;
+        try {
+          await fbDb.collection('challenges').doc(state.challenge.activeCode)
+            .set({ status: 'ended', endedEarly: true }, { merge: true });
+          handleChallengeEnd();
+        } catch (err) { console.error('❌ End-early error:', err.message); }
+      });
+    }
+  } else {
+    createForm.style.display = '';
+    active.style.display = 'none';
+  }
 }
 
 function updateModeInfo() {
@@ -2266,7 +4717,13 @@ window.addEventListener('mousemove', e => {
         state.nlWorldX = clampedWorld;
       }
     }
-    if (centN !== state.n) { state.n = centN; state.subStep = 0; requestDrawSpiral(); updateModeInfo(); }
+    if (centN !== state.n) {
+      state.n = centN; state.subStep = 0;
+      if (!state._dragExploredNs) state._dragExploredNs = new Set();
+      state._dragExploredNs.add(centN);
+      if (state._dragExploredNs.size >= 5) checkAchievements();
+      requestDrawSpiral(); updateModeInfo();
+    }
     requestDrawNumberLine();
   }
 });
@@ -2404,7 +4861,13 @@ nl.addEventListener('touchmove', e => {
     if (centN === -state.highestAbsN || centN === state.highestAbsN)
       state.nlWorldX = state._nlw/2 - centN*NL_CELL - NL_CELL/2;
   }
-  if (centN !== state.n) { state.n = centN; state.subStep = 0; requestDrawSpiral(); updateModeInfo(); }
+  if (centN !== state.n) {
+    state.n = centN; state.subStep = 0;
+    if (!state._dragExploredNs) state._dragExploredNs = new Set();
+    state._dragExploredNs.add(centN);
+    if (state._dragExploredNs.size >= 5) checkAchievements();
+    requestDrawSpiral(); updateModeInfo();
+  }
   requestDrawNumberLine();
 }, { passive: false });
 nl.addEventListener('touchend', e => {
@@ -2415,8 +4878,166 @@ nl.addEventListener('touchend', e => {
 function openOverlay(id)  { document.getElementById(id).classList.add('open'); }
 function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
 
-document.getElementById('settingsBtn').addEventListener('click', () => openOverlay('settingsOverlay'));
-document.getElementById('settingsClose').addEventListener('click', () => closeOverlay('settingsOverlay'));
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  renderSkins();  // v2.5 Tier 2 — refresh skin lock/active state on open
+  renderAdminChallengePanel(); // v4.0 Tier 4 — show create form or active-panel
+  openOverlay('settingsOverlay');
+  startMemPanelTicker();       // v3.2 crash-fix: begin diagnostic updates while visible
+});
+document.getElementById('settingsClose').addEventListener('click', () => {
+  closeOverlay('settingsOverlay');
+  stopMemPanelTicker();        // v3.2 crash-fix: stop ticker when panel hidden
+});
+
+// ─── v3.2 crash-fix: Memory diagnostic panel ────────────────────
+// Admin-only live readouts so we can see heap growth and catch any
+// accidental leak. Ticks at 2 s cadence only while the Settings
+// overlay is open — zero cost otherwise. Also ships a stress-test
+// button that fires 300 synthetic +1 ticks over ~3 s to confirm the
+// DPR clamp + toast cap + confetti cap + engine-loop guards hold.
+let memPanelTimer = null;
+function renderMemPanel() {
+  const body = document.getElementById('memPanelBody');
+  if (!body) return;
+  const heap = (performance.memory && performance.memory.usedJSHeapSize)
+    ? (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MB'
+    : 'n/a';
+  const heapCap = (performance.memory && performance.memory.jsHeapSizeLimit)
+    ? (performance.memory.jsHeapSizeLimit / 1048576).toFixed(0) + ' MB'
+    : 'n/a';
+  const nodeCount = document.getElementsByTagName('*').length;
+  const flowerEls = document.querySelectorAll('#flowerLayer > *').length;
+  const toastEls  = document.querySelectorAll('#achievementToasts > *').length;
+  const confettiN = confettiParticles.length;
+  const canvasBytes = (() => {
+    const cs = [sc, cc, nl];
+    let total = 0;
+    for (const c of cs) {
+      if (c && c.width && c.height) total += c.width * c.height * 4;
+    }
+    return (total / 1048576).toFixed(1) + ' MB';
+  })();
+  const rAFs = [
+    engineAF        != null ? 'engine'      : null,
+    celebrationAF   != null ? 'celebration' : null,
+    state.nlAF      != null ? 'nlDrag'      : null,
+    frenzyBannerAF  != null ? 'frenzy'      : null,
+    (typeof challengeCountdownTimer !== 'undefined' && challengeCountdownTimer != null) ? 'challenge' : null,
+  ].filter(Boolean).join(', ') || '—';
+  body.innerHTML = `
+    <div>Heap:        <b>${heap}</b> / ${heapCap}</div>
+    <div>DOM nodes:   <b>${nodeCount}</b></div>
+    <div>Canvas mem:  <b>${canvasBytes}</b> · DPR ${DPR}${LOW_MEM_DEVICE ? ' (low-mem)' : ''}</div>
+    <div>Confetti:    <b>${confettiN}</b> / ${CONFETTI_GLOBAL_CAP}</div>
+    <div>Flowers/smileys/golden:  <b>${flowerEls}</b></div>
+    <div>Toasts live: <b>${toastEls}</b> / ${TOAST_MAX}</div>
+    <div>rAF loops:   <b>${rAFs}</b></div>
+    <div>n=<b>${state.n}</b>  highest=<b>${state.highestAbsN}</b>  tokens=<b>${Math.floor(state.boostTokens)}</b></div>
+  `;
+}
+function startMemPanelTicker() {
+  if (memPanelTimer) return;
+  renderMemPanel();
+  memPanelTimer = setInterval(renderMemPanel, 2000);
+}
+function stopMemPanelTicker() {
+  if (memPanelTimer) { clearInterval(memPanelTimer); memPanelTimer = null; }
+}
+
+// Stress-test button: fires 300 synthetic +1 ticks over ~3 s and
+// renders a before/after heap delta in the panel.
+document.addEventListener('click', e => {
+  if (e.target && e.target.id === 'memStressBtn') {
+    const body = document.getElementById('memPanelBody');
+    const before = (performance.memory && performance.memory.usedJSHeapSize) || 0;
+    let fired = 0;
+    const iv = setInterval(() => {
+      if (fired >= 300) {
+        clearInterval(iv);
+        // Two GC-friendly frames so the reading settles, then render delta
+        setTimeout(() => {
+          const after = (performance.memory && performance.memory.usedJSHeapSize) || 0;
+          const delta = ((after - before) / 1048576).toFixed(1);
+          renderMemPanel();
+          if (body) body.insertAdjacentHTML('beforeend',
+            `<div style="color:var(--amber);margin-top:6px;">Stress test · Δ heap: <b>${delta} MB</b></div>`);
+        }, 400);
+        return;
+      }
+      tickInput(1);
+      fired++;
+    }, 10);
+  }
+});
+
+// ─── Tier 4: Level-fact + Classroom Challenge wiring ─────────────
+document.getElementById('factCardClose').addEventListener('click', () => {
+  document.getElementById('factCard').style.display = 'none';
+});
+function openJoinChallengeDialog() {
+  if (!currentUser) { console.warn('⚠️  Must be signed in to join a challenge'); return; }
+  openOverlay('joinChallengeOverlay');
+  const input = document.getElementById('challengeCodeInput');
+  if (input) { input.value = ''; input.focus(); }
+  document.getElementById('joinChallengeError').textContent = '';
+}
+document.getElementById('joinChallengeBtn').addEventListener('click', openJoinChallengeDialog);
+const mobileJoinBtn = document.getElementById('mobileJoinChallengeBtn');
+if (mobileJoinBtn) mobileJoinBtn.addEventListener('click', openJoinChallengeDialog);
+document.getElementById('joinChallengeClose').addEventListener('click', () => closeOverlay('joinChallengeOverlay'));
+document.getElementById('joinChallengeOverlay').addEventListener('click', e => {
+  if (e.target.id === 'joinChallengeOverlay') closeOverlay('joinChallengeOverlay');
+});
+document.getElementById('challengeJoinBtn').addEventListener('click', submitJoinChallenge);
+document.getElementById('challengeCodeInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitJoinChallenge();
+});
+document.getElementById('challengeCreateBtn').addEventListener('click', createChallenge);
+document.getElementById('chBannerEnd').addEventListener('click', async () => {
+  if (!state.challenge.isCreator) return;
+  if (!confirm('End this challenge now for all participants?')) return;
+  try {
+    await fbDb.collection('challenges').doc(state.challenge.activeCode)
+      .set({ status: 'ended', endedEarly: true }, { merge: true });
+    handleChallengeEnd();
+  } catch (err) { console.error('❌ End-early error:', err.message); }
+});
+document.getElementById('chBannerLeave').addEventListener('click', () => {
+  if (confirm('Leave this challenge? Your progress stays in your score.')) {
+    endChallengeSession();
+  }
+});
+
+// ─── Tier 2: Streak + Achievements wiring ────────────────────────
+document.getElementById('streakBadge').addEventListener('click', () => {
+  if (state.streak.count > 0) showStreakInfoModal();
+});
+document.getElementById('streakModal').addEventListener('click', e => {
+  if (e.target.id === 'streakModal') closeOverlay('streakModal');
+});
+document.getElementById('achievementsBtn').addEventListener('click', () => openAchievementsModal());
+document.getElementById('achievementsClose').addEventListener('click', () => closeOverlay('achievementsOverlay'));
+document.getElementById('achievementsOverlay').addEventListener('click', e => {
+  if (e.target.id === 'achievementsOverlay') closeOverlay('achievementsOverlay');
+});
+
+// ─── Tier 3: Gallery + Leaderboard tab wiring ────────────────────
+document.getElementById('galleryBtn').addEventListener('click', openGalleryModal);
+document.getElementById('galleryClose').addEventListener('click', () => closeOverlay('galleryOverlay'));
+document.getElementById('galleryItemClose').addEventListener('click', () => closeOverlay('galleryItemOverlay'));
+document.getElementById('galleryOverlay').addEventListener('click', e => {
+  if (e.target.id === 'galleryOverlay') closeOverlay('galleryOverlay');
+});
+document.getElementById('galleryItemOverlay').addEventListener('click', e => {
+  if (e.target.id === 'galleryItemOverlay') closeOverlay('galleryItemOverlay');
+});
+document.querySelectorAll('.lb-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeLbTab = btn.dataset.tab;
+    document.querySelectorAll('.lb-tab').forEach(b => b.classList.toggle('active', b === btn));
+    restartLeaderboardListener();
+  });
+});
 
 document.getElementById('settingsOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('settingsOverlay')) closeOverlay('settingsOverlay');
@@ -2463,8 +5084,10 @@ function syncMobileAuth() {
     // Show/hide elements for anon vs Google
     document.getElementById('mobileSignInBtn').style.display     = isAnon ? '' : 'none';
     document.getElementById('mobileSignOutBtn').style.display     = isAnon ? 'none' : '';
-    document.getElementById('mobileGuestNameInput').style.display = isAnon ? '' : 'none';
-    if (isAnon) document.getElementById('mobileGuestNameInput').value = name;
+    // v4.3: show name-edit input for every signed-in user (mirrors the
+    // desktop change in onSignIn — Google-linked users had no rename UI).
+    document.getElementById('mobileGuestNameInput').style.display = '';
+    document.getElementById('mobileGuestNameInput').value = name;
   } else {
     document.getElementById('mobileSignedOut').style.display  = 'block';
     document.getElementById('mobileSignedIn').style.display   = 'none';
@@ -2573,24 +5196,23 @@ ro.observe(document.querySelector('.canvas-box'));
 ro.observe(document.querySelector('.nl-wrapper'));
 
 // ─── v2.0 Tier 1: tab hide — flush progress, pause engine, drop listener ────
-// Chromebook memory-pressure fix: backgrounded tabs on 2–4 GB Chromebooks get
-// swapped aggressively. We (a) flush progress so offline anchor is accurate,
-// (b) cancel the engine rAF loop so there's no dt spike on resume and no
-// frame-clock work while paged out, and (c) unsubscribe the leaderboard
-// onSnapshot so no Firestore callbacks fire into swapped-out DOM. On resume
-// we reset the engine clock and re-subscribe. `lbUnsub` and
-// `startLeaderboardListener` live in the second <script> block but are in
-// the shared global lexical env by the time this callback fires at runtime.
+// v3.2 crash-fix: stop/restart the engine rAF loop so a backgrounded tab
+// never sits in a throttled-but-still-running animation frame chain.
+// v2.0.1 Chromebook memory fix: also unsubscribe the leaderboard onSnapshot
+// on hide so no Firestore callbacks fire into DOM that's been paged out by
+// the OS; re-subscribe on show. `lbUnsub` and `startLeaderboardListener`
+// live in the second <script> block but are in the shared global lexical
+// env by the time this callback fires at runtime.
 window.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     if (currentUser) saveProgress();
-    stopEngineLoop();
+    if (typeof stopEngineLoop === 'function') stopEngineLoop();
     if (typeof lbUnsub !== 'undefined' && lbUnsub) {
       lbUnsub();
       lbUnsub = null;
     }
   } else {
-    if (state.engine.owned && state.engine.enabled) {
+    if (state.engine && state.engine.owned) {
       state.engine.lastTick = performance.now();
       startEngineLoop();
     }
@@ -2607,6 +5229,17 @@ drawSpiral();
 drawNumberLine();
 updateModeInfo();
 updateTokenDisplay();   // v2.0 Tier 1 — paints boost + engine cards
+renderSkins();          // v2.5 Tier 2 — initial skin grid (Classic only unlocked)
+updateStreakBadge();    // v2.5 Tier 2 — seed streak badge
+// UX polish: seed always-visible Achievements + Gallery panels
+renderSidebarAchievements();
+renderSidebarGallery();
+// v3.0 Tier 3 — seed weekly ID so Weekly tab works before Firebase signs in
+if (!state.weekly.currentWeekId) {
+  state.weekly.currentWeekId       = isoWeekStr();
+  state.weekly.highestAbsNThisWeek = state.highestAbsN;
+  state.weekly.lowestNThisWeek     = state.lowestN ?? 1;
+}
 </script>
 
 <!-- Firebase SDKs (compat v9 — works as plain script tags, no bundler needed) -->
@@ -2676,13 +5309,22 @@ function initFirebase() {
     fbAuth = firebase.auth();
     fbDb   = firebase.firestore();
 
-    // Handle redirect result when returning from Google auth on mobile
+    // Handle redirect result when returning from Google auth (all browsers
+    // as of v4.2 login-harden — used to be mobile-only).
     fbAuth.getRedirectResult().then(result => {
       if (result && result.user) {
         console.log('✅ Redirect sign-in complete:', result.user.displayName);
       }
     }).catch(err => {
-      if (err.code !== 'auth/no-auth-event') {
+      // v4.2 login-harden: "Google account already in use as a different
+      // UID" used to arrive via the inline .catch on linkWithPopup; with
+      // redirect-first it arrives here on the return visit. Reuse the same
+      // handler so the fallback to signInWithCredential still works.
+      if (err && err.code === 'auth/credential-already-in-use') {
+        handleLinkError(err);
+        return;
+      }
+      if (err && err.code !== 'auth/no-auth-event') {
         console.error('❌ Redirect result error:', err.message);
       }
     });
@@ -2711,27 +5353,34 @@ function initFirebase() {
     // Sign-in helper: links anonymous → Google, or direct Google sign-in
     function doSignIn() {
       const provider = new firebase.auth.GoogleAuthProvider();
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
+      // v4.2 login-harden: redirect-first on every browser. signInWithPopup
+      // silently fails on school-managed Chromebooks (third-party cookie
+      // blocking + popup-blocker enterprise policies) — the popup opens,
+      // closes, and the promise never resolves, which looked like "Sign in
+      // with Google does nothing" to our classroom users. Redirect works
+      // universally; a single full-page nav is a tiny UX cost for a flow
+      // that actually completes. Mobile was already on redirect.
       if (currentUser && currentUser.isAnonymous) {
-        // Link anonymous account to Google (preserves UID + all data)
-        if (isMobile) {
-          currentUser.linkWithRedirect(provider).catch(handleLinkError);
-        } else {
-          currentUser.linkWithPopup(provider).then(result => {
-            console.log('✅ Account linked:', result.user.displayName);
-          }).catch(handleLinkError);
-        }
+        // Link anonymous account to Google (preserves UID + all data).
+        // The linked-user promise resolves after the return trip via
+        // getRedirectResult(); handleLinkError runs here only for synchronous
+        // pre-redirect failures (e.g. offline).
+        currentUser.linkWithRedirect(provider).catch(handleLinkError);
       } else {
-        if (isMobile) {
-          fbAuth.signInWithRedirect(provider).catch(err => {
-            console.error('❌ Sign-in redirect error:', err.message);
-          });
-        } else {
-          fbAuth.signInWithPopup(provider).catch(err => {
-            console.error('❌ Sign-in popup error:', err.message);
-          });
-        }
+        // v4.4: stash pre-auth guest click count so it can merge into the
+        // signed-in account in onSignIn. signInWithRedirect reloads the
+        // whole page, destroying in-memory state — without this stash the
+        // click-merge feature would be a no-op for the primary use case
+        // (pure guest user clicks the Sign In button). sessionStorage is
+        // per-tab and cleared on tab close; it's not a persistence layer
+        // and doesn't violate the "Firestore only" convention.
+        try {
+          const clicks = (state.weekly && state.weekly.clickCountThisWeek) || 0;
+          if (clicks > 0) sessionStorage.setItem('fibzoomGuestClicks', String(clicks));
+        } catch (e) { /* storage blocked — accept click loss for this user */ }
+        fbAuth.signInWithRedirect(provider).catch(err => {
+          console.error('❌ Sign-in redirect error:', err.message);
+        });
       }
     }
 
@@ -2746,9 +5395,16 @@ function initFirebase() {
       console.error('❌ Link error:', err.message);
     }
 
-    // Sign-in buttons (desktop + mobile)
+    // Sign-in buttons (desktop + mobile). The ones in #signedIn fire for
+    // anonymous→Google upgrade; v4.4 also wires sign-in from the
+    // #signedOut state (pre-anonymous-auth) so users don't have to reach
+    // F(21) before they can log in.
     document.getElementById('signInBtn').addEventListener('click', doSignIn);
     document.getElementById('mobileSignInBtn').addEventListener('click', doSignIn);
+    const guestSignInBtn = document.getElementById('guestSignInBtn');
+    if (guestSignInBtn) guestSignInBtn.addEventListener('click', doSignIn);
+    const mobileGuestSignInBtn = document.getElementById('mobileGuestSignInBtn');
+    if (mobileGuestSignInBtn) mobileGuestSignInBtn.addEventListener('click', doSignIn);
 
     // Sign-out: delete anonymous accounts entirely, sign out Google accounts
     async function doSignOut() {
@@ -2776,15 +5432,28 @@ function initFirebase() {
       const input = document.getElementById(inputId);
       if (!input) return;
       input.addEventListener('change', async () => {
-        if (!currentUser || !currentUser.isAnonymous) return;
+        // v4.3: was anonymous-only — Google-linked users had no in-app
+        // way to rename, which forced one user into editing Firestore by
+        // hand. Now any signed-in user can edit.
+        if (!currentUser) return;
         const name = input.value.trim() || 'Guest' + generateAnimalName();
         await currentUser.updateProfile({ displayName: name });
+        // v4.3: write displayName directly to Firestore. Used to
+        // piggyback on debouncedSaveProgress(), which made displayName
+        // part of the progress-save payload — that payload kept
+        // overwriting Firestore from Firebase Auth on every 2 s tick
+        // and clobbered out-of-band edits.
+        try {
+          await fbDb.collection('scores').doc(currentUser.uid)
+            .set({ displayName: name }, { merge: true });
+        } catch (err) {
+          console.error('❌ Error saving display name:', err.message);
+        }
         // Sync display
         document.getElementById('userName').textContent = name;
         document.getElementById('mobileUserName').textContent = name;
         updateMobileAccountBtn();
-        debouncedSaveProgress();
-        console.log('✅ Guest name set:', name);
+        console.log('✅ Display name set:', name);
       });
     }
     setupGuestNameInput('guestNameInput');
@@ -2825,6 +5494,16 @@ async function onSignIn(user) {
   if (!isAnon && user.displayName && user.displayName.startsWith('Guest') && user.displayName.length > 5) {
     const stripped = user.displayName.slice(5);
     await user.updateProfile({ displayName: stripped });
+    // v4.3: also propagate the stripped name to Firestore so the
+    // leaderboard reflects it immediately. Pre-v4.3 this used to
+    // happen on the next progress-save tick (which always wrote
+    // displayName from Auth); now identity writes are dedicated.
+    try {
+      await fbDb.collection('scores').doc(user.uid)
+        .set({ displayName: stripped }, { merge: true });
+    } catch (err) {
+      console.error('❌ Error propagating stripped name:', err.message);
+    }
     console.log('✅ Upgraded name: Guest' + stripped + ' → ' + stripped);
   }
 
@@ -2835,8 +5514,11 @@ async function onSignIn(user) {
   // Show/hide elements based on anonymous vs Google
   document.getElementById('signInBtn').style.display     = isAnon ? '' : 'none';
   document.getElementById('signOutBtn').style.display     = isAnon ? 'none' : '';
-  document.getElementById('guestNameInput').style.display = isAnon ? '' : 'none';
-  if (isAnon) document.getElementById('guestNameInput').value = displayName;
+  // v4.3: show name-edit input for every signed-in user (used to be
+  // anonymous-only, leaving Google-linked users with no in-app rename
+  // path). Pre-fill with whatever displayName resolved to above.
+  document.getElementById('guestNameInput').style.display = '';
+  document.getElementById('guestNameInput').value = displayName;
 
   // Admin check (anonymous users never admin)
   isAdmin = !isAnon && ADMIN_EMAILS.includes((user.email || '').toLowerCase());
@@ -2846,6 +5528,20 @@ async function onSignIn(user) {
   // Capture guest progress before loading saved data
   const guestN    = state.n;
   const guestAbsN = Math.abs(guestN);
+  // v4.4: also capture click count so guest ticks can merge into the
+  // signed-in account. Only this one metric — tokens, boosts, engine,
+  // skins, and achievements stay with whichever account earned them.
+  // Fall back to sessionStorage stash because signInWithRedirect reloads
+  // the page and wipes in-memory state; doSignIn stashes the count
+  // before redirecting so we can recover it here.
+  let guestClicksThisWeek = state.weekly.clickCountThisWeek || 0;
+  try {
+    const stashed = parseInt(sessionStorage.getItem('fibzoomGuestClicks') || '0', 10);
+    if (stashed > 0) {
+      guestClicksThisWeek = Math.max(guestClicksThisWeek, stashed);
+      sessionStorage.removeItem('fibzoomGuestClicks');
+    }
+  } catch (e) { /* storage blocked — nothing to recover */ }
 
   // Load saved progress
   try {
@@ -2853,6 +5549,27 @@ async function onSignIn(user) {
     if (doc.exists) {
       const data = doc.data();
       userBestAbsN = data.absN || 0;
+
+      // v4.3: Firestore is the durable source of truth for the user's
+      // chosen displayName (Firebase Auth's displayName can drift — Auth
+      // is per-device session state). If Firestore has a different name,
+      // push it back into Auth and update every UI surface so the user
+      // sees their saved name immediately on every device.
+      if (data.displayName && data.displayName !== user.displayName) {
+        try {
+          await user.updateProfile({ displayName: data.displayName });
+          document.getElementById('userName').textContent = data.displayName;
+          const mn = document.getElementById('mobileUserName');
+          if (mn) mn.textContent = data.displayName;
+          const gi = document.getElementById('guestNameInput');
+          if (gi) gi.value = data.displayName;
+          const mgi = document.getElementById('mobileGuestNameInput');
+          if (mgi) mgi.value = data.displayName;
+          console.log('✅ Hydrated displayName from Firestore:', data.displayName);
+        } catch (err) {
+          console.error('❌ Error hydrating displayName:', err.message);
+        }
+      }
 
       // v2.0 Tier 1 — restore boost tokens, upgrades, and engine state
       state.boostTokens         = data.boostTokens         ?? 0;
@@ -2863,6 +5580,44 @@ async function onSignIn(user) {
         state.engine.upgrades = data.engine.upgrades ?? {};
         state.engine.enabled  = data.engine.enabled !== false;
       }
+
+      // v2.5 Tier 2 — restore streak, achievements, lowestN, active skin
+      if (data.streak) {
+        state.streak.count               = data.streak.count               ?? 0;
+        state.streak.longestCount        = data.streak.longestCount        ?? 0;
+        state.streak.lastDateStr         = data.streak.lastDateStr         ?? '';
+        state.streak.freezesLeft         = data.streak.freezesLeft         ?? 1;
+        state.streak.lastFreezeRestoreWk = data.streak.lastFreezeRestoreWk ?? '';
+      }
+      state.achievements = data.achievements ?? {};
+      state.lowestN      = data.lowestN      ?? 1;
+      state.activeSkin   = data.activeSkin   ?? 'classic';
+      applySkin(state.activeSkin);
+
+      // v3.0 Tier 3 — restore weekly + gallery state
+      if (data.weekly) {
+        state.weekly.currentWeekId       = data.weekly.currentWeekId       ?? '';
+        state.weekly.clickCountThisWeek  = data.weekly.clickCountThisWeek  ?? 0;
+        state.weekly.flowersThisWeek     = data.weekly.flowersThisWeek     ?? 0;
+        state.weekly.tokensThisWeek      = data.weekly.tokensThisWeek      ?? 0;
+        state.weekly.highestAbsNThisWeek = data.weekly.highestAbsNThisWeek ?? state.highestAbsN;
+        state.weekly.lowestNThisWeek     = data.weekly.lowestNThisWeek     ?? (state.lowestN ?? 1);
+        state.weekly.championBadges      = Array.isArray(data.weekly.championBadges) ? data.weekly.championBadges : [];
+      }
+      // v4.4: merge guest click count (captured above before this restore
+      // clobbered it) into the signed-in account's weekly total. This is
+      // the only state that carries across the sign-in boundary from
+      // guest mode — tokens, boosts, upgrades, engine, skins, and
+      // achievements intentionally stay with whichever account earned
+      // them, so sign-in can't be used as a shortcut for incentives.
+      if (guestClicksThisWeek > 0) {
+        state.weekly.clickCountThisWeek += guestClicksThisWeek;
+        console.log(`✅ Merged ${guestClicksThisWeek} guest clicks → ${state.weekly.clickCountThisWeek} total`);
+      }
+      state.galleryViewed = data.galleryViewed ?? {};
+      // v4.0 Tier 4 — restore level-fact history + preference
+      state.factsShown    = data.factsShown    ?? {};
+      state.suppressFacts = data.suppressFacts ?? false;
 
       // Keep whichever is further: guest progress or saved progress
       if (guestAbsN > userBestAbsN) {
@@ -2886,21 +5641,47 @@ async function onSignIn(user) {
         }
       }
 
+      // v4.4: if guest clicks merged into an existing account, persist
+      // the new weekly total right away — don't wait for the next
+      // debounced save tick to flush it, since a quick tab close would
+      // otherwise drop the merged clicks.
+      if (guestClicksThisWeek > 0) {
+        saveProgress();
+        maybeUpdateWeeklyScore();
+      }
+
       // v2.0 Tier 1 — compute offline progress (engine must be owned)
       const rate    = data.offlineRateSnapshot ?? 0;
       const sinceTs = data.offlineSinceTs;
+      let offlineModalShown = false;
       if (state.engine.owned && rate > 0 && sinceTs && typeof sinceTs.toMillis === 'function') {
         const elapsedSec = Math.max(0, (Date.now() - sinceTs.toMillis()) / 1000);
         const cappedSec  = Math.min(elapsedSec, OFFLINE_CAP_SECONDS);
         const ticks      = Math.floor(rate * cappedSec);
         if (ticks > 0) {
           showOfflineWelcomeModal(ticks, cappedSec, elapsedSec >= OFFLINE_CAP_SECONDS);
+          offlineModalShown = true;
         }
       }
 
       // Boot the engine loop if owned
       if (state.engine.owned) startEngineLoop();
       updateTokenDisplay();
+      // v2.5 Tier 2 — render Tier 2 UI and evaluate streak
+      updateStreakBadge();
+      renderSkins();
+      checkAchievements();
+      if (!offlineModalShown) evaluateStreak();  // else the offline Collect handler calls evaluateStreak
+      // v3.0 Tier 3 — weekly challenge + gallery + golden moment
+      evaluateWeekly();
+      renderChampionBadges();
+      if (activeLbTab === 'weekly') renderChallengeHeader();
+      if (state.highestAbsN >= 5 && !goldenTimer) initGoldenMoment();
+      // UX polish: refresh always-visible sidebar panels after restore
+      renderSidebarAchievements();
+      renderSidebarGallery();
+      // v4.0 Tier 4 — auto-resume an in-progress Classroom Challenge
+      resumeActiveChallenge();
     } else {
       // Anonymous user with no saved data — sign them out to start fresh
       // (this handles stale anonymous sessions persisted by Firebase IndexedDB)
@@ -2910,12 +5691,35 @@ async function onSignIn(user) {
         return;
       }
       userBestAbsN = 0;
+      // v4.4: fresh Google account with no saved data — seed clickCountThisWeek
+      // from the guest's pre-sign-in count so guest ticks aren't lost when a
+      // first-time Google user signs in. maybeSaveScore below reads from
+      // state.weekly.clickCountThisWeek, so this must happen before that call.
+      if (guestClicksThisWeek > 0) {
+        state.weekly.clickCountThisWeek = guestClicksThisWeek;
+        console.log(`✅ Seeded new account with ${guestClicksThisWeek} guest clicks`);
+      }
       if (guestAbsN > 0) {
         updateUserBestDisplay(guestN);
         maybeSaveScore(guestN);
       } else {
         updateUserBestDisplay(null);
       }
+      // v2.5 Tier 2 — first-time signed-in user: initialise UI and streak
+      updateTokenDisplay();
+      updateStreakBadge();
+      renderSkins();
+      evaluateStreak();
+      // v3.0 Tier 3 — seed weekly challenge state and render
+      evaluateWeekly();
+      renderChampionBadges();
+      if (activeLbTab === 'weekly') renderChallengeHeader();
+      if (state.highestAbsN >= 5 && !goldenTimer) initGoldenMoment();
+      // UX polish: refresh always-visible sidebar panels after restore
+      renderSidebarAchievements();
+      renderSidebarGallery();
+      // v4.0 Tier 4 — auto-resume an in-progress Classroom Challenge
+      resumeActiveChallenge();
     }
     drawSpiral();
     drawNumberLine();
@@ -2972,7 +5776,35 @@ async function maybeSaveScore(n) {
         upgrades: state.engine.upgrades,
         enabled:  state.engine.enabled,
       },
-      displayName: currentUser.displayName || currentUser.email || 'Guest',
+      // v2.5 Tier 2 fields
+      streak: {
+        count:               state.streak.count,
+        longestCount:        state.streak.longestCount,
+        lastDateStr:         state.streak.lastDateStr,
+        freezesLeft:         state.streak.freezesLeft,
+        lastFreezeRestoreWk: state.streak.lastFreezeRestoreWk,
+      },
+      achievements: state.achievements,
+      lowestN:      state.lowestN ?? 1,
+      activeSkin:   state.activeSkin || 'classic',
+      // v3.0 Tier 3 fields
+      weekly: {
+        currentWeekId:       state.weekly.currentWeekId,
+        clickCountThisWeek:  state.weekly.clickCountThisWeek,
+        flowersThisWeek:     state.weekly.flowersThisWeek,
+        tokensThisWeek:      state.weekly.tokensThisWeek,
+        highestAbsNThisWeek: state.weekly.highestAbsNThisWeek,
+        lowestNThisWeek:     state.weekly.lowestNThisWeek,
+        championBadges:      state.weekly.championBadges || [],
+      },
+      galleryViewed: state.galleryViewed || {},
+      // v4.0 Tier 4 fields
+      factsShown:    state.factsShown    || {},
+      suppressFacts: !!state.suppressFacts,
+      // v4.3: displayName no longer written here — it's owned by the name-
+      // edit handler (setupGuestNameInput) and onSignIn hydration. Writing
+      // it on every score save was the mechanism that clobbered out-of-
+      // band displayName edits within ~2 seconds of play.
       photoURL:    currentUser.photoURL    || '',
       uid:         currentUser.uid,
       updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
@@ -3011,8 +5843,37 @@ async function saveProgress() {
       },
       offlineRateSnapshot: offlineRate,
       offlineSinceTs:      firebase.firestore.FieldValue.serverTimestamp(),
-      // Identity
-      displayName: currentUser.displayName || currentUser.email || 'Guest',
+      // v2.5 Tier 2 fields
+      streak: {
+        count:               state.streak.count,
+        longestCount:        state.streak.longestCount,
+        lastDateStr:         state.streak.lastDateStr,
+        freezesLeft:         state.streak.freezesLeft,
+        lastFreezeRestoreWk: state.streak.lastFreezeRestoreWk,
+      },
+      achievements: state.achievements,
+      lowestN:      state.lowestN ?? 1,
+      activeSkin:   state.activeSkin || 'classic',
+      // v3.0 Tier 3 fields
+      weekly: {
+        currentWeekId:       state.weekly.currentWeekId,
+        clickCountThisWeek:  state.weekly.clickCountThisWeek,
+        flowersThisWeek:     state.weekly.flowersThisWeek,
+        tokensThisWeek:      state.weekly.tokensThisWeek,
+        highestAbsNThisWeek: state.weekly.highestAbsNThisWeek,
+        lowestNThisWeek:     state.weekly.lowestNThisWeek,
+        championBadges:      state.weekly.championBadges || [],
+      },
+      galleryViewed: state.galleryViewed || {},
+      // v4.0 Tier 4 fields
+      factsShown:    state.factsShown    || {},
+      suppressFacts: !!state.suppressFacts,
+      // v4.3: displayName removed from the progress-save payload. It used
+      // to be re-pushed to Firestore from Firebase Auth on every ~2 s
+      // debounced tick, which silently clobbered any direct Firestore
+      // edit (e.g. via the Firebase Console) within seconds. Identity is
+      // now owned by setupGuestNameInput (user-initiated edits) and by
+      // onSignIn hydration (sign-in time).
       photoURL:    currentUser.photoURL    || '',
       uid:         currentUser.uid,
       updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
