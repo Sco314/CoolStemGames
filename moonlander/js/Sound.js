@@ -37,7 +37,7 @@ class Sound {
   setVolume(v) {
     if (v < 0) v = 0; else if (v > 1) v = 1;
     this._baseVolume = v;
-    this.el.volume = v * _masterVolume;
+    this.el.volume = _muted ? 0 : (v * _masterVolume);
   }
   loop() {
     this.el.addEventListener('timeupdate', () => {
@@ -50,19 +50,34 @@ class Sound {
   }
 }
 
-// Registry so setMasterVolume() can retune every live Sound without the
-// callers needing to know the list.
+// Registry so setMasterVolume() / setMuted() can retune every live Sound
+// without callers needing to know the list.
 const _instances = new Set();
 let _masterVolume = 1;
+let _muted = false;
+
+function _applyAll() {
+  for (const s of _instances) {
+    s.el.volume = _muted ? 0 : (s._baseVolume * _masterVolume);
+  }
+}
 
 /** Scale all Sound element volumes by a global master multiplier. */
 export function setMasterVolume(mv) {
   if (mv < 0) mv = 0; else if (mv > 1) mv = 1;
   _masterVolume = mv;
-  for (const s of _instances) s.el.volume = s._baseVolume * _masterVolume;
+  _applyAll();
 }
 
 export function getMasterVolume() { return _masterVolume; }
+
+/** Hard mute/unmute gate, independent of master volume. */
+export function setMuted(m) {
+  _muted = !!m;
+  _applyAll();
+}
+
+export function isMuted() { return _muted; }
 
 export const Sounds = {
   crash:    null,

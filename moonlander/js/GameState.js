@@ -65,8 +65,13 @@ export const GameState = {
   },
 
   // ----- User settings (profile-level) -----
+  // `muted` ships true — the game starts silent so the page doesn't blast
+  // anything before the player has engaged with it. Unmute via the corner
+  // button or the settings panel. When unmuted, the Sound layer applies
+  // `masterVolume`; when muted, every sound is effectively zero.
   settings: {
     masterVolume: 0.8,
+    muted:        true,
     invertY:      false
   }
 };

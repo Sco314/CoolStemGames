@@ -186,6 +186,119 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 }
 .overlay ol#hs-list li.empty { justify-content: center; opacity: 0.4; }
 
+/* ---- Main-menu instructions panel (added with Chromebook-readability polish)
+ * The menu is already very tall on phones so the grid collapses to one column
+ * below 720px and the menu itself becomes scrollable. */
+#main-menu {
+  padding: 32px 24px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow-y: auto;
+  gap: 14px;
+}
+#main-menu h1 { align-self: center; }
+#main-menu .subtitle { align-self: center; }
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+}
+@media (max-width: 720px) {
+  .menu-grid { grid-template-columns: 1fr; gap: 18px; }
+  #main-menu h1 { font-size: 32px; letter-spacing: 6px; }
+}
+.menu-grid .howto {
+  background: rgba(255, 238, 136, 0.05);
+  border: 1px solid rgba(255, 238, 136, 0.25);
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: left;
+  letter-spacing: 1px;
+}
+.menu-grid .howto h3 {
+  margin: 14px 0 6px;
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: #ffee88;
+}
+.menu-grid .howto h3:first-child { margin-top: 0; }
+.menu-grid .howto h4 {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: #66ff88;
+  opacity: 0.9;
+}
+.menu-grid .howto p.tagline { margin: 0 0 10px; opacity: 0.88; }
+.menu-grid .howto ul.controls,
+.menu-grid .howto ul.bullet {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px;
+}
+.menu-grid .howto ul.controls li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 0;
+}
+.menu-grid .howto ul.controls li span { opacity: 0.85; }
+.menu-grid .howto ul.controls li.touch-hint {
+  opacity: 0.6; font-size: 12px; font-style: italic;
+}
+.menu-grid .howto ul.bullet li {
+  padding: 3px 0 3px 14px;
+  position: relative;
+  opacity: 0.9;
+}
+.menu-grid .howto ul.bullet li::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: #ffee88;
+}
+.menu-grid .howto ul.bullet.warn li::before { color: #ffb84d; }
+.menu-grid .howto kbd {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 238, 136, 0.6);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffee88;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.menu-grid .howto .pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  margin-right: 2px;
+  color: #04060e;
+}
+.menu-grid .howto .pill.fuel    { background: #ffb020; }
+.menu-grid .howto .pill.kit     { background: #d0d0d5; }
+.menu-grid .howto .pill.sample  { background: #5ec3ff; }
+.menu-grid .howto .pill.damaged { background: #f08080; }
+
+.menu-bottom-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.hs-panel.compact { min-width: 260px; }
+.hs-panel.compact ol#hs-list { font-size: 14px; min-width: 260px; }
+
 .overlay .go-row {
   display: flex;
   gap: 16px;
@@ -359,3 +472,31 @@ body.touch.mode-walk   #touch-walk   { display: flex; left: 0; right: 0; justify
   outline: 2px solid #66ff88;
   outline-offset: 3px;
 }
+
+/* ---- Mute / unmute toggle — always visible, top-right.
+ * Sits above every overlay (z-index > .overlay) so the player can flip
+ * sound on from the menu, from gameplay, or from the game-over screen. */
+.mute-btn {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 250;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 238, 136, 0.7);
+  background: rgba(10, 15, 25, 0.75);
+  color: #ffee88;
+  font-family: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: transform 0.15s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.mute-btn:hover { background: rgba(255, 238, 136, 0.18); transform: scale(1.05); }
+.mute-btn:focus-visible { outline: 2px solid #66ff88; outline-offset: 3px; }
+.mute-btn .mute-icon { line-height: 1; }

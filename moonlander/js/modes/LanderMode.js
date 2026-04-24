@@ -30,6 +30,7 @@ import { setLanderTelemetry, setCenterMessage, showAchievementToast } from '../H
 import { points as terrainPoints } from '../TerrainData.js';
 import { Sounds } from '../Sound.js';
 import { ParticleSystemCone, ParticleSystemExplosion } from '../Particles.js';
+import { getSharedTexture } from '../AssetCache.js';
 import {
   effectiveGravity, effectiveLandingVelocityTolerance, effectiveEdgeMarginFrac,
   effectiveSpawnVelocity
@@ -308,15 +309,18 @@ function spawnMultiplierLabel(seg) {
 function buildLander() {
   lander = new THREE.Group();
 
-  // Textured sprite: crisp/retro pixel look via NearestFilter.
-  const tex = new THREE.TextureLoader().load('textures/lander.png');
+  // Textured sprite: crisp/retro pixel look via NearestFilter. The texture
+  // itself is shared via AssetCache so round-tripping lander→walk→lander
+  // doesn't upload the same PNG to the GPU twice on a Chromebook.
+  const tex = getSharedTexture('textures/lander.png');
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   const geom = new THREE.PlaneGeometry(LANDER_SCALE, LANDER_SCALE);
   const mat  = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
   const mesh = new THREE.Mesh(geom, mat);
   lander.add(mesh);
-  disposables.push({ geometry: geom, material: mat, texture: tex });
+  // Note: texture is NOT pushed to disposables — AssetCache owns it.
+  disposables.push({ geometry: geom, material: mat });
 
   // Invisible collider anchors. Their world positions (which include the
   // lander's rotation) are what we test against terrain segments.

@@ -31,15 +31,22 @@ export const FOOT_COLLIDER_OFFSET_Y = -LANDER_SCALE * 0.45; // below center
 
 // If the lander x is within this fraction of the lander scale of either
 // landing-pad edge, the landing is rejected as "TOO CLOSE TO EDGE".
-export const LANDING_EDGE_MARGIN_FRAC = 0.38;
+// Easier at level 0 (was 0.38) so first-time players don't bounce on
+// barely-off-center touchdowns. Progression.js tightens it each landing.
+export const LANDING_EDGE_MARGIN_FRAC = 0.22;
 
 // ---------- Fuel / scoring ----------
 export const STARTING_FUEL          = 1000;
 export const FUEL_CONSUMPTION_MIN   = 4;
 export const FUEL_CONSUMPTION_MAX   = 14;
 export const FUEL_ALERT_THRESHOLD   = 300;
-export const LANDING_ANGLE_TOLERANCE    = 6.7 * (Math.PI / 180);
-export const LANDING_VELOCITY_TOLERANCE = 5.0;
+// Angle tolerance was 6.7° (tblazevic). Bumped to 9° so a slightly-tilted
+// first approach still counts as a landing; Progression tightens it later.
+export const LANDING_ANGLE_TOLERANCE    = 9.0 * (Math.PI / 180);
+// Velocity tolerance was 5.0 (tblazevic). Bumped to 8.0 for the first run —
+// Progression.js steps it back down toward the classic tblazevic number as
+// the player levels up.
+export const LANDING_VELOCITY_TOLERANCE = 8.0;
 export const SCORE_PER_LANDING = 100;
 
 // ---------- Bonus pad multipliers ----------
@@ -89,9 +96,11 @@ export const WALK_GROUND_AMPLITUDE   = 3.0;   // peak height variation of moon s
 export const WALK_CRATER_COUNT       = 20;
 
 // ---------- Particle tunables (ported subset — expand as needed) ----------
-export const CONE_PS_MAX_PARTICLES     = 1100;
-export const CONE_PS_PER_SEC_MIN       = 250;
-export const CONE_PS_PER_SEC_MAX       = 350;
+// These are the "high-end" budgets. Particles.js scales them via Device.js
+// so Chromebooks and low-memory phones get a smaller pool and lower emit rate.
+export const CONE_PS_MAX_PARTICLES     = 700;    // was 1100 — trimmed for memory safety
+export const CONE_PS_PER_SEC_MIN       = 200;
+export const CONE_PS_PER_SEC_MAX       = 280;
 export const CONE_PS_LIFETIME_MIN      = 0.3;
 export const CONE_PS_LIFETIME_MAX      = 0.8;
 // Geometry / kinematics of the thruster cone
@@ -111,7 +120,7 @@ export const CONE_PS_SCALE_START       = 1.4;
 export const CONE_PS_SCALE_END         = 0.4;
 export const CONE_PS_PARTICLE_SIZE     = 1.6;    // base plane edge length
 
-export const EXPLOSION_PS_MAX_PARTICLES = 350;
+export const EXPLOSION_PS_MAX_PARTICLES = 220;   // was 350 — trimmed for memory safety
 export const EXPLOSION_PS_LIFETIME_MIN  = 0.8;
 export const EXPLOSION_PS_LIFETIME_MAX  = 5;
 export const EXPLOSION_PS_SPEED_MIN     = 40;
@@ -211,12 +220,14 @@ export const OBJECTIVES = [
 
 // ---------- Progression (Phase 6) ----------
 // Each successful landing bumps GameState.level. Progression.js reads these
-// bases and scales effective gameplay values accordingly.
+// bases and scales effective gameplay values accordingly. Tuned so level 0
+// is forgiving for first-time players and the classic tblazevic tolerances
+// are approached by ~level 10.
 export const DIFFICULTY_GRAVITY_PER_LEVEL       = 0.07;  // fractional gravity growth per level
-export const DIFFICULTY_TOLERANCE_FLOOR         = 2.0;   // lowest landing-velocity tolerance
-export const DIFFICULTY_TOLERANCE_STEP          = 0.2;
+export const DIFFICULTY_TOLERANCE_FLOOR         = 3.0;   // velocity-tolerance floor (was 2.0)
+export const DIFFICULTY_TOLERANCE_STEP          = 0.3;   // steeper drop per level (was 0.2)
 export const DIFFICULTY_EDGE_MARGIN_STEP        = 0.02;
-export const DIFFICULTY_EDGE_MARGIN_CAP         = 0.48;
+export const DIFFICULTY_EDGE_MARGIN_CAP         = 0.44;  // slightly lower cap (was 0.48)
 export const DIFFICULTY_SPAWN_VEL_BASE          = 60;
 export const DIFFICULTY_SPAWN_VEL_STEP          = 8;
 export const DIFFICULTY_FUEL_GAIN_STEP          = 15;

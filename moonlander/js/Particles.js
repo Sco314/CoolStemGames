@@ -13,6 +13,7 @@
 
 import * as THREE from 'three';
 import { getQualityFactor } from './Quality.js';
+import { scalePool, LOW_END } from './Device.js';
 import {
   GRAVITY,
   CONE_PS_MAX_PARTICLES, CONE_PS_PER_SEC_MIN, CONE_PS_PER_SEC_MAX,
@@ -92,16 +93,21 @@ export class ParticleSystemCone {
     this.emitting = false;
     this._emitBacklog = 0;
 
-    const built = buildPool(scene, CONE_PS_MAX_PARTICLES, CONE_PS_PARTICLE_SIZE);
+    // Low-end devices (Chromebooks, older phones) get a smaller pool so we
+    // don't thrash the GPU or run out of memory. The adaptive-quality path
+    // still scales emit rate on top of this.
+    const poolSize = scalePool(CONE_PS_MAX_PARTICLES);
+    const built = buildPool(scene, poolSize, CONE_PS_PARTICLE_SIZE);
     this._geom = built.geom;
     this._pool = built.pool;
   }
 
   update(dt) {
     // Spawn new particles based on emit rate (only while emitting). Adaptive
-    // quality scales the rate so low-FPS devices emit fewer per second.
+    // quality scales the rate so low-FPS devices emit fewer per second;
+    // low-end devices additionally get a baseline rate cut.
     if (this.emitting) {
-      const qf = getQualityFactor();
+      const qf = getQualityFactor() * (LOW_END ? 0.55 : 1);
       const rate = rand(CONE_PS_PER_SEC_MIN, CONE_PS_PER_SEC_MAX) * qf;
       this._emitBacklog += rate * dt;
       const toSpawn = Math.floor(this._emitBacklog);
@@ -198,7 +204,8 @@ export class ParticleSystemExplosion {
     this.scene = scene;
     this.target = targetObject;
 
-    const built = buildPool(scene, EXPLOSION_PS_MAX_PARTICLES, EXPLOSION_PS_PARTICLE_SIZE);
+    const poolSize = scalePool(EXPLOSION_PS_MAX_PARTICLES);
+    const built = buildPool(scene, poolSize, EXPLOSION_PS_PARTICLE_SIZE);
     this._geom = built.geom;
     this._pool = built.pool;
   }
