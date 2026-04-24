@@ -186,73 +186,74 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 }
 .overlay ol#hs-list li.empty { justify-content: center; opacity: 0.4; }
 
-/* ---- Main-menu instructions panel (added with Chromebook-readability polish)
- * The menu is already very tall on phones so the grid collapses to one column
- * below 720px and the menu itself becomes scrollable. */
+/* ---- Main-menu instructions panel
+ * Sized so START / SETTINGS / HIGH SCORES are visible without scrolling on
+ * a standard 13" laptop viewport. On narrow screens the grid collapses
+ * and the menu allows scroll. */
 #main-menu {
-  padding: 32px 24px;
-  align-items: flex-start;
+  padding: 18px 20px 22px;
+  align-items: center;
   justify-content: flex-start;
   overflow-y: auto;
-  gap: 14px;
+  gap: 10px;
 }
-#main-menu h1 { align-self: center; }
-#main-menu .subtitle { align-self: center; }
+#main-menu h1 { font-size: 34px; letter-spacing: 6px; margin: 0; }
+#main-menu .subtitle { margin: -6px 0 4px; font-size: 13px; opacity: 0.7; }
 .menu-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 28px;
+  gap: 16px;
   width: 100%;
-  max-width: 960px;
+  max-width: 820px;
   margin: 0 auto;
 }
 @media (max-width: 720px) {
-  .menu-grid { grid-template-columns: 1fr; gap: 18px; }
-  #main-menu h1 { font-size: 32px; letter-spacing: 6px; }
+  .menu-grid { grid-template-columns: 1fr; gap: 10px; }
+  #main-menu h1 { font-size: 26px; letter-spacing: 4px; }
 }
 .menu-grid .howto {
   background: rgba(255, 238, 136, 0.05);
   border: 1px solid rgba(255, 238, 136, 0.25);
-  padding: 14px 18px;
-  font-size: 13px;
-  line-height: 1.55;
+  padding: 10px 14px;
+  font-size: 11px;
+  line-height: 1.45;
   text-align: left;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 .menu-grid .howto h3 {
-  margin: 14px 0 6px;
-  font-size: 15px;
-  letter-spacing: 3px;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  letter-spacing: 2px;
   color: #ffee88;
 }
 .menu-grid .howto h3:first-child { margin-top: 0; }
 .menu-grid .howto h4 {
-  margin: 10px 0 4px;
-  font-size: 12px;
-  letter-spacing: 3px;
+  margin: 6px 0 3px;
+  font-size: 11px;
+  letter-spacing: 2px;
   color: #66ff88;
   opacity: 0.9;
 }
-.menu-grid .howto p.tagline { margin: 0 0 10px; opacity: 0.88; }
+.menu-grid .howto p.tagline { margin: 0 0 6px; opacity: 0.88; font-size: 11px; }
 .menu-grid .howto ul.controls,
 .menu-grid .howto ul.bullet {
   list-style: none;
   padding: 0;
-  margin: 0 0 6px;
+  margin: 0 0 4px;
 }
 .menu-grid .howto ul.controls li {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
-  padding: 3px 0;
+  padding: 2px 0;
 }
 .menu-grid .howto ul.controls li span { opacity: 0.85; }
 .menu-grid .howto ul.controls li.touch-hint {
-  opacity: 0.6; font-size: 12px; font-style: italic;
+  opacity: 0.6; font-size: 10px; font-style: italic;
 }
 .menu-grid .howto ul.bullet li {
-  padding: 3px 0 3px 14px;
+  padding: 2px 0 2px 12px;
   position: relative;
   opacity: 0.9;
 }
@@ -265,8 +266,8 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 .menu-grid .howto ul.bullet.warn li::before { color: #ffb84d; }
 .menu-grid .howto kbd {
   font-family: inherit;
-  font-size: 11px;
-  padding: 2px 6px;
+  font-size: 10px;
+  padding: 1px 5px;
   border: 1px solid rgba(255, 238, 136, 0.6);
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.4);
@@ -278,7 +279,7 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
   display: inline-block;
   padding: 1px 6px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 1px;
   margin-right: 2px;
   color: #04060e;
@@ -290,14 +291,138 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 
 .menu-bottom-row {
   display: flex;
-  gap: 24px;
-  align-items: flex-start;
-  margin-top: 8px;
+  gap: 16px;
+  align-items: center;
+  margin-top: 4px;
   flex-wrap: wrap;
   justify-content: center;
 }
-.hs-panel.compact { min-width: 260px; }
-.hs-panel.compact ol#hs-list { font-size: 14px; min-width: 260px; }
+.hs-panel.compact { min-width: 220px; }
+.hs-panel.compact h3 { font-size: 13px; margin-bottom: 2px; }
+.hs-panel.compact ol#hs-list { font-size: 12px; min-width: 220px; }
+
+/* ---- First-time walk-mode tutorial panel ---- */
+.walk-tutorial[hidden] { display: none !important; }
+.walk-tutorial {
+  position: fixed;
+  top: 80px;
+  left: 20px;
+  z-index: 80;
+  max-width: 320px;
+  padding: 14px 18px;
+  background: rgba(10, 15, 25, 0.92);
+  border: 1px solid rgba(255, 238, 136, 0.6);
+  color: #eaeaf0;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.5px;
+  pointer-events: auto;
+  animation: walk-tut-in 0.35s ease-out;
+}
+@keyframes walk-tut-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.walk-tutorial h3 {
+  margin: 0 0 8px;
+  color: #ffee88;
+  letter-spacing: 2px;
+  font-size: 13px;
+}
+.walk-tutorial h4 {
+  margin: 8px 0 4px;
+  color: #66ff88;
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+.walk-tutorial ul.controls,
+.walk-tutorial ul.bullet {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 4px;
+}
+.walk-tutorial ul.controls li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  padding: 1px 0;
+}
+.walk-tutorial ul.controls li span { opacity: 0.85; }
+.walk-tutorial ul.controls li.touch-hint {
+  opacity: 0.6; font-size: 10px; font-style: italic;
+}
+.walk-tutorial ul.bullet li {
+  padding: 1px 0 1px 12px;
+  position: relative;
+  opacity: 0.9;
+}
+.walk-tutorial ul.bullet li::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: #ffee88;
+}
+.walk-tutorial kbd {
+  font-family: inherit;
+  font-size: 10px;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 238, 136, 0.6);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffee88;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.walk-tutorial .pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  margin-right: 2px;
+  color: #04060e;
+}
+.walk-tutorial .pill.fuel    { background: #ffb020; }
+.walk-tutorial .pill.kit     { background: #d0d0d5; }
+.walk-tutorial .pill.sample  { background: #5ec3ff; }
+.walk-tutorial .pill.damaged { background: #f08080; }
+.walk-tutorial .walk-tutorial-foot {
+  margin: 8px 0 0;
+  font-size: 10px;
+  opacity: 0.55;
+  font-style: italic;
+}
+.walk-tutorial-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 238, 136, 0.5);
+  background: transparent;
+  color: #ffee88;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.walk-tutorial-close:hover { background: rgba(255, 238, 136, 0.15); }
+.walk-tutorial-close:focus-visible { outline: 2px solid #66ff88; outline-offset: 2px; }
+
+/* ---- Telemetry gauge color states ----
+ * Applied to #hud-fuel, #hud-vspeed, #hud-hspeed, #hud-angle depending on
+ * how close the reading is to its failure threshold. Colors are tuned for
+ * the Phase-7 colorblind-safer palette (amber not pure red). */
+#hud-fuel, #hud-vspeed, #hud-hspeed, #hud-angle {
+  transition: color 0.15s ease;
+}
+.gauge-ok     { color: #66ff88; }
+.gauge-warn   { color: #ffd84d; }
+.gauge-danger { color: #ff6b4a; font-weight: bold; }
 
 .overlay .go-row {
   display: flex;
