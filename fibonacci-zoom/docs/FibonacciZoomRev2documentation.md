@@ -1136,6 +1136,17 @@ Persistence / resume:
 
 ## Changelog
 
+### v2.0.1 — Tier 1 follow-up: Chromebook memory fixes
+
+Audit reason: classroom Chromebooks (2–4 GB RAM) were reported to "hang on to memory and crash" during long play sessions. Targeted three accumulators/lifecycles on the Tier 1 codebase:
+
+- **Capped** `_memo` (BigInt Fibonacci cache) and `_fibNumMemo` (Number cache) at `MEMO_MAX = 512` entries each. On overflow, the map is cleared and reseeded with the `[0, 1]` identity pair — O(1) amortized, and the cost of recomputing the iterative loop is negligible compared to unbounded growth of multi-KB BigInts per `k` visited.
+- **Added** `stopEngineLoop()` and extended the `visibilitychange` listener to call it on tab hide. Chrome pauses `requestAnimationFrame` for hidden tabs, so without the pause the first post-unhide callback received a `dt` equal to the full hidden duration (possibly minutes) and flooded `commitN` with thousands of ticks in a single frame — a real crash vector on weak Chromebook GPUs. On resume we reset `state.engine.lastTick` to `performance.now()` before restarting, eliminating the dt spike.
+- **Unsubscribed** the leaderboard `onSnapshot` on tab hide; re-subscribe via `startLeaderboardListener()` on show. Prevents Firestore callbacks from firing into DOM that has been paged out by the OS.
+- `saveProgress()` on hide is preserved (offline anchor stays fresh).
+
+**Do not** re-introduce unbounded `.set`/`.push` in session-lifetime caches, and **always** pair an `onSnapshot`/engine-rAF start with a matching teardown in the `visibilitychange: hidden` path.
+
 ### v2.0 — Tier 1 (Boosts + Engine + Offline)
 
 - **Added** Boost Tokens currency, earned on every new `|n|` high with Fibonacci milestone bonuses.

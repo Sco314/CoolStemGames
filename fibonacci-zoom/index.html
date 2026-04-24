@@ -1624,11 +1624,22 @@ html, body {
 'use strict';
 
 // ─── BigInt Fibonacci (extended to negatives) ──────────────────────
+// Memoized. Capped at MEMO_MAX entries to bound RSS on long sessions
+// (classroom Chromebooks previously OOM'd after hours of play as the
+// memo accumulated one multi-KB BigInt per k ever visited). Eviction is
+// an O(1) clear-and-reseed; recomputation from the seeds is a tight
+// iterative loop, negligible compared to unbounded growth.
+const MEMO_MAX = 512;
 const _memo = new Map([[0, 0n],[1, 1n]]);
 function fibPos(n) {
   if (_memo.has(n)) return _memo.get(n);
   let a = 0n, b = 1n;
   for (let i = 2; i <= n; i++) { [a, b] = [b, a + b]; }
+  if (_memo.size >= MEMO_MAX) {
+    _memo.clear();
+    _memo.set(0, 0n);
+    _memo.set(1, 1n);
+  }
   _memo.set(n, b);
   return b;
 }
@@ -2020,11 +2031,17 @@ function col(i, alpha = 1) {
 
 // Cache Number(fibPos(k)) — BigInt→Number conversion is expensive at large k
 // and buildSquares re-runs every draw frame. Keyed by k only; result is independent of scale.
+// Shares MEMO_MAX cap with _memo — same rationale (bound growth on long sessions).
 const _fibNumMemo = new Map([[0, 0], [1, 1]]);
 function fibPosNum(k) {
   const cached = _fibNumMemo.get(k);
   if (cached !== undefined) return cached;
   const v = Number(fibPos(k));
+  if (_fibNumMemo.size >= MEMO_MAX) {
+    _fibNumMemo.clear();
+    _fibNumMemo.set(0, 0);
+    _fibNumMemo.set(1, 1);
+  }
   _fibNumMemo.set(k, v);
   return v;
 }
@@ -5178,15 +5195,31 @@ const ro = new ResizeObserver(() => {
 ro.observe(document.querySelector('.canvas-box'));
 ro.observe(document.querySelector('.nl-wrapper'));
 
-// ─── v2.0 Tier 1: flush progress on tab hide (offline anchor) ────
-// v3.2 crash-fix: also stop/restart the engine rAF loop so a backgrounded
-// tab never sits in a throttled-but-still-running animation frame chain.
+// ─── v2.0 Tier 1: tab hide — flush progress, pause engine, drop listener ────
+// v3.2 crash-fix: stop/restart the engine rAF loop so a backgrounded tab
+// never sits in a throttled-but-still-running animation frame chain.
+// v2.0.1 Chromebook memory fix: also unsubscribe the leaderboard onSnapshot
+// on hide so no Firestore callbacks fire into DOM that's been paged out by
+// the OS; re-subscribe on show. `lbUnsub` and `startLeaderboardListener`
+// live in the second <script> block but are in the shared global lexical
+// env by the time this callback fires at runtime.
 window.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     if (currentUser) saveProgress();
     if (typeof stopEngineLoop === 'function') stopEngineLoop();
+    if (typeof lbUnsub !== 'undefined' && lbUnsub) {
+      lbUnsub();
+      lbUnsub = null;
+    }
   } else {
-    if (state.engine && state.engine.owned) startEngineLoop();
+    if (state.engine && state.engine.owned) {
+      state.engine.lastTick = performance.now();
+      startEngineLoop();
+    }
+    if (typeof startLeaderboardListener === 'function' &&
+        (typeof lbUnsub === 'undefined' || !lbUnsub)) {
+      startLeaderboardListener();
+    }
   }
 });
 
