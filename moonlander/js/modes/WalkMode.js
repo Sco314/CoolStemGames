@@ -19,7 +19,7 @@ import {
   WALK_PLAY_RADIUS, WALK_MOUSE_SENSITIVITY,
   WALK_PITCH_MIN, WALK_PITCH_MAX,
   WALK_GROUND_AMPLITUDE, WALK_CRATER_COUNT,
-  INTERACTABLE_TYPES, LANDING_SITE_LOOT, DEFAULT_LOOT,
+  INTERACTABLE_TYPES, APOLLO_SITES,
   DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
   TRANSITION_WIND_VOL,
   HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
@@ -616,24 +616,42 @@ function buildParkedLander() {
 // ---------- Phase-4 interactable system ----------
 
 /**
- * Walk scene loot is seeded by the landing segment index stashed on
- * GameState.lastLanding. Unknown or crashed segments (-1) fall through to
- * DEFAULT_LOOT so there's always something to do.
+ * Walk-scene loot is seeded by the metadata stashed on GameState.lastLanding
+ * when the lander touched down. The pad KIND drives what appears:
+ *   - 'beginner' → a fuel drum near spawn (reward advertised in 2D)
+ *   - 'bonus'    → a science sample near spawn (extra on top of the score
+ *                  multiplier you already banked)
+ *   - 'plain'    → no automatic loot; the landing is its own reward
+ * Apollo 11 is always placed (fixed world position) so there's always a
+ * named destination to walk to regardless of where you landed.
  */
 function spawnInteractables() {
-  const segIdx = GameState.lastLanding.terrainSegmentIndex;
-  const spawns = LANDING_SITE_LOOT[segIdx] || DEFAULT_LOOT;
-  for (const [type, x, z] of spawns) {
-    const it = buildInteractable(type, x, z);
+  const ll = GameState.lastLanding;
+
+  if (ll.padKind === 'beginner') {
+    const it = buildInteractable('fuel', 12, 8);
+    if (it) interactables.push(it);
+  } else if (ll.padKind === 'bonus') {
+    const it = buildInteractable('sample', 12, 8);
     if (it) interactables.push(it);
   }
+
+  // Apollo landmarks. For now only Apollo 11 is defined; follow-up PR
+  // will add 12/14/15/16/17 with the damage/repair-part loop.
+  for (const site of APOLLO_SITES) {
+    const [sx, sz] = site.walkPos;
+    const it = buildApolloSite(site, sx, sz);
+    if (it) interactables.push(it);
+  }
+
   // Breadcrumb rings from the parked lander to each interactable so the
-  // player has cues on where to walk. Built after both the lander and the
-  // loot exist so we know start and end points.
+  // player has cues on where to walk. Built after everything exists.
   for (const it of interactables) {
     it.trailMarkers = buildTrailMarkers(landerModel.position, it.object3d.position, it.type);
   }
-  console.log(`ℹ️ Spawned ${interactables.length} interactables for segment ${segIdx}`);
+  console.log(
+    `ℹ️ Spawned ${interactables.length} interactables for pad kind "${ll.padKind}"`
+  );
 }
 
 function buildInteractable(type, x, z) {
@@ -792,6 +810,81 @@ function buildDamagedProbe(group, spec) {
   group.add(ant);
 }
 
+/**
+ * Apollo landing-site landmark. Builds a small ensemble visible from a
+ * distance: descent-stage silhouette, a pole with an American flag, and a
+ * small commemorative plaque. Returned as a regular interactable record
+ * with `type: 'apollo'` so performInteraction() can route it.
+ */
+function buildApolloSite(site, x, z) {
+  const group = new THREE.Group();
+  group.position.set(x, groundHeight(x, z), z);
+
+  // Descent stage — a stubby octagonal block to represent the lander base
+  // left behind at the site.
+  const baseGeom = new THREE.CylinderGeometry(1.5, 1.7, 1.2, 8);
+  const baseMat  = new THREE.MeshLambertMaterial({ color: 0x8a8a90 });
+  const base = new THREE.Mesh(baseGeom, baseMat);
+  base.position.y = 0.6;
+  group.add(base);
+  disposables.push({ geometry: baseGeom, material: baseMat });
+
+  // Flag pole + cloth
+  const poleGeom = new THREE.CylinderGeometry(0.06, 0.06, 4.5, 8);
+  const poleMat  = new THREE.MeshLambertMaterial({ color: 0xdadade });
+  const pole = new THREE.Mesh(poleGeom, poleMat);
+  pole.position.set(1.8, 2.25, 0);
+  group.add(pole);
+  disposables.push({ geometry: poleGeom, material: poleMat });
+
+  // Flag cloth — stiff (no wind on the moon) rectangle. Painted with a
+  // CanvasTexture so we avoid needing an extra asset file.
+  const flagCanvas = document.createElement('canvas');
+  flagCanvas.width = 96;
+  flagCanvas.height = 60;
+  const fctx = flagCanvas.getContext('2d');
+  fctx.fillStyle = '#cc2233'; fctx.fillRect(0, 0, 96, 60);
+  fctx.fillStyle = '#ffffff';
+  for (let i = 1; i < 7; i += 2) fctx.fillRect(0, i * (60 / 7), 96, 60 / 7);
+  fctx.fillStyle = '#1a3a8a'; fctx.fillRect(0, 0, 36, 28);
+  fctx.fillStyle = '#ffffff';
+  for (let ry = 0; ry < 4; ry++) for (let rx = 0; rx < 5; rx++) {
+    fctx.fillRect(3 + rx * 7, 3 + ry * 7, 2, 2);
+  }
+  const flagTex = new THREE.CanvasTexture(flagCanvas);
+  flagTex.magFilter = THREE.NearestFilter;
+  const flagMat  = new THREE.MeshBasicMaterial({ map: flagTex, side: THREE.DoubleSide });
+  const flagGeom = new THREE.PlaneGeometry(1.8, 1.1);
+  const flag = new THREE.Mesh(flagGeom, flagMat);
+  flag.position.set(2.7, 3.9, 0);
+  group.add(flag);
+  disposables.push({ geometry: flagGeom, material: flagMat, texture: flagTex });
+
+  // Plaque: small dark block with a pale top strip.
+  const plaqueGeom = new THREE.BoxGeometry(1.4, 0.8, 0.15);
+  const plaqueMat  = new THREE.MeshLambertMaterial({ color: 0x2a2a30 });
+  const plaque = new THREE.Mesh(plaqueGeom, plaqueMat);
+  plaque.position.set(-1.6, 1.3, 0);
+  group.add(plaque);
+  disposables.push({ geometry: plaqueGeom, material: plaqueMat });
+  const stripGeom = new THREE.BoxGeometry(1.35, 0.22, 0.16);
+  const stripMat  = new THREE.MeshLambertMaterial({ color: 0xd0d0d5 });
+  const strip = new THREE.Mesh(stripGeom, stripMat);
+  strip.position.set(-1.6, 1.62, 0);
+  group.add(strip);
+  disposables.push({ geometry: stripGeom, material: stripMat });
+
+  scene.add(group);
+  return {
+    type: 'apollo',
+    object3d: group,
+    used: false,
+    spin: 0,
+    apollo: site,
+    trailMarkers: []
+  };
+}
+
 function pickClosestInteractable() {
   let best = null;
   let bestDist = WALK_INTERACT_RADIUS;
@@ -804,6 +897,9 @@ function pickClosestInteractable() {
 }
 
 function promptFor(it) {
+  if (it.type === 'apollo') {
+    return `PRESS E — ${it.apollo.name}`;
+  }
   const spec = INTERACTABLE_TYPES[it.type];
   if (it.type === 'damaged') {
     if (it.used) return '';  // already repaired, no prompt
@@ -815,8 +911,28 @@ function promptFor(it) {
 }
 
 function performInteraction(it) {
-  const spec = INTERACTABLE_TYPES[it.type];
   let justDone = [];
+
+  // Apollo landmarks aren't in INTERACTABLE_TYPES — they live on the site
+  // record itself (from APOLLO_SITES). Handle them first and bail.
+  if (it.type === 'apollo') {
+    const gain = it.apollo.artifactScore | 0;
+    updateState(s => {
+      s.score += gain;
+      justDone = refreshObjectives();
+    }, 'pickup-apollo');
+    showComms(it.apollo.comms || `+${gain} SCORE — APOLLO ARTIFACT`);
+    it.used = true;
+    // Leave the landmark standing so the player sees it on repeat visits;
+    // just hide its breadcrumb trail.
+    hideTrailMarkers(it);
+    if (justDone.length) {
+      setTimeout(() => showComms(`OBJECTIVE COMPLETE: ${firstObjectiveLabel(justDone[0])}`), 1100);
+    }
+    return;
+  }
+
+  const spec = INTERACTABLE_TYPES[it.type];
 
   switch (it.type) {
     case 'fuel': {
