@@ -37,7 +37,11 @@ export const GameState = {
     x: 0,
     terrainSegmentIndex: -1,
     surfaceNormal: null,
-    fuelAtLanding: STARTING_FUEL // snapshot for the hot-swap achievement
+    fuelAtLanding: STARTING_FUEL, // snapshot for the hot-swap achievement
+    padCenterX: 0,                // world-x of the landed pad's center
+    padWidth: 0,                  // width of the landed pad
+    padKind: 'plain',             // 'beginner' | 'bonus' | 'plain'
+    padMultiplier: 1              // X2/X3/X5 on bonus pads
   },
 
   // ----- Flags (run-local) -----
@@ -138,7 +142,11 @@ export function startNewRun() {
     x: 0,
     terrainSegmentIndex: -1,
     surfaceNormal: null,
-    fuelAtLanding: GameState.fuel.capacity
+    fuelAtLanding: GameState.fuel.capacity,
+    padCenterX: 0,
+    padWidth: 0,
+    padKind: 'plain',
+    padMultiplier: 1
   };
   notify('new-run');
 }

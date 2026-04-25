@@ -20,6 +20,7 @@ import {
   MAIN_COLLIDER_SCALE, SMALL_COLLIDER_SCALE,
   FOOT_COLLIDER_OFFSET_X, FOOT_COLLIDER_OFFSET_Y,
   PAD_MULTIPLIER_WEIGHTS, SCORE_PER_LANDING,
+  BEGINNER_PAD_CENTERS, BEGINNER_PAD_TOLERANCE, MIN_PAD_WIDTH,
   CAMERA_ZOOM_ALTITUDE, CAMERA_ZOOM_FACTOR,
   PERFECT_FUEL_FRAC, PERFECT_VELOCITY_MAX, PERFECT_CENTER_FRAC, PERFECT_ANGLE_MAX,
   ORTHO_NEAR, ORTHO_FAR, MODE
@@ -248,14 +249,29 @@ function buildTerrain() {
       const [prevPx, prevPy] = terrainPoints[i - 1];
       const lx = prevPx - HALF_WIDTH, ly = prevPy - HALF_HEIGHT;
       const slope = Math.abs(wy - ly);
+      const width = wx - lx;
+      const centerX = (lx + wx) / 2;
+      const isFlat = slope < 0.001 && width >= MIN_PAD_WIDTH;
+      // A pad is "beginner" if its center matches one of the curated
+      // BEGINNER_PAD_CENTERS — those get a fuel drum sprite in 2D and
+      // a drum next to the astronaut on disembark instead of a random
+      // multiplier.
+      const isBeginner = isFlat && BEGINNER_PAD_CENTERS.some(
+        c => Math.abs(centerX - c) <= BEGINNER_PAD_TOLERANCE
+      );
       const seg = {
         left:  new THREE.Vector2(lx, ly),
         right: new THREE.Vector2(wx, wy),
-        // Slope ~0 means this is a valid landing pad (matches tblazevic).
         slope,
-        multiplier: 1
+        width,
+        centerX,
+        multiplier: 1,
+        kind: isBeginner ? 'beginner' : (isFlat ? 'plain' : 'slope')
       };
-      if (slope < 0.001) seg.multiplier = rollMultiplier();
+      if (isFlat && !isBeginner) {
+        seg.multiplier = rollMultiplier();
+        if (seg.multiplier > 1) seg.kind = 'bonus';
+      }
       terrainSegments.push(seg);
     }
   }
@@ -266,10 +282,11 @@ function buildTerrain() {
   scene.add(line);
   disposables.push({ geometry: geom, material: mat });
 
-  // Bonus-pad labels: a small X2/X3/X5 sprite floating above each flat pad
-  // whose rolled multiplier is > 1.
+  // Pad adornments: X-multiplier labels on bonus pads, fuel-drum sprites
+  // on beginner pads (advertising that a guaranteed fuel pickup awaits).
   for (const seg of terrainSegments) {
-    if (seg.multiplier > 1) spawnMultiplierLabel(seg);
+    if (seg.kind === 'bonus')    spawnMultiplierLabel(seg);
+    if (seg.kind === 'beginner') spawnFuelDrumLabel(seg);
   }
 }
 
@@ -313,6 +330,54 @@ function spawnMultiplierLabel(seg) {
   const cx = (seg.left.x + seg.right.x) / 2;
   const cy = (seg.left.y + seg.right.y) / 2;
   sprite.position.set(cx, cy + 14, 1);
+  scene.add(sprite);
+  disposables.push({ material: smat, texture: tex });
+}
+
+/**
+ * Draw a pixel-art fuel drum above a beginner pad so the player sees a clear
+ * incentive to aim there. The drum is rendered to a CanvasTexture so we
+ * don't need another PNG asset, and pushed onto a THREE.Sprite so it stays
+ * camera-facing (no surprise when we tilt the ortho camera).
+ */
+function spawnFuelDrumLabel(seg) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 96;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 64, 96);
+
+  // Drum body: yellow rectangle, slightly rounded
+  ctx.fillStyle = '#ffb020';
+  ctx.fillRect(14, 14, 36, 70);
+  // Top + bottom caps
+  ctx.fillStyle = '#8a8a90';
+  ctx.fillRect(12, 10, 40, 8);
+  ctx.fillRect(12, 80, 40, 8);
+  // Hazard bands
+  ctx.fillStyle = '#2a2a30';
+  ctx.fillRect(14, 30, 36, 5);
+  ctx.fillRect(14, 62, 36, 5);
+  // "F" stencil
+  ctx.fillStyle = '#2a2a30';
+  ctx.font = 'bold 20px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('F', 32, 49);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.LinearFilter;
+  const smat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+  const sprite = new THREE.Sprite(smat);
+  // Size the drum ~40% of LANDER_SCALE so the player can see it from altitude
+  // without it swallowing the pad visually.
+  const drumW = LANDER_SCALE * 0.25;
+  const drumH = drumW * 1.5;
+  sprite.scale.set(drumW, drumH, 1);
+  const cx = (seg.left.x + seg.right.x) / 2;
+  const cy = (seg.left.y + seg.right.y) / 2;
+  sprite.position.set(cx, cy + drumH * 0.55, 1);
   scene.add(sprite);
   disposables.push({ material: smat, texture: tex });
 }
@@ -481,6 +546,12 @@ function resolveLanding(segment, segmentIndex) {
     s.lastLanding.terrainSegmentIndex = segmentIndex;
     s.lastLanding.surfaceNormal = new THREE.Vector2(0, 1);
     s.lastLanding.fuelAtLanding = fuelAtLanding;
+    // Hand the pad's metadata to walk mode so it can seed the scene with
+    // the matching loot (fuel drum on beginner pad, sample on bonus pad).
+    s.lastLanding.padCenterX = (segment.left.x + segment.right.x) / 2;
+    s.lastLanding.padWidth   = segment.right.x - segment.left.x;
+    s.lastLanding.padKind    = segment.kind || 'plain';
+    s.lastLanding.padMultiplier = multiplier;
   }, 'landed');
 
   // Achievement triggers.

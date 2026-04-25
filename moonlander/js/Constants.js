@@ -12,14 +12,12 @@ export const HALF_WIDTH  = GAME_WIDTH  / 2;
 export const HALF_HEIGHT = GAME_HEIGHT / 2;
 
 // ---------- Lander physics (tblazevic values, unchanged) ----------
-// LANDER_SCALE: 8 → 16 (200% bigger) → 24 (now ~3× the original) so the
-// craft reads clearly on phone viewports after the letterbox fix. Every
-// dependent value (collider sizes, foot offsets, particle spawn offsets,
-// parked-lander sprite) is expressed as a multiple of LANDER_SCALE, so the
-// scale change propagates automatically — but we also tighten the foot
-// offset / edge-margin fractions below so the wider craft still fits the
-// terrain's narrowest 15-unit pads.
-export const LANDER_SCALE          = 24;
+// LANDER_SCALE: 8 → 16 → 24 → 32 over successive playtests. Every dependent
+// value (colliders, foot offsets, particle spawn, parked-lander sprite) is
+// expressed as a multiple of LANDER_SCALE so the scale change propagates,
+// and the foot-offset / edge-margin fractions below are re-tightened with
+// each bump so the larger craft still fits the 15-unit narrowest pads.
+export const LANDER_SCALE          = 32;
 export const GRAVITY               = 1.62;          // Moon gravity m/s²
 export const THRUSTER_ACCEL_MAX    = 4;
 export const THRUSTER_JERK         = 4;             // Jerk = d(accel)/dt — gives smooth lift-off feel
@@ -36,13 +34,14 @@ export const HORIZONTAL_DRAG_COEF  = 0.04;
 // pads with room to spare.
 export const MAIN_COLLIDER_SCALE   = LANDER_SCALE / 2;
 export const SMALL_COLLIDER_SCALE  = LANDER_SCALE / 8;
-export const FOOT_COLLIDER_OFFSET_X = LANDER_SCALE * 0.20;  // feet closer to center
+export const FOOT_COLLIDER_OFFSET_X = LANDER_SCALE * 0.15;  // feet closer to center
 export const FOOT_COLLIDER_OFFSET_Y = -LANDER_SCALE * 0.45; // below center
 
 // If the lander x is within this fraction of the lander scale of either
 // landing-pad edge, the landing is rejected as "TOO CLOSE TO EDGE".
-// Small margin so the wider sprite still lands comfortably.
-export const LANDING_EDGE_MARGIN_FRAC = 0.08;
+// At scale 32: feet span 9.6 + edge margin 3.84 = 13.44 units — fits the
+// 15-unit narrowest pad with 1.5 units of slack on each side.
+export const LANDING_EDGE_MARGIN_FRAC = 0.06;
 
 // ---------- Fuel / scoring ----------
 export const STARTING_FUEL          = 1000;
@@ -189,21 +188,36 @@ export const INTERACTABLE_TYPES = Object.freeze({
   }
 });
 
-// Landing-site → spawn list. Keys are terrain segment indices; values are
-// [type, localX, localZ] tuples placed relative to the walk scene origin
-// (where the parked lander sits). Unknown landing sites fall back to
-// DEFAULT_LOOT so every walk scene has something to do.
-export const LANDING_SITE_LOOT = {
-  5:  [['fuel',   10, 10], ['sample', 15,   0]],
-  12: [['sample',-15, 10], ['sample',  0, -20], ['repair', 20,  5]],
-  18: [['repair',  5,  5], ['sample', 20,  20], ['sample',-10, 15], ['damaged', 0, -15]],
-  25: [['fuel', -10,-10], ['fuel',   10, -10], ['sample',  0, 18]],
-  33: [['damaged', 0, 20], ['repair', 12,  5], ['repair',-12,  5]]
-};
-export const DEFAULT_LOOT = [
-  ['fuel',   20, 10],
-  ['sample',-15, 12],
-  ['repair', 10,-14]
+// Beginner pads — wide flat terrain segments advertised in 2D lander mode
+// with a fuel-drum sprite floating above them. Identified by the pad's
+// center-x in WORLD coordinates (after the TerrainData shift by HALF_WIDTH),
+// so editing the terrain polyline doesn't require renumbering anywhere.
+// A small tolerance handles sub-unit rounding. These pads roll multiplier=1
+// (no bonus label) but guarantee a fuel drum appears next to the astronaut
+// on disembark as a tangible reward for a clean landing.
+export const BEGINNER_PAD_CENTERS = [
+  -370,   // left bay:    15,12 → 45,12
+  -215,   // middle mesa: 170,100 → 200,100
+   125    // right plateau: 510,80 → 540,80
+];
+export const BEGINNER_PAD_TOLERANCE = 2;  // world units
+
+// Minimum pad width (world units) for a flat segment to count as a real
+// landing pad. Tiny sub-10-unit flats in the polyline (visual detail, not
+// landable) are filtered out so they don't get multiplier labels.
+export const MIN_PAD_WIDTH = 10;
+
+// Apollo landing sites placed in walk mode at fixed positions. For now
+// only Apollo 11 — follow-up PR will add 12/14/15/16/17 along with the
+// damage + repair-part mechanic that makes them structurally meaningful.
+export const APOLLO_SITES = [
+  {
+    id: 'apollo-11',
+    name: 'APOLLO 11 (TRANQUILITY BASE)',
+    walkPos: [110, -70],           // [x, z] inside the walk-mode radius
+    artifactScore: 300,
+    comms: 'APOLLO 11 ARTIFACT COLLECTED — TRANQUILITY BASE'
+  }
 ];
 
 // ---------- Mission objectives (Phase 4) ----------
