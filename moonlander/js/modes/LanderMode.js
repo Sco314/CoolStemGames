@@ -23,6 +23,7 @@ import {
   BEGINNER_PAD_CENTERS, BEGINNER_PAD_TOLERANCE, MIN_PAD_WIDTH,
   CAMERA_ZOOM_ALTITUDE, CAMERA_ZOOM_FACTOR,
   PERFECT_FUEL_FRAC, PERFECT_VELOCITY_MAX, PERFECT_CENTER_FRAC, PERFECT_ANGLE_MAX,
+  LANDER_CRASH_DAMAGE,
   ORTHO_NEAR, ORTHO_FAR, MODE
 } from '../Constants.js';
 import { GameState, update as updateState, notify, unlockAchievement } from '../GameState.js';
@@ -573,9 +574,21 @@ function resolveCrash(reason) {
   // Hide the wreck so the explosion reads as "the lander is gone". A fresh
   // lander mesh is built when the next life enter()s.
   lander.visible = false;
-  updateState(s => { s.hasLanded = false; }, 'crashed');
-  setCenterMessage(reason);
-  onCrashedCallback({ reason });
+  // Shave the lander's HP. Hitting zero flips wrecked → game-over (Main.js
+  // handleCrashed also game-overs on fuel-empty; both conditions end the
+  // run). Repair parts collected at Apollo sites and stowed at the lander
+  // restore HP up to maxHp.
+  let wrecked = false;
+  updateState(s => {
+    s.hasLanded = false;
+    s.lander.hp = Math.max(0, (s.lander.hp ?? s.lander.maxHp) - LANDER_CRASH_DAMAGE);
+    if (s.lander.hp <= 0) { s.lander.wrecked = true; wrecked = true; }
+  }, 'crashed');
+  const hpSuffix = wrecked
+    ? '\nLANDER DESTROYED'
+    : `\nLANDER HP: ${GameState.lander.hp}/${GameState.lander.maxHp}`;
+  setCenterMessage(reason + hpSuffix);
+  onCrashedCallback({ reason, wrecked });
 }
 
 function updateCameraZoom(altitude) {

@@ -14,7 +14,8 @@
 //   - startNewRun() / commitRunToHighScores() / unlockAchievement()
 
 import {
-  STARTING_FUEL, MODE, OBJECTIVES, ACHIEVEMENTS, HIGH_SCORE_SLOTS
+  STARTING_FUEL, MODE, OBJECTIVES, ACHIEVEMENTS, HIGH_SCORE_SLOTS,
+  LANDER_MAX_HP
 } from './Constants.js';
 
 export const GameState = {
@@ -25,6 +26,10 @@ export const GameState = {
   // ----- Resources (run-local) -----
   fuel:     { current: STARTING_FUEL, capacity: STARTING_FUEL },
   supplies: { repairKits: 0, scienceSamples: 0 },
+  lander:   { hp: LANDER_MAX_HP, maxHp: LANDER_MAX_HP, wrecked: false },
+  // Items the astronaut is carrying in walk mode but hasn't deposited at
+  // the lander yet. Each entry: { type, amount }. Cleared on stow.
+  carrying: [],
 
   // ----- Scoring (run-local) -----
   score: 0,
@@ -125,6 +130,8 @@ export function startNewRun() {
   GameState.fuel.current = GameState.fuel.capacity;
   GameState.supplies.repairKits = 0;
   GameState.supplies.scienceSamples = 0;
+  GameState.lander = { hp: LANDER_MAX_HP, maxHp: LANDER_MAX_HP, wrecked: false };
+  GameState.carrying = [];
   GameState.score = 0;
   GameState.timeElapsed = 0;
   GameState.landingsCompleted = 0;
