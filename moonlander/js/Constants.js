@@ -86,9 +86,13 @@ export const TRANSITION_WIND_VOL   = 0.55;
 
 // Scripted disembark (lander → walk) and embark (walk → lander) animations
 // that bracket the camera transition. Input is locked for the duration.
-export const DISEMBARK_DURATION_S  = 1.5;
-export const DISEMBARK_STEP_UNITS  = 7.0;   // how far the astronaut walks out
-export const EMBARK_DURATION_S     = 1.2;
+// DISEMBARK_STEP_UNITS bumped 7→16 because the larger parked-lander sprite
+// at LANDER_SCALE 32 was filling the frame on the first walk-mode frame —
+// walking the astronaut out further before handing over control gets the
+// player past the silhouette.
+export const DISEMBARK_DURATION_S  = 1.8;
+export const DISEMBARK_STEP_UNITS  = 16.0;
+export const EMBARK_DURATION_S     = 1.4;
 
 // ---------- Walk mode ----------
 export const WALK_SPEED              = 18;   // units per second

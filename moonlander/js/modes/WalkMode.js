@@ -67,7 +67,21 @@ let scripted = null;
 let onMouseMove = null;
 let onPointerLockChange = null;
 let onCanvasClick = null;
+let onCanvasTouchStart = null;
+let onCanvasTouchMove = null;
+let onCanvasTouchEnd = null;
 let unsubQuality = null;
+
+// Mobile touch state — a one-finger drag rotates astronaut yaw + camera
+// pitch (replaces unreachable pointer-lock); a quick tap with little
+// movement triggers the closest in-range interactable.
+let touchActiveId  = null;
+let touchLastX = 0, touchLastY = 0;
+let touchStartX = 0, touchStartY = 0;
+let touchStartTime = 0;
+const TOUCH_TAP_MAX_PIXELS = 16;
+const TOUCH_TAP_MAX_MS     = 300;
+const TOUCH_LOOK_GAIN      = 1.7;   // touch is coarser than mouse — bump sens
 
 export const WalkMode = {
   enter(context, callbacks = {}) {
@@ -202,9 +216,8 @@ export const WalkMode = {
     const isMoving = moveSign !== 0 || strafeSign !== 0;
     updateWalkAnim(dt, isMoving);
 
-    // --- footprint trail ---
+    // --- footprint trail (permanent, no fade) ---
     if (isMoving) dropFootprintIfMoved();
-    updateFootprints(dt);
 
     // --- strict chase camera around the astronaut's chest ---
     updateChaseCamera();
@@ -315,18 +328,86 @@ function bindMouse() {
     pointerLocked = document.pointerLockElement === canvasEl;
   };
   onCanvasClick = () => {
+    // Skip pointer-lock requests on touch devices — they get screen-swipe
+    // controls instead, and a synthetic click after touchend would otherwise
+    // trip the lock dialog.
+    if (touchActiveId !== null) return;
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
     if (!pointerLocked) canvasEl.requestPointerLock?.();
   };
+
+  // ----- Mobile touch handlers (canvas only) -----
+  // Drag → camera/astronaut yaw + pitch. Tap → tap-to-interact.
+  // We ignore touches whose target isn't the canvas itself, so the joystick
+  // and the corner buttons keep their own behavior.
+  onCanvasTouchStart = (e) => {
+    if (e.target !== canvasEl) return;
+    if (touchActiveId !== null) return;
+    const t = e.changedTouches[0];
+    touchActiveId  = t.identifier;
+    touchLastX = touchStartX = t.clientX;
+    touchLastY = touchStartY = t.clientY;
+    touchStartTime = performance.now();
+  };
+  onCanvasTouchMove = (e) => {
+    if (touchActiveId === null || scripted) return;
+    let t = null;
+    for (const tt of e.changedTouches) {
+      if (tt.identifier === touchActiveId) { t = tt; break; }
+    }
+    if (!t) return;
+    const dx = t.clientX - touchLastX;
+    const dy = t.clientY - touchLastY;
+    touchLastX = t.clientX;
+    touchLastY = t.clientY;
+    const pitchSign = GameState.settings?.invertY ? -1 : 1;
+    yawRad   -= dx * WALK_MOUSE_SENSITIVITY * TOUCH_LOOK_GAIN;
+    pitchRad += dy * WALK_MOUSE_SENSITIVITY * TOUCH_LOOK_GAIN * pitchSign;
+    if (pitchRad < WALK_PITCH_MIN) pitchRad = WALK_PITCH_MIN;
+    if (pitchRad > WALK_PITCH_MAX) pitchRad = WALK_PITCH_MAX;
+    if (e.cancelable) e.preventDefault();   // suppress page scroll while looking
+  };
+  onCanvasTouchEnd = (e) => {
+    if (touchActiveId === null) return;
+    let t = null;
+    for (const tt of e.changedTouches) {
+      if (tt.identifier === touchActiveId) { t = tt; break; }
+    }
+    if (!t) return;
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    const moved = Math.hypot(dx, dy);
+    const elapsed = performance.now() - touchStartTime;
+    touchActiveId = null;
+    // Tap = short + still: trigger the closest in-range interactable.
+    if (moved < TOUCH_TAP_MAX_PIXELS && elapsed < TOUCH_TAP_MAX_MS && !scripted) {
+      const closest = pickClosestInteractable();
+      if (closest) performInteraction(closest);
+    }
+  };
+
   window.addEventListener('mousemove', onMouseMove);
   document.addEventListener('pointerlockchange', onPointerLockChange);
   canvasEl.addEventListener('click', onCanvasClick);
+  canvasEl.addEventListener('touchstart',  onCanvasTouchStart, { passive: true });
+  canvasEl.addEventListener('touchmove',   onCanvasTouchMove,  { passive: false });
+  canvasEl.addEventListener('touchend',    onCanvasTouchEnd);
+  canvasEl.addEventListener('touchcancel', onCanvasTouchEnd);
 }
 
 function unbindMouse() {
   if (onMouseMove) window.removeEventListener('mousemove', onMouseMove);
   if (onPointerLockChange) document.removeEventListener('pointerlockchange', onPointerLockChange);
   if (onCanvasClick && canvasEl) canvasEl.removeEventListener('click', onCanvasClick);
+  if (canvasEl) {
+    if (onCanvasTouchStart)  canvasEl.removeEventListener('touchstart',  onCanvasTouchStart);
+    if (onCanvasTouchMove)   canvasEl.removeEventListener('touchmove',   onCanvasTouchMove);
+    if (onCanvasTouchEnd)    canvasEl.removeEventListener('touchend',    onCanvasTouchEnd);
+    if (onCanvasTouchEnd)    canvasEl.removeEventListener('touchcancel', onCanvasTouchEnd);
+  }
   onMouseMove = onPointerLockChange = onCanvasClick = null;
+  onCanvasTouchStart = onCanvasTouchMove = onCanvasTouchEnd = null;
+  touchActiveId = null;
 }
 
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -392,15 +473,16 @@ function buildGround() {
 
 // ---------- Boot-print trail ----------
 //
-// A small pooled set of dark prints laid flat on the surface every time the
-// astronaut walks ~1.6 units. Alternates left/right offset to read as a
-// proper boot trail. Each print fades over FOOTPRINT_LIFETIME seconds; the
-// pool overwrites oldest-first so the trail length is bounded.
+// A pool of dark prints laid flat on the surface every time the astronaut
+// walks ~1.6 units. Alternates left/right offset to read as a proper boot
+// trail. Per playtest feedback (no wind / erosion on the moon), prints
+// stay visible permanently — when the pool wraps, the oldest print is
+// repositioned rather than fading. Pool sized so the trail covers nearly
+// the full playable area before wrapping.
 
-const FOOTPRINT_POOL_SIZE = 32;
+const FOOTPRINT_POOL_SIZE = 200;
 const FOOTPRINT_INTERVAL  = 1.6;   // world units between prints
-const FOOTPRINT_LIFETIME  = 30;    // seconds before fully faded
-const FOOTPRINT_BASE_OPAC = 0.55;
+const FOOTPRINT_OPACITY   = 0.55;
 
 function buildFootprintPool() {
   const geom = new THREE.PlaneGeometry(0.55, 0.95);
@@ -418,7 +500,7 @@ function buildFootprintPool() {
     const mesh = new THREE.Mesh(geom, mat);
     mesh.visible = false;
     scene.add(mesh);
-    footprints.push({ mesh, mat, age: FOOTPRINT_LIFETIME });
+    footprints.push({ mesh, mat });
     disposables.push({ material: mat });
   }
   footprintCursor = 0;
@@ -446,23 +528,10 @@ function dropFootprintIfMoved() {
 
   fp.mesh.position.set(px, groundHeight(px, pz) + 0.06, pz);
   fp.mesh.rotation.y = astronaut.rotation.y;
-  fp.mat.opacity = FOOTPRINT_BASE_OPAC;
+  fp.mat.opacity = FOOTPRINT_OPACITY;
   fp.mesh.visible = true;
-  fp.age = 0;
 
   lastFootprintPos.copy(astronaut.position);
-}
-
-function updateFootprints(dt) {
-  for (const fp of footprints) {
-    if (!fp.mesh.visible) continue;
-    fp.age += dt;
-    if (fp.age >= FOOTPRINT_LIFETIME) {
-      fp.mesh.visible = false;
-      continue;
-    }
-    fp.mat.opacity = FOOTPRINT_BASE_OPAC * (1 - fp.age / FOOTPRINT_LIFETIME);
-  }
 }
 
 function buildCraters() {
@@ -685,32 +754,43 @@ function buildTrailMarkers(start, end, type) {
   const dist = Math.hypot(dx, dz);
   if (dist < 4) return [];                  // too close to need a trail
 
-  // ~one marker every 3 world units, capped between 4 and 9 markers per trail.
-  const count = Math.max(4, Math.min(9, Math.round(dist / 3)));
-  const ringGeom = new THREE.RingGeometry(0.55, 0.95, 18);
+  // Denser + bigger + brighter than the previous version so players can
+  // actually see them from across the playable radius. ~1 marker every 2
+  // world units, capped 6–18.
+  const count = Math.max(6, Math.min(18, Math.round(dist / 2)));
+  const ringGeom = new THREE.RingGeometry(0.9, 1.6, 24);
   ringGeom.rotateX(-Math.PI / 2);
   const color = INTERACTABLE_TYPES[type]?.color ?? 0xffee88;
   const ringMat = new THREE.MeshBasicMaterial({
-    color, transparent: true, opacity: 0.55,
+    color, transparent: true, opacity: 0.85,
     side: THREE.DoubleSide, depthWrite: false
   });
-  // Geometry + material are shared by every ring on this trail and disposed
-  // together when WalkMode.exit() walks the disposables list.
   disposables.push({ geometry: ringGeom, material: ringMat });
 
   const markers = [];
-  // Place markers between (not at) the endpoints — start at fraction 1/(count+1),
-  // end at count/(count+1). That keeps the trail clear of the lander base
-  // and the interactable itself.
   for (let i = 1; i <= count; i++) {
     const t = i / (count + 1);
     const mx = start.x + dx * t;
     const mz = start.z + dz * t;
     const ring = new THREE.Mesh(ringGeom, ringMat);
-    ring.position.set(mx, groundHeight(mx, mz) + 0.05, mz);
+    ring.position.set(mx, groundHeight(mx, mz) + 0.08, mz);
     scene.add(ring);
     markers.push(ring);
   }
+
+  // Beacon pillar at the destination — a thin tall bar of the same color
+  // visible from far away. Hidden along with the trail when the
+  // interactable is consumed.
+  const beaconGeom = new THREE.CylinderGeometry(0.18, 0.18, 8, 8);
+  const beaconMat  = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.55, depthWrite: false
+  });
+  const beacon = new THREE.Mesh(beaconGeom, beaconMat);
+  beacon.position.set(end.x, groundHeight(end.x, end.z) + 4, end.z);
+  scene.add(beacon);
+  markers.push(beacon);
+  disposables.push({ geometry: beaconGeom, material: beaconMat });
+
   return markers;
 }
 
