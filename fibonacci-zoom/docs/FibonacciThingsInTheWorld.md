@@ -4,6 +4,8 @@ This list collects things commonly associated with **Fibonacci numbers**, the **
 
 Accuracy note: Fibonacci numbers show up most clearly in **growth, packing, spacing, recursion, and spiral arrangements**. Some art, architecture, logo, and photography examples are better described as **golden-ratio associations** or **proportional design examples** rather than proven intentional Fibonacci designs.
 
+Image URL note: The image URLs at the bottom of this file use stable Wikimedia Commons media-search/source URLs. They are intended as classroom-safe starting points for selecting final images. Before using an image in production, verify the exact image, license, and attribution requirements.
+
 ---
 
 ## Strong Natural Examples
@@ -347,3 +349,289 @@ Best category label: **Educational math activities.**
 Fibonacci numbers show up most clearly when something grows by adding on to what came before, or when nature packs objects efficiently around a center. That is why sunflowers, pinecones, pineapples, leaves, shells, and some flower petals are such useful examples.
 
 In art, architecture, logos, photography, and design, Fibonacci is often connected to the golden ratio and golden spiral. These examples are useful, but they should be treated as design associations unless there is evidence the creator intentionally used the Fibonacci sequence.
+
+---
+
+# Image Source URLs for the Items Above
+
+These URLs are intended for selecting final school-appropriate images. They use Wikimedia Commons MediaSearch/source pages because Commons is comparatively stable and provides license/attribution details. For final production use, choose the exact image file from the result page and record its license and attribution.
+
+## Strong Natural Examples — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Sunflowers | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=sunflower%20head%20fibonacci%20spirals |
+| Pinecones | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=pinecone%20spiral%20phyllotaxis |
+| Pineapples | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=pineapple%20spiral%20pattern |
+| Romanesco broccoli | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Romanesco%20broccoli%20fractal%20spiral |
+| Flower petals | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=flower%20petals%20fibonacci%20numbers |
+| Daisies | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=daisy%20flower%20fibonacci%20petals |
+| Lilies | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=lily%20flower%20three%20petals |
+| Buttercups | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=buttercup%20flower%20five%20petals |
+| Chicory flowers | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=chicory%20flower%20petals |
+| Black-eyed Susans | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=black%20eyed%20susan%20flower%20seed%20head |
+| Cacti | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=cactus%20spiral%20phyllotaxis |
+| Succulents | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=succulent%20spiral%20rosette |
+| Aloe plants | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=aloe%20spiral%20rosette |
+| Artichokes | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=artichoke%20spiral%20bracts |
+| Fern growth | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=fern%20fiddlehead%20spiral |
+| Tree branching | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=tree%20branching%20pattern |
+| Leaf arrangement around stems | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=phyllotaxis%20leaf%20arrangement%20diagram |
+| Golden angle in plants | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20angle%20phyllotaxis%20diagram |
+
+## Shells, Spirals, and Curves in Nature — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Nautilus shells | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=nautilus%20shell%20logarithmic%20spiral |
+| Sea shells | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=sea%20shell%20logarithmic%20spiral |
+| Snail shells | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=snail%20shell%20spiral |
+| Ram horns | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=ram%20horns%20spiral |
+| Goat horns | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=goat%20horns%20spiral |
+| Elephant tusk curves | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=elephant%20tusk%20curve |
+| Ocean waves | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=curling%20ocean%20wave%20spiral |
+| Hurricane spirals | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=hurricane%20spiral%20satellite%20image |
+| Spiral galaxies | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=spiral%20galaxy |
+
+## Animals and Biology — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Rabbit population problem | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20rabbit%20population%20diagram |
+| Honeybee family trees | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=honeybee%20genealogy%20fibonacci%20diagram |
+| Human body proportions | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=human%20proportions%20golden%20ratio%20diagram |
+| DNA helix proportions | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=DNA%20double%20helix%20diagram |
+| Animal coat patterns | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=animal%20coat%20pattern%20zebra%20giraffe |
+
+## Classical Greek Architecture — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| The Parthenon in Athens | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Parthenon%20Athens%20facade |
+| Greek temple facades | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Greek%20temple%20facade%20columns |
+| Doric order | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Doric%20order%20column%20diagram |
+| Ionic order | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Ionic%20order%20column%20volute%20diagram |
+| Corinthian order | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Corinthian%20order%20column%20capital |
+| Column spacing | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Greek%20columns%20colonnade%20spacing |
+| Pediment geometry | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Greek%20temple%20pediment%20geometry |
+| Greek amphitheaters | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=ancient%20Greek%20amphitheatre |
+| Polykleitos' Canon | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Polykleitos%20Doryphoros%20head%20detail |
+| Euclid and Greek geometry | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Euclid%20Elements%20geometry%20diagram |
+
+## Renaissance Art — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Leonardo da Vinci — Mona Lisa | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Mona%20Lisa%20Leonardo%20da%20Vinci |
+| Leonardo da Vinci — The Last Supper | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Leonardo%20da%20Vinci%20Last%20Supper |
+| Leonardo da Vinci — Vitruvian Man | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Vitruvian%20Man%20proportion%20diagram |
+| Luca Pacioli — De Divina Proportione | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=De%20Divina%20Proportione%20Leonardo%20polyhedra |
+| Albrecht Durer — human proportion studies | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Albrecht%20Durer%20human%20proportion%20diagram |
+| Raphael — The School of Athens | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Raphael%20School%20of%20Athens |
+| Botticelli — The Birth of Venus | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Botticelli%20Birth%20of%20Venus%20face%20detail |
+| Michelangelo — Creation of Adam | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Michelangelo%20Creation%20of%20Adam%20hands |
+| Piero della Francesca — perspective and geometry | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Piero%20della%20Francesca%20perspective%20geometry |
+| Fra Luca Bartolomeo de Pacioli and Leonardo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Luca%20Pacioli%20portrait%20mathematics |
+
+## Other Art and Architecture Associations — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Notre-Dame Cathedral | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Notre%20Dame%20Cathedral%20facade |
+| Pyramids of Giza | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Pyramids%20of%20Giza |
+| Islamic geometric art | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Islamic%20geometric%20pattern |
+| Mandala designs | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=mandala%20geometric%20pattern |
+| Mosaics | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=geometric%20mosaic%20pattern |
+| Modern architecture | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=modern%20architecture%20geometric%20facade |
+
+## Modern Logo Design and Branding — Image URLs
+
+Trademark note: Logo images are usually trademarked. Use them only for commentary, comparison, or classroom discussion where appropriate, and verify local policy before publishing them in an app.
+
+| Item | Image source URL |
+|---|---|
+| Apple logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Apple%20logo%20svg |
+| Twitter bird / old Twitter logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Twitter%20bird%20logo%20svg |
+| Pepsi globe logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Pepsi%20logo%20svg |
+| National Geographic rectangle | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=National%20Geographic%20logo%20yellow%20rectangle |
+| Toyota logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Toyota%20logo%20svg |
+| Mastercard logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Mastercard%20logo%20svg |
+| BP Helios logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=BP%20Helios%20logo |
+| Google “G” logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Google%20G%20logo%20svg |
+| Spotify logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Spotify%20logo%20svg |
+| Shell logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Shell%20logo%20svg |
+| Mercedes-Benz logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Mercedes%20Benz%20logo%20svg |
+| Target logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Target%20logo%20svg |
+| NBC peacock | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=NBC%20peacock%20logo%20svg |
+| Adidas trefoil / three-stripe marks | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Adidas%20trefoil%20logo%20svg |
+| Mitsubishi logo | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Mitsubishi%20logo%20svg |
+
+## Photography and Visual Composition — Image URLs
+
+Copyright note: Some famous photographs are copyrighted. Use public-domain alternatives when needed, especially for production web use.
+
+| Item | Image source URL |
+|---|---|
+| Henri Cartier-Bresson — street photography | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=street%20photography%20geometry%20composition |
+| Henri Cartier-Bresson, Hyeres, France, 1932 | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=cyclist%20staircase%20composition%20photograph |
+| Ansel Adams — landscape photography | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Ansel%20Adams%20landscape%20public%20domain |
+| Ansel Adams, The Tetons and the Snake River | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Ansel%20Adams%20Tetons%20Snake%20River |
+| Dorothea Lange, Migrant Mother | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Dorothea%20Lange%20Migrant%20Mother |
+| Steve McCurry, Afghan Girl | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=public%20domain%20portrait%20composition%20eyes |
+| Spiral staircase photography | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=spiral%20staircase%20photograph |
+| Sunflower close-up photos | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=sunflower%20close%20up%20fibonacci%20spirals |
+| Nautilus shell photos | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=nautilus%20shell%20close%20up%20spiral |
+| Aerial hurricane photos | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=hurricane%20satellite%20spiral |
+| Galaxy photographs | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=spiral%20galaxy%20photograph |
+| Roads, rivers, and paths | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=winding%20river%20aerial%20photograph |
+| Portrait eye placement | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=portrait%20rule%20of%20thirds%20composition%20diagram |
+| Sports photography | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=sports%20motion%20arc%20photography |
+| Architecture photography | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=architecture%20photography%20columns%20arches%20geometry |
+
+## Poetry and Writing — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Fibonacci poem / Fib poem | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20poem%20syllables |
+| Six-line Fib poem | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=six%20line%20Fibonacci%20poem |
+| Long Fibonacci poem | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20poem%201%201%202%203%205%208%2013%2021 |
+| Reverse Fibonacci poem | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=reverse%20Fibonacci%20poem |
+| Fibonacci word-count poem | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20word%20count%20poem |
+| Fibonacci stanza structure | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20stanza%20poem%20structure |
+| Fibonacci storytelling | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=story%20structure%20golden%20ratio%20diagram |
+| The Fib as a modern micro-poetry form | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fib%20poem%20micro%20poetry |
+| Haiku comparison | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=haiku%205%207%205%20poem%20structure |
+| Concrete poetry | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=spiral%20concrete%20poem |
+
+## Music and Sound — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Tool — “Lateralus” | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Lateralus%20Fibonacci%20syllables%20diagram |
+| Bela Bartok | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Bela%20Bartok%20golden%20section%20music |
+| Claude Debussy | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Claude%20Debussy%20golden%20ratio%20music |
+| Rhythm patterns | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=rhythm%20pattern%201%201%202%203%205%208 |
+| Phrase lengths | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=music%20phrase%20length%20diagram |
+| Build-ups and drops | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=music%20waveform%20build%20up%20diagram |
+| Fibonacci scale exercises | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20music%20scale%20exercise |
+
+## Math and Number Patterns — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Fibonacci sequence | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20sequence%20diagram |
+| Golden ratio | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20ratio%20diagram |
+| Golden spiral | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20spiral%20Fibonacci%20squares |
+| Logarithmic spirals | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=logarithmic%20spiral%20diagram |
+| Fractals | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=fractal%20image |
+| Pascal’s Triangle | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Pascal%20triangle%20Fibonacci%20diagonals |
+| Recursive patterns | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=recursion%20Fibonacci%20diagram |
+| Lucas numbers | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Lucas%20numbers%20sequence%20diagram |
+| Fibonacci primes | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20prime%20numbers |
+| Modulo patterns | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20modulo%20pattern |
+| Pisano periods | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Pisano%20period%20Fibonacci%20modulo |
+| Continued fractions | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20ratio%20continued%20fraction |
+| Zeckendorf representation | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Zeckendorf%20theorem%20Fibonacci%20representation |
+
+## Computer Science and Algorithms — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Recursion examples | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20recursion%20tree |
+| Dynamic programming | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20dynamic%20programming%20table |
+| Memoization | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20memoization%20diagram |
+| Iterative algorithms | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=iterative%20Fibonacci%20algorithm%20flowchart |
+| Big-O notation | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20recursion%20time%20complexity%20diagram |
+| Fibonacci heaps | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20heap%20data%20structure%20diagram |
+| Fibonacci search | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20search%20algorithm%20diagram |
+| Golden-section search | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20section%20search%20diagram |
+| Euclidean algorithm worst case | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Euclidean%20algorithm%20Fibonacci%20worst%20case |
+| Fibonacci coding | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20coding%20representation |
+| Fibonacci word | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20word%20sequence |
+| Fibonacci LFSR | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20LFSR%20diagram |
+| Procedural generation | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20angle%20procedural%20generation%20points |
+| Computer graphics | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20sphere%20points |
+| Game balancing | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=game%20progression%20curve%20Fibonacci |
+
+## Tiling Patterns and Geometry — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Fibonacci squares | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20squares%20diagram |
+| Golden rectangle | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20rectangle%20diagram |
+| Fibonacci tiling | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20tiling%20squares |
+| Spiral mosaics | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20spiral%20mosaic |
+| Fibonacci word tiling | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20word%20tiling |
+| Penrose tilings | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Penrose%20tiling |
+| Quasicrystals | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=quasicrystal%20pattern%20golden%20ratio |
+| Pentagons and pentagrams | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=pentagram%20golden%20ratio%20diagram |
+| Decagons | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=decagon%20golden%20ratio%20diagram |
+| Golden triangles | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20triangle%20geometry |
+| Logarithmic spiral drawings | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=logarithmic%20spiral%20drawing |
+| Tessellations | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=geometric%20tessellation%20pattern |
+
+## Product Design, UI, and Layout — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Graphic design layouts | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20ratio%20graphic%20design%20layout |
+| Web design | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20ratio%20web%20design%20layout |
+| Typography | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=typography%20scale%20Fibonacci |
+| Poster design | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20ratio%20poster%20layout |
+| Magazine layouts | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=magazine%20layout%20grid%20golden%20ratio |
+| Book design | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=book%20page%20proportions%20golden%20ratio |
+| App interfaces | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=app%20interface%20layout%20grid |
+| Product proportions | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20ratio%20product%20design |
+| Data visualization | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=data%20visualization%20spacing%20annotation |
+
+## Finance and Trading — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Fibonacci retracement levels | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20retracement%20chart |
+| Fibonacci extensions | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20extension%20chart |
+| Technical analysis | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=technical%20analysis%20Fibonacci%20chart |
+
+## Games, Puzzles, and Interactive Learning — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Number sequence puzzles | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20number%20sequence%20puzzle |
+| Spiral drawing challenges | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=draw%20Fibonacci%20spiral%20squares |
+| Sunflower counting activity | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=sunflower%20spiral%20counting%20Fibonacci |
+| Pinecone counting activity | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=pinecone%20spiral%20counting |
+| Golden rectangle construction | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20rectangle%20construction%20compass |
+| Pascal’s Triangle diagonal hunt | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Pascal%20triangle%20Fibonacci%20diagonals |
+| Rabbit reproduction simulation | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20rabbits%20diagram |
+| Honeybee ancestry chart | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=honeybee%20ancestry%20Fibonacci%20chart |
+| Logo analysis activity | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20ratio%20logo%20analysis%20diagram |
+| Photo composition activity | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20spiral%20photography%20overlay |
+| Nature scavenger hunt | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=nature%20scavenger%20hunt%20flowers%20shells%20leaves |
+| Fibonacci poem activity | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20poem%20classroom%20activity |
+| Coding activity | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20code%20recursion |
+| Game progression design | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=game%20level%20progression%20curve |
+| Tile art activity | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Fibonacci%20square%20tile%20art |
+| Camera composition challenge | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20spiral%20camera%20composition |
+
+## Everyday and Pop Culture Associations — Image URLs
+
+| Item | Image source URL |
+|---|---|
+| Tool’s song “Lateralus” | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=Lateralus%20Fibonacci%20syllable%20pattern |
+| Spiral tattoos | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=abstract%20spiral%20design |
+| Jewelry design | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=spiral%20jewelry%20design |
+| Furniture design | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=golden%20ratio%20furniture%20design |
+| Staircases | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=spiral%20staircase |
+| Sports motion arcs | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=sports%20motion%20arc%20diagram |
+| Roller coasters and ramps | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=roller%20coaster%20curve |
+| Camera lenses and apertures | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=camera%20aperture%20blades |
+| Clocks and watch faces | https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search=clock%20face%20radial%20geometry |
+
+## Final Image Selection Notes
+
+- Prefer images with public-domain, CC0, or Creative Commons licenses.
+- For Renaissance and classical art, verify school policy on anatomical or mythological nudity. Use cropped details when needed.
+- For logos, treat images as trademarked even when an SVG exists on Commons.
+- For famous photography, verify copyright status. Public-domain government archive images are safer than modern copyrighted photos.
+- For natural examples, prioritize photos or diagrams that visibly show spirals, packing, branching, or proportion.
+- For the Fibonacci app, store the final selected image URL, license, creator, attribution text, and source page separately from the display text.
