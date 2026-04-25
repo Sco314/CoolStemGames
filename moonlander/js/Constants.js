@@ -251,6 +251,22 @@ export const TERRAIN_TILE_POSITIONS = [
 export const TERRAIN_TILE_SIZE = 240;   // target horizontal extent in world units
 export const TERRAIN_TILE_SINK = 8;     // bury this many units below ground
 
+// Curated set of items placed in level-1 walk mode (GameState.level === 0)
+// at fixed [type, x, z] positions. The user asked for first-level continuity
+// so a new player always has the same layout to learn from. Pad-kind extras
+// (beginner pad → fuel drum near spawn, bonus pad → sample) still apply on
+// top, so the same level can have variable bonus loot at the start spot.
+// Higher levels (level >= 1) skip this set and rely solely on pad-kind loot
+// + landmarks to keep variety.
+export const LEVEL1_FIXED_LOOT = [
+  ['fuel',    -22,  18],
+  ['fuel',     34, -28],
+  ['repair',   18,  40],
+  ['sample',   -8, -36],
+  ['sample',   45,  20],
+  ['damaged',  -40, -10]
+];
+
 // Standalone landmark interactables placed in walk mode (not Apollo sites).
 // Each spawns once per walk session, talks via the existing 'apollo'-style
 // interactable contract (artifactScore + comms blip).

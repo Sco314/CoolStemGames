@@ -21,6 +21,8 @@ export function initTouchControls() {
   bindHoldButton('touch-left',   'ArrowLeft');
   bindHoldButton('touch-right',  'ArrowRight');
   bindHoldButton('touch-thrust', 'ArrowUp');
+  // No-op if the element is missing — the walk-mode E button was removed
+  // in favor of canvas tap-to-interact (see js/modes/WalkMode.js bindMouse).
   bindTapButton('touch-interact', 'e');
 
   bindJoystick();
