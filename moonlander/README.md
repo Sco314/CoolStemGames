@@ -9,6 +9,46 @@ Live URL: https://coolstemgames.com/moonlander/ (the folder name is kept as
 `moonlander/` to avoid breaking existing links and cache; the player-facing
 name is Space Racer).
 
+## Current state — what's done
+
+| Area | Done? | Notes |
+|---|---|---|
+| 2D Lander mode | ✅ | 3-circle collision, foot/edge tolerances, X2/X3/X5 bonus pads, beginner pads with fuel-drum sprites |
+| Lander texture | ✅ | Pixel-art `textures/lander.png` (drop-in replacement supported) |
+| 3D Walk mode | ✅ | Procedural astronaut OR NASA Mercury Spacesuit GLB, displaced moon ground OR tiled Apollo 11 STL, footprint trail (permanent), color-coded breadcrumb rings + beacon pillars to objectives |
+| Mode transitions | ✅ | Letterbox + fade-through-black + audio crossfade, scripted disembark/embark |
+| HUD | ✅ | Live telemetry with green/yellow/red color coding for V-SPEED / H-SPEED / ANGLE / FUEL |
+| Main menu / game over | ✅ | High-score persistence (top 10) and 6 achievements |
+| Settings | ✅ | Master volume, invert-Y, fullscreen, persisted in localStorage |
+| Mobile | ✅ | Letterbox or full-viewport, touch joystick + thrust buttons, screen-swipe camera, **tap-on-canvas to interact** (no E button needed), top-right mute toggle, top-left satellite-map button |
+| Satellite map | ✅ | Top-left button opens a top-down view of the play area showing astronaut, lander, every objective + landmark, color-coded; updates live |
+| NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit (×2), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks |
+| Adaptive quality | ✅ | Particle pool scales by `Device.LOW_END`; FPS-driven fallback drops emit rate further if average FPS < 30 |
+| Audio | ⚠️ | Synthesized .wav placeholders; drop in real .mp3s and update paths in `js/Sound.js` |
+
+## Roadmap — what's pending
+
+Things explicitly deferred to a follow-up PR:
+
+- **Lander damage + repair loop.** Crashing reduces lander HP; below
+  threshold the craft can't fly until a repair part is brought back.
+- **Astronaut HP + health packs.** Separate pool, refilled at habitats
+  or by collecting health packs at Apollo sites.
+- **Carry-and-deposit fuel.** Currently picking up a fuel drum auto-
+  refuels the lander. Pending change: drum becomes a carried inventory
+  item; only deposits when the astronaut walks back to the lander.
+- **Apollo 12 / 14 / 15 / 16 / 17 sites.** Each tied to a successful
+  landing level (level 2 = Apollo 12, etc.) with its own height-map STL
+  and curated landmarks. Phase 8 wires up the registry; only Apollo 11
+  is populated today.
+- **Ladder-climb animation.** The map is currently always-accessible
+  via the corner button. Lore-correct path is "walk to lander → climb
+  ladder → connect to satellite → see map".
+- **Mercury Spacesuit rigging.** GLB ships unrigged so we drive a
+  procedural bob+sway in `updateWalkAnim`. Real walking-limb animation
+  needs a Blender pass to add a skeleton + skin weights.
+- **Real audio.** All five WAVs are synthesized placeholders.
+
 ## How to play
 
 **Lander (2D side view)**
@@ -82,6 +122,37 @@ python3 -m http.server 8000
 - **Difficulty is data.** `Progression.js` takes `GameState.level` and
   returns effective gravity / tolerance / edge-margin / spawn-velocity /
   fuel-gain. LanderMode and WalkMode just ask.
+
+## Memory budget + Chromebook safety
+
+Space Racer is engineered for ~4 GB Chromebooks running Chrome's per-tab
+memory budget. Key design choices that keep it light:
+
+- **Single WebGLRenderer for the session.** No dispose/recreate on
+  mode switches.
+- **Per-mode `disposables` discipline.** Every geometry, material, and
+  CanvasTexture allocated in a mode's `enter()` is pushed to a list and
+  cleaned up in `exit()`. Round-tripping lander↔walk dozens of times
+  doesn't grow heap monotonically.
+- **`Device.LOW_END` profile.** Trips on Chromebook (CrOS UA), tight
+  RAM (`navigator.deviceMemory ≤ 4`), low core count (≤ 4), or any
+  touch device. When set:
+  - Particle pools shrink ~65 % and emit rate further drops 45 %.
+  - **All NASA model loads (`ModelCache`) are skipped** and the
+    procedural fallbacks render instead — no GLB/STL upload.
+  - Walk-mode fog disabled by `Quality.onQualityChange`.
+- **Adaptive quality.** Rolling FPS sample over ~2 s; if average drops
+  below 30, particle emit rate scales by 0.4 ×. If it recovers above
+  55, full quality is restored.
+- **Asset / model caches share textures and geometries.** The lander
+  PNG is uploaded once (used by 2D + 3D); each Apollo 11 terrain tile
+  shares one decoded geometry; cloned scene graphs share materials.
+- **Footprint pool capped at 200** prints, ring-buffered by oldest.
+  ~few hundred KB total.
+
+To verify on a real device: open DevTools → Performance → Memory.
+Round-trip lander → walk → lander 10 times. Heap should oscillate (GC
+returns it to baseline after each cycle), not climb monotonically.
 
 ## Credits
 

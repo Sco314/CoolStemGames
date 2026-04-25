@@ -23,7 +23,7 @@ import {
   DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
   TRANSITION_WIND_VOL,
   HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
-  MODEL_PATHS, LANDMARKS,
+  MODEL_PATHS, LANDMARKS, LEVEL1_FIXED_LOOT,
   TERRAIN_TILE_POSITIONS, TERRAIN_TILE_SIZE, TERRAIN_TILE_SINK,
   MODE
 } from '../Constants.js';
@@ -34,7 +34,8 @@ import {
 import { Input } from '../Input.js';
 import {
   setCenterMessage, showComms, showAchievementToast,
-  showWalkTutorial, hideWalkTutorial
+  showWalkTutorial, hideWalkTutorial,
+  setMapDataProvider, hideMap
 } from '../HUD.js';
 import { Sounds } from '../Sound.js';
 import { effectiveFuelGain } from '../Progression.js';
@@ -132,6 +133,9 @@ export const WalkMode = {
     GameState.mode = MODE.WALK;
     notify('mode');
     setCenterMessage('CLICK TO LOOK AROUND\nWASD TO MOVE · E TO INTERACT');
+    // Wire up the satellite-map button by handing HUD a function that
+    // returns the current snapshot. Cleared on exit.
+    setMapDataProvider(() => this.getMapData());
   },
 
   exit() {
@@ -142,6 +146,10 @@ export const WalkMode = {
     // Tear down the first-time tutorial if it was still open — we don't
     // want it hovering over lander mode.
     hideWalkTutorial();
+    // Tear down the satellite map's data link so HUD doesn't poll a dead
+    // walk session, and hide the overlay if it was open.
+    setMapDataProvider(null);
+    hideMap();
 
     for (const d of disposables) {
       if (d.geometry) d.geometry.dispose();
@@ -267,6 +275,39 @@ export const WalkMode = {
   getCamera() { return camera; },
   getScene()  { return scene; },
   getAstronaut() { return astronaut; },
+
+  /**
+   * Snapshot of everything the satellite-map overlay needs to render.
+   * Returns null when called outside walk mode (caller should hide map).
+   */
+  getMapData() {
+    if (!astronaut || !landerModel) return null;
+    const items = interactables.map(it => {
+      const p = it.object3d.position;
+      let kind, color, label;
+      if (it.type === 'apollo') {
+        kind = 'apollo';
+        color = '#ffd860';
+        label = it.apollo.name;
+      } else if (it.type === 'landmark') {
+        kind = 'landmark';
+        color = '#c0c0c8';
+        label = it.landmark.name;
+      } else {
+        kind = it.type;
+        const c = INTERACTABLE_TYPES[it.type]?.color ?? 0xffffff;
+        color = '#' + c.toString(16).padStart(6, '0');
+        label = INTERACTABLE_TYPES[it.type]?.label || it.type.toUpperCase();
+      }
+      return { kind, x: p.x, z: p.z, used: it.used, color, label };
+    });
+    return {
+      bounds: WALK_PLAY_RADIUS,
+      astronaut: { x: astronaut.position.x, z: astronaut.position.z, yaw: yawRad },
+      lander:    { x: landerModel.position.x, z: landerModel.position.z },
+      items
+    };
+  },
 
   /**
    * Phase-5 disembark: teleport the astronaut to the parked lander's hatch,
@@ -811,12 +852,25 @@ function buildParkedLander() {
 function spawnInteractables() {
   const ll = GameState.lastLanding;
 
+  // Pad-kind extras (variable per landing). At level >= 1 these are the
+  // primary loot; level 0 also gets the curated LEVEL1_FIXED_LOOT below.
   if (ll.padKind === 'beginner') {
     const it = buildInteractable('fuel', 12, 8);
     if (it) interactables.push(it);
   } else if (ll.padKind === 'bonus') {
     const it = buildInteractable('sample', 12, 8);
     if (it) interactables.push(it);
+  }
+
+  // Level 1 (GameState.level === 0): curated fixed-location loot so a new
+  // player always has the same layout to learn from. Higher levels skip
+  // this set so the moon feels less crowded and the run leans more on
+  // procedural placement.
+  if (GameState.level === 0) {
+    for (const [type, x, z] of LEVEL1_FIXED_LOOT) {
+      const it = buildInteractable(type, x, z);
+      if (it) interactables.push(it);
+    }
   }
 
   // Apollo landmarks. For now only Apollo 11 is defined; follow-up PR

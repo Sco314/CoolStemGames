@@ -48,6 +48,33 @@
     <span class="mute-icon" aria-hidden="true">🔇</span>
   </button>
 
+  <!-- Walk-mode satellite map. Top-left button toggles a fullscreen
+       top-down view of the playable area with every interactable +
+       landmark + the parked lander + a live astronaut indicator.
+       Hidden via CSS unless body.mode-walk is active. -->
+  <button id="map-btn" class="map-btn walk-only" aria-label="Open satellite map">
+    <span aria-hidden="true">🛰</span>
+    <span class="map-btn-label">MAP</span>
+  </button>
+  <div id="map-overlay" class="overlay map-overlay" hidden>
+    <h2>SATELLITE VIEW</h2>
+    <p class="map-sub">Tranquility-Base uplink — live positions of objectives, landmarks, and the parked lander.</p>
+    <div id="map-stage">
+      <div id="map-frame"></div>
+    </div>
+    <div id="map-legend">
+      <span><span class="dot dot-astronaut"></span>You</span>
+      <span><span class="dot dot-lander"></span>Lander</span>
+      <span><span class="dot dot-fuel"></span>Fuel</span>
+      <span><span class="dot dot-kit"></span>Kit</span>
+      <span><span class="dot dot-sample"></span>Sample</span>
+      <span><span class="dot dot-damaged"></span>Probe</span>
+      <span><span class="dot dot-landmark"></span>Landmark</span>
+      <span><span class="dot dot-apollo"></span>Apollo</span>
+    </div>
+    <button id="btn-close-map" class="big">CLOSE</button>
+  </div>
+
   <!-- The HUD overlay lives in the DOM, NOT in a Three.js scene.
        Cheaper than a second scene/camera, easier to style, and it survives
        mode switches untouched. The Three.js canvas is appended by Main.js. -->
@@ -200,7 +227,9 @@
     <div id="touch-pad" aria-label="Move">
       <div id="touch-thumb"></div>
     </div>
-    <button id="touch-interact" class="touch-btn" aria-label="Interact">E</button>
+    <!-- The E interact button used to live here. Touch-to-interact is now
+         handled by tap-on-canvas (see js/modes/WalkMode.js bindMouse()),
+         so this slot is intentionally empty. -->
   </div>
 
   <script type="module" src="js/Main.js"></script>

@@ -57,8 +57,15 @@ const overlay = {
   toastTitle:       document.querySelector('#achievement-toast .toast-title'),
   toastDesc:        document.querySelector('#achievement-toast .toast-desc'),
   walkTutorial:     document.getElementById('walk-tutorial'),
-  walkTutorialClose:document.getElementById('walk-tutorial-close')
+  walkTutorialClose:document.getElementById('walk-tutorial-close'),
+  mapBtn:           document.getElementById('map-btn'),
+  mapOverlay:       document.getElementById('map-overlay'),
+  mapFrame:         document.getElementById('map-frame'),
+  btnCloseMap:      document.getElementById('btn-close-map')
 };
+
+let mapDataProvider = null;
+let mapAnimRaf = null;
 
 // Per-frame pull state — lander mode writes these before renderFrame().
 // State strings drive the green/yellow/red gauge color classes.
@@ -122,6 +129,99 @@ function bindOverlayButtons() {
   // Walk-mode first-time tutorial close button. Dismiss sets the
   // profile-level flag so the card doesn't reappear next run.
   overlay.walkTutorialClose?.addEventListener('click', dismissWalkTutorial);
+
+  // Satellite map open/close.
+  overlay.mapBtn?.addEventListener('click', () => showMap());
+  overlay.btnCloseMap?.addEventListener('click', () => hideMap());
+}
+
+/**
+ * WalkMode registers itself as the data source on enter() so HUD doesn't
+ * have to import WalkMode (avoids circular module init order). Provider
+ * returns a {bounds, astronaut, lander, items} snapshot or null when no
+ * walk session is active.
+ */
+export function setMapDataProvider(fn) {
+  mapDataProvider = typeof fn === 'function' ? fn : null;
+}
+
+export function showMap() {
+  if (!overlay.mapOverlay) return;
+  if (!mapDataProvider) return;             // not in walk mode
+  overlay.mapOverlay.hidden = false;
+  // Render loop ticks per animation frame — cheap (just DOM updates).
+  const tick = () => {
+    renderMap();
+    mapAnimRaf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+export function hideMap() {
+  if (overlay.mapOverlay) overlay.mapOverlay.hidden = true;
+  if (mapAnimRaf) cancelAnimationFrame(mapAnimRaf);
+  mapAnimRaf = null;
+}
+
+export function isMapOpen() {
+  return !!(overlay.mapOverlay && !overlay.mapOverlay.hidden);
+}
+
+function renderMap() {
+  const data = mapDataProvider?.();
+  if (!data || !overlay.mapFrame) return;
+  // World x/z range [-bounds, bounds] → CSS percent [0%, 100%]. Z grows
+  // "into the screen" in Three.js; map "down" on screen corresponds to
+  // the +z direction so the player's instinct ("up on the map = forward
+  // when yaw=0") matches the chase-cam.
+  const B = data.bounds;
+  const toMap = (worldCoord) => ((worldCoord + B) / (2 * B)) * 100;
+
+  // Cheap-but-correct: rebuild children each frame. Item count is small
+  // (< 20 dots) so we don't bother diffing.
+  overlay.mapFrame.innerHTML = '';
+
+  // Lander
+  appendDot(overlay.mapFrame, 'lander', toMap(data.lander.x), toMap(data.lander.z),
+            'LANDER', '#ffee88', false);
+
+  // Items
+  for (const it of data.items) {
+    const cls = `dot-pin item-${it.kind}` + (it.used ? ' used' : '');
+    const pin = document.createElement('div');
+    pin.className = cls;
+    pin.style.left = toMap(it.x) + '%';
+    pin.style.top  = toMap(it.z) + '%';
+    pin.style.background = it.color;
+    overlay.mapFrame.appendChild(pin);
+    if (it.kind === 'landmark' || it.kind === 'apollo') {
+      const lbl = document.createElement('div');
+      lbl.className = 'dot-label';
+      lbl.textContent = it.label;
+      lbl.style.left = toMap(it.x) + '%';
+      lbl.style.top  = toMap(it.z) + '%';
+      overlay.mapFrame.appendChild(lbl);
+    }
+  }
+
+  // Astronaut last, so it always renders on top.
+  appendDot(overlay.mapFrame, 'astronaut',
+    toMap(data.astronaut.x), toMap(data.astronaut.z),
+    null, null, false, data.astronaut.yaw);
+}
+
+function appendDot(parent, cls, leftPct, topPct, label, color, used, rotation) {
+  const pin = document.createElement('div');
+  pin.className = `dot-pin ${cls}` + (used ? ' used' : '');
+  pin.style.left = leftPct + '%';
+  pin.style.top  = topPct + '%';
+  if (color) pin.style.background = color;
+  if (typeof rotation === 'number') {
+    // Astronaut is a triangle; rotate to indicate facing.
+    pin.style.transform = `rotate(${rotation}rad)`;
+    pin.style.transformOrigin = 'center';
+  }
+  parent.appendChild(pin);
 }
 
 /**
