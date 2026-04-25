@@ -144,6 +144,10 @@ function goToMode(nextMode, opts = {}) {
   if (currentMode) currentMode.exit();
   currentMode = nextMode;
   currentMode.enter({ renderer, canvas }, opts);
+  // Fit the new mode's camera to the current viewport. Without this, an
+  // ortho camera built with the static GAME_WIDTH×GAME_HEIGHT bounds in
+  // its constructor would ignore any portrait/ultrawide adjustments.
+  onResize();
 }
 
 function cinematicSwap(fromMode, toMode, enterOpts = {}) {
@@ -165,6 +169,7 @@ function cinematicSwap(fromMode, toMode, enterOpts = {}) {
       currentMode = toMode;
       GameState.mode = (toMode === WalkMode) ? MODE.WALK : MODE.LANDER;
       notify('mode');
+      onResize();              // re-fit the new mode's camera
       if (direction === 'lander-to-walk' && typeof toMode.startDisembark === 'function') {
         toMode.startDisembark();
       }
@@ -264,41 +269,55 @@ function onGlobalKey(e) {
 
 // ---------- misc ----------
 /**
- * Resize + letterbox the canvas so the game's fixed 800×450 world never
- * renders stretched on portrait phones / ultrawide monitors. We compute a
- * canvas size that fits inside the viewport while preserving GAME_WIDTH :
- * GAME_HEIGHT, then center it absolutely. Overlays (menu, HUD, touch) are
- * positioned against the viewport, not the canvas, so they're unaffected.
+ * Resize the canvas to the full viewport, then fit the active mode's camera
+ * frustum to that viewport. The fit logic preserves world-aspect:
+ *   - Landscape viewport (≥ game aspect) → show full GAME_WIDTH; frustum
+ *     height auto-derived. Camera stays centered.
+ *   - Portrait viewport (< game aspect) → show full GAME_HEIGHT and a
+ *     narrower slice of width. LanderMode follows the lander horizontally
+ *     to keep the action on-screen.
+ *
+ * Stashing viewWidth/viewHeight on `cam.userData` so LanderMode's per-frame
+ * camera-follow knows whether to clamp to the lander's x.
  */
 function onResize() {
   const ww = window.innerWidth;
   const wh = window.innerHeight;
-  const gameAspect   = GAME_WIDTH / GAME_HEIGHT;
-  const windowAspect = ww / wh;
-
-  let canvasW, canvasH;
-  if (windowAspect > gameAspect) {
-    // Wider than the game — pillar-box: cap by height.
-    canvasH = wh;
-    canvasW = wh * gameAspect;
-  } else {
-    // Taller than the game (e.g. portrait phone) — letter-box: cap by width.
-    canvasW = ww;
-    canvasH = ww / gameAspect;
-  }
-
-  renderer.setSize(canvasW, canvasH);
+  renderer.setSize(ww, wh);
   canvas.style.position = 'fixed';
-  canvas.style.left = `${Math.round((ww - canvasW) / 2)}px`;
-  canvas.style.top  = `${Math.round((wh - canvasH) / 2)}px`;
+  canvas.style.left = '0';
+  canvas.style.top  = '0';
 
-  // Perspective camera (walk mode) uses the canvas aspect, which now matches
-  // the game aspect — stable no matter the viewport.
   const cam = currentMode?.getCamera?.();
-  if (cam?.isPerspectiveCamera) {
-    cam.aspect = canvasW / canvasH;
+  const aspect = ww / wh;
+  if (cam?.isOrthographicCamera) {
+    fitOrthoToViewport(cam, aspect);
+  } else if (cam?.isPerspectiveCamera) {
+    cam.aspect = aspect;
     cam.updateProjectionMatrix();
   }
+}
+
+function fitOrthoToViewport(cam, aspect) {
+  const gameAspect = GAME_WIDTH / GAME_HEIGHT;
+  let viewW, viewH;
+  if (aspect >= gameAspect) {
+    // Landscape: show full game width, frustum gains some vertical sky.
+    viewW = GAME_WIDTH;
+    viewH = viewW / aspect;
+  } else {
+    // Portrait: show full game height, frustum loses some horizontal world.
+    // LanderMode will pan to follow the lander.
+    viewH = GAME_HEIGHT;
+    viewW = viewH * aspect;
+  }
+  cam.left   = -viewW / 2;
+  cam.right  =  viewW / 2;
+  cam.top    =  viewH / 2;
+  cam.bottom = -viewH / 2;
+  cam.userData.viewWidth  = viewW;
+  cam.userData.viewHeight = viewH;
+  cam.updateProjectionMatrix();
 }
 
 function showFatalError(err) {
