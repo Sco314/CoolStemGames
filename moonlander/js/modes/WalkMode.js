@@ -47,6 +47,9 @@ let astronautParts = null;     // references to animated bones
 let landerModel = null;
 let interactables = [];        // Phase-4 loot: [{ type, object3d, used, ... }]
 let disposables = [];
+let footprints = [];           // pooled fading prints behind the astronaut
+let footprintCursor = 0;       // ring-buffer write index
+let lastFootprintPos = null;   // THREE.Vector3 — last spot we dropped a print
 let onReturnToLanderCallback = null;
 
 // Camera-orbit state — yaw also rotates the astronaut (strict chase cam).
@@ -91,6 +94,7 @@ export const WalkMode = {
     buildAstronaut();
     buildParkedLander();
     spawnInteractables();
+    buildFootprintPool();
 
     // Spawn next to the parked lander, facing away from it.
     astronaut.position.set(6, 0, 6);
@@ -131,6 +135,9 @@ export const WalkMode = {
     astronautParts = null;
     landerModel = null;
     interactables = [];
+    footprints = [];
+    footprintCursor = 0;
+    lastFootprintPos = null;
     pointerLocked = false;
     scripted = null;
   },
@@ -194,6 +201,10 @@ export const WalkMode = {
     // --- walk animation ---
     const isMoving = moveSign !== 0 || strafeSign !== 0;
     updateWalkAnim(dt, isMoving);
+
+    // --- footprint trail ---
+    if (isMoving) dropFootprintIfMoved();
+    updateFootprints(dt);
 
     // --- strict chase camera around the astronaut's chest ---
     updateChaseCamera();
@@ -379,6 +390,81 @@ function buildGround() {
   disposables.push({ geometry: geom, material: mat });
 }
 
+// ---------- Boot-print trail ----------
+//
+// A small pooled set of dark prints laid flat on the surface every time the
+// astronaut walks ~1.6 units. Alternates left/right offset to read as a
+// proper boot trail. Each print fades over FOOTPRINT_LIFETIME seconds; the
+// pool overwrites oldest-first so the trail length is bounded.
+
+const FOOTPRINT_POOL_SIZE = 32;
+const FOOTPRINT_INTERVAL  = 1.6;   // world units between prints
+const FOOTPRINT_LIFETIME  = 30;    // seconds before fully faded
+const FOOTPRINT_BASE_OPAC = 0.55;
+
+function buildFootprintPool() {
+  const geom = new THREE.PlaneGeometry(0.55, 0.95);
+  geom.rotateX(-Math.PI / 2);
+  disposables.push({ geometry: geom });
+
+  footprints = [];
+  for (let i = 0; i < FOOTPRINT_POOL_SIZE; i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x1a1a20,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.visible = false;
+    scene.add(mesh);
+    footprints.push({ mesh, mat, age: FOOTPRINT_LIFETIME });
+    disposables.push({ material: mat });
+  }
+  footprintCursor = 0;
+  lastFootprintPos = null;
+}
+
+function dropFootprintIfMoved() {
+  if (!astronaut || footprints.length === 0) return;
+  if (!lastFootprintPos) {
+    lastFootprintPos = astronaut.position.clone();
+    return;
+  }
+  if (astronaut.position.distanceTo(lastFootprintPos) < FOOTPRINT_INTERVAL) return;
+
+  const fp = footprints[footprintCursor];
+  footprintCursor = (footprintCursor + 1) % footprints.length;
+
+  // Offset left/right of centerline by ~0.35 units. The astronaut's forward
+  // is (-sin(yaw), 0, -cos(yaw)); right is its 90° rotation.
+  const sign = footprintCursor % 2 === 0 ? 1 : -1;
+  const sideX = -Math.cos(astronaut.rotation.y) * 0.35 * sign;
+  const sideZ =  Math.sin(astronaut.rotation.y) * 0.35 * sign;
+  const px = astronaut.position.x + sideX;
+  const pz = astronaut.position.z + sideZ;
+
+  fp.mesh.position.set(px, groundHeight(px, pz) + 0.06, pz);
+  fp.mesh.rotation.y = astronaut.rotation.y;
+  fp.mat.opacity = FOOTPRINT_BASE_OPAC;
+  fp.mesh.visible = true;
+  fp.age = 0;
+
+  lastFootprintPos.copy(astronaut.position);
+}
+
+function updateFootprints(dt) {
+  for (const fp of footprints) {
+    if (!fp.mesh.visible) continue;
+    fp.age += dt;
+    if (fp.age >= FOOTPRINT_LIFETIME) {
+      fp.mesh.visible = false;
+      continue;
+    }
+    fp.mat.opacity = FOOTPRINT_BASE_OPAC * (1 - fp.age / FOOTPRINT_LIFETIME);
+  }
+}
+
 function buildCraters() {
   const ringMat = new THREE.MeshBasicMaterial({
     color: 0x3a3a42, transparent: true, opacity: 0.65, side: THREE.DoubleSide
@@ -509,11 +595,19 @@ function buildParkedLander() {
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
-  const size = LANDER_SCALE * 1.6;
+  // Sprite size 0.8 × LANDER_SCALE — at scale 24 that's 19.2 world units,
+  // about 4–5× astronaut height which feels right next to a humanoid.
+  // Previous 1.6× looked like a 38-unit colossus floating overhead.
+  const size = LANDER_SCALE * 0.8;
   landerModel = new THREE.Sprite(mat);
   landerModel.scale.set(size, size, 1);
   const lx = 0, lz = 0;
-  landerModel.position.set(lx, groundHeight(lx, lz) + size * 0.5, lz);
+  // Y offset accounts for the lander.png's transparent bottom margin: the
+  // visible foot pads end at pixel y=122 of 128, so the visible bottom is
+  // at sprite_center_y - size * (122/128 - 0.5) = sprite_center_y - size *
+  // 0.453. Setting center_y = ground + size * 0.453 puts the visible feet
+  // exactly on the surface instead of floating above it.
+  landerModel.position.set(lx, groundHeight(lx, lz) + size * 0.453, lz);
   scene.add(landerModel);
   // Note: the cached texture is NOT disposed — AssetCache owns it.
   disposables.push({ material: mat });
@@ -532,6 +626,12 @@ function spawnInteractables() {
   for (const [type, x, z] of spawns) {
     const it = buildInteractable(type, x, z);
     if (it) interactables.push(it);
+  }
+  // Breadcrumb rings from the parked lander to each interactable so the
+  // player has cues on where to walk. Built after both the lander and the
+  // loot exist so we know start and end points.
+  for (const it of interactables) {
+    it.trailMarkers = buildTrailMarkers(landerModel.position, it.object3d.position, it.type);
   }
   console.log(`ℹ️ Spawned ${interactables.length} interactables for segment ${segIdx}`);
 }
@@ -552,7 +652,53 @@ function buildInteractable(type, x, z) {
   }
 
   scene.add(group);
-  return { type, object3d: group, used: false, spin };
+  return { type, object3d: group, used: false, spin, trailMarkers: [] };
+}
+
+/**
+ * Drop a chain of small dim rings on the ground from `start` to `end`. Each
+ * ring is colored to match the destination interactable so the player can
+ * tell the trails apart at a glance. Returns the meshes so the caller can
+ * hide them when the interactable is consumed.
+ */
+function buildTrailMarkers(start, end, type) {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist < 4) return [];                  // too close to need a trail
+
+  // ~one marker every 3 world units, capped between 4 and 9 markers per trail.
+  const count = Math.max(4, Math.min(9, Math.round(dist / 3)));
+  const ringGeom = new THREE.RingGeometry(0.55, 0.95, 18);
+  ringGeom.rotateX(-Math.PI / 2);
+  const color = INTERACTABLE_TYPES[type]?.color ?? 0xffee88;
+  const ringMat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.55,
+    side: THREE.DoubleSide, depthWrite: false
+  });
+  // Geometry + material are shared by every ring on this trail and disposed
+  // together when WalkMode.exit() walks the disposables list.
+  disposables.push({ geometry: ringGeom, material: ringMat });
+
+  const markers = [];
+  // Place markers between (not at) the endpoints — start at fraction 1/(count+1),
+  // end at count/(count+1). That keeps the trail clear of the lander base
+  // and the interactable itself.
+  for (let i = 1; i <= count; i++) {
+    const t = i / (count + 1);
+    const mx = start.x + dx * t;
+    const mz = start.z + dz * t;
+    const ring = new THREE.Mesh(ringGeom, ringMat);
+    ring.position.set(mx, groundHeight(mx, mz) + 0.05, mz);
+    scene.add(ring);
+    markers.push(ring);
+  }
+  return markers;
+}
+
+function hideTrailMarkers(it) {
+  if (!it?.trailMarkers) return;
+  for (const m of it.trailMarkers) m.visible = false;
 }
 
 function buildFuelDrum(group, spec) {
@@ -739,6 +885,9 @@ function performInteraction(it) {
 
   it.used = true;
   if (it.type !== 'damaged') it.object3d.visible = false;
+  // Cue trail leading to this interactable is no longer useful — hide the
+  // breadcrumb rings so the player isn't drawn back to a finished objective.
+  hideTrailMarkers(it);
 
   if (justDone.length) {
     setTimeout(() => showComms(`OBJECTIVE COMPLETE: ${firstObjectiveLabel(justDone[0])}`), 1100);
