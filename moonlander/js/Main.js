@@ -29,7 +29,8 @@ import {
   initHUD, renderFrame as renderHUDFrame,
   showMainMenu, hideMainMenu,
   showGameOver, hideGameOver,
-  showSettings, hideSettings, isSettingsOpen
+  showSettings, hideSettings, isSettingsOpen,
+  toggleMute
 } from './HUD.js';
 import { LanderMode }     from './modes/LanderMode.js';
 import { WalkMode }       from './modes/WalkMode.js';
@@ -264,6 +265,10 @@ function onGlobalKey(e) {
     } else if (!transitioning) {
       showSettings({ onClose: hideSettings });
     }
+  } else if (e.key === 'm' || e.key === 'M') {
+    // Mute toggle — the corner button is unreachable while pointer-locked
+    // in walk mode, so keep a keyboard shortcut available everywhere.
+    toggleMute();
   }
 }
 

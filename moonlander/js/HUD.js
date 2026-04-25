@@ -115,14 +115,9 @@ function bindOverlayButtons() {
   });
 
   // Always-visible corner mute toggle. Click flips state, persists,
-  // retunes every live Sound.
-  overlay.muteBtn.addEventListener('click', () => {
-    const next = !isMuted();
-    setMuted(next);
-    GameState.settings.muted = next;
-    refreshMuteIcon();
-    persistSettings();
-  });
+  // retunes every live Sound. The same path is exposed as toggleMute()
+  // so a keyboard shortcut works while the canvas has pointer-lock.
+  overlay.muteBtn.addEventListener('click', () => toggleMute());
 
   // Walk-mode first-time tutorial close button. Dismiss sets the
   // profile-level flag so the card doesn't reappear next run.
@@ -157,6 +152,20 @@ function applySettings(settings) {
   overlay.setVolLabel.textContent = overlay.setVolume.value;
   overlay.setInvertY.checked = !!settings.invertY;
   refreshMuteIcon();
+}
+
+/**
+ * Flip the global mute state, retune every live Sound, refresh the corner
+ * icon, and persist. Call from the corner button click OR a keyboard
+ * shortcut — the latter is the only way to mute while pointer-locked in
+ * walk mode.
+ */
+export function toggleMute() {
+  const next = !isMuted();
+  setMuted(next);
+  GameState.settings.muted = next;
+  refreshMuteIcon();
+  persistSettings();
 }
 
 function refreshMuteIcon() {
