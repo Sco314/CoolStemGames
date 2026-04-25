@@ -550,28 +550,29 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 }
 
 /* ---- Mobile touch controls (Phase 7) ----
- * Hidden by default. Touch.js adds body.touch on touch-capable devices;
- * the body.mode-* classes (set by HUD.js) pick which overlay shows. */
+ * Slimmer + more translucent so the buttons don't eat the bottom of the
+ * screen on phones. Hidden by default; Touch.js adds body.touch on
+ * touch-capable devices; the body.mode-* classes pick which overlay shows. */
 .touch-controls {
   position: fixed;
-  bottom: 20px;
+  bottom: 14px;
   z-index: 45;
   display: none;
   pointer-events: none;       /* children opt in */
 }
-body.touch.mode-lander #touch-lander { display: flex; left: 0; right: 0; justify-content: space-between; padding: 0 24px; }
-body.touch.mode-walk   #touch-walk   { display: flex; left: 0; right: 0; justify-content: space-between; padding: 0 24px; align-items: flex-end; }
+body.touch.mode-lander #touch-lander { display: flex; left: 0; right: 0; justify-content: space-between; padding: 0 14px; }
+body.touch.mode-walk   #touch-walk   { display: flex; left: 0; right: 0; justify-content: space-between; padding: 0 14px; align-items: flex-end; }
 
 .touch-btn {
   pointer-events: auto;
-  width: 76px;
-  height: 76px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 238, 136, 0.7);
-  background: rgba(10, 15, 25, 0.6);
-  color: #ffee88;
+  border: 2px solid rgba(255, 238, 136, 0.55);
+  background: rgba(10, 15, 25, 0.32);
+  color: rgba(255, 238, 136, 0.85);
   font-family: inherit;
-  font-size: 22px;
+  font-size: 18px;
   letter-spacing: 0;
   display: flex;
   align-items: center;
@@ -581,36 +582,39 @@ body.touch.mode-walk   #touch-walk   { display: flex; left: 0; right: 0; justify
   -webkit-tap-highlight-color: transparent;
 }
 .touch-btn.thrust {
-  width: 96px;
-  height: 96px;
-  font-size: 28px;
-  border-color: rgba(255, 150, 60, 0.9);
-  color: #ffcc88;
+  width: 70px;
+  height: 70px;
+  font-size: 22px;
+  border-color: rgba(255, 150, 60, 0.75);
+  color: rgba(255, 204, 136, 0.9);
 }
-.touch-btn.pressed { background: rgba(255, 238, 136, 0.25); }
+.touch-btn.pressed {
+  background: rgba(255, 238, 136, 0.32);
+  border-color: rgba(255, 238, 136, 0.85);
+}
 
-/* Walk-mode joystick */
+/* Walk-mode joystick — also slimmer */
 #touch-pad {
   pointer-events: auto;
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 238, 136, 0.55);
-  background: rgba(10, 15, 25, 0.5);
+  border: 2px solid rgba(255, 238, 136, 0.45);
+  background: rgba(10, 15, 25, 0.32);
   touch-action: none;
 }
 #touch-thumb {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 56px;
-  height: 56px;
-  margin-left: -28px;
-  margin-top: -28px;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
   border-radius: 50%;
-  background: rgba(255, 238, 136, 0.45);
-  border: 2px solid rgba(255, 238, 136, 0.85);
+  background: rgba(255, 238, 136, 0.38);
+  border: 2px solid rgba(255, 238, 136, 0.7);
   transition: transform 0.05s linear;
   pointer-events: none;
 }

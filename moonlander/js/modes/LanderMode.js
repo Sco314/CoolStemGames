@@ -72,6 +72,9 @@ export const LanderMode = {
     onLandedCallback  = callbacks.onLanded  || (() => {});
     onCrashedCallback = callbacks.onCrashed || (() => {});
     landingResolved = false;
+    // Clear any leftover center message from the previous life (e.g. the
+    // "CRASHED ON UNEVEN TERRAIN" notice) so the next attempt boots fresh.
+    setCenterMessage('');
 
     // Build scene
     scene = new THREE.Scene();
@@ -505,8 +508,16 @@ function resolveCrash(reason) {
 }
 
 function updateCameraZoom(altitude) {
-  // Below the threshold, snap to a higher zoom and follow the lander; above,
-  // restore the wide ortho framing so the player can plan their descent.
+  // Two camera behaviors layered:
+  //   1) Final-approach zoom: when altitude is low, we snap to CAMERA_ZOOM_FACTOR
+  //      and follow the lander tightly so the touchdown reads.
+  //   2) Portrait pan-follow: if the viewport is narrower than the world, the
+  //      ortho frustum is narrower than GAME_WIDTH (set by Main.fitOrthoToViewport)
+  //      and we slide the camera horizontally to keep the lander on-screen.
+  const viewW = camera.userData.viewWidth || (camera.right - camera.left);
+  const viewH = camera.userData.viewHeight || (camera.top - camera.bottom);
+  const portraitFollow = viewW < GAME_WIDTH;
+
   if (altitude < CAMERA_ZOOM_ALTITUDE) {
     if (camera.zoom !== CAMERA_ZOOM_FACTOR) {
       camera.zoom = CAMERA_ZOOM_FACTOR;
@@ -514,10 +525,26 @@ function updateCameraZoom(altitude) {
     }
     camera.position.x = lander.position.x;
     camera.position.y = lander.position.y;
-  } else if (camera.zoom !== 1) {
+    return;
+  }
+
+  if (camera.zoom !== 1) {
     camera.zoom = 1;
-    camera.position.set(0, 0, 100);
     camera.updateProjectionMatrix();
+  }
+
+  if (portraitFollow) {
+    // Pan horizontally to follow the lander, clamped to the world bounds so
+    // we never reveal off-world space.
+    const halfW = viewW / 2;
+    const minX = -HALF_WIDTH + halfW;
+    const maxX =  HALF_WIDTH - halfW;
+    camera.position.x = Math.max(minX, Math.min(maxX, lander.position.x));
+    // Vertical: keep the world centered. Frustum height matches GAME_HEIGHT.
+    camera.position.y = 0;
+    camera.position.z = 100;
+  } else {
+    camera.position.set(0, 0, 100);
   }
 }
 
