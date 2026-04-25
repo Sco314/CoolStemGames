@@ -100,12 +100,15 @@ export const WALK_TURN_SPEED         = 2.2;  // radians per second (keyboard tur
 export const WALK_CAMERA_DISTANCE    = 20;   // how far behind the astronaut
 export const WALK_CAMERA_HEIGHT      = 10;   // how high above
 export const WALK_INTERACT_RADIUS    = 8;    // how close to a fuel tank to interact
-export const WALK_PLAY_RADIUS        = 180;  // hard cap on astronaut x/z movement
+// Bumped 180→320 to give the tiled NASA Apollo-11 terrain room to breathe.
+// Procedural sin-displaced ground still covers everything; STL tiles sit on
+// top as visual cladding.
+export const WALK_PLAY_RADIUS        = 320;
 export const WALK_MOUSE_SENSITIVITY  = 0.0025;
-export const WALK_PITCH_MIN          = -0.45; // camera below-and-behind (looking up)
-export const WALK_PITCH_MAX          =  1.15; // camera high-and-behind (looking down)
-export const WALK_GROUND_AMPLITUDE   = 3.0;   // peak height variation of moon surface
-export const WALK_CRATER_COUNT       = 20;
+export const WALK_PITCH_MIN          = -0.45;
+export const WALK_PITCH_MAX          =  1.15;
+export const WALK_GROUND_AMPLITUDE   = 3.0;
+export const WALK_CRATER_COUNT       = 24;
 
 // ---------- Particle tunables (ported subset — expand as needed) ----------
 // These are the "high-end" budgets. Particles.js scales them via Device.js
@@ -221,6 +224,66 @@ export const APOLLO_SITES = [
     walkPos: [110, -70],           // [x, z] inside the walk-mode radius
     artifactScore: 300,
     comms: 'APOLLO 11 ARTIFACT COLLECTED — TRANQUILITY BASE'
+  }
+];
+
+// ---------- NASA 3D Resources model paths (Phase 8) ----------
+// Files live under moonlander/assets/nasa_models/. Source repo:
+//   https://github.com/nasa/NASA-3D-Resources/tree/11ebb4ee043715aefbba6aeec8a61746fad67fa7/3D%20Models
+// Code paths for each load are wrapped in try/catch + low-end skip, so
+// missing files degrade gracefully to procedural primitives.
+export const MODEL_PATHS = Object.freeze({
+  apolloLM:     'assets/nasa_models/Apollo Lunar Module.glb',
+  spacesuit:    'assets/nasa_models/Mercury Spacesuit.glb',
+  habitat:      'assets/nasa_models/Habitat Demonstration Unit.glb',
+  atlas6:       'assets/nasa_models/Atlas 6 (Friendship 7).glb',
+  apollo11Site: 'assets/nasa_models/Apollo 11 - Landing Site.stl'
+});
+
+// Visible terrain tiles laid out in a 2×2 grid centered on the play area.
+// Each tile is one mesh instance sharing the cached STL geometry; their xz
+// positions in WORLD coords. The base sin-displaced plane sits underneath
+// so the corners between tiles still have ground.
+export const TERRAIN_TILE_POSITIONS = [
+  [-150, -150], [150, -150],
+  [-150,  150], [150,  150]
+];
+export const TERRAIN_TILE_SIZE = 240;   // target horizontal extent in world units
+export const TERRAIN_TILE_SINK = 8;     // bury this many units below ground
+
+// Standalone landmark interactables placed in walk mode (not Apollo sites).
+// Each spawns once per walk session, talks via the existing 'apollo'-style
+// interactable contract (artifactScore + comms blip).
+export const LANDMARKS = [
+  {
+    id: 'habitat-a',
+    kind: 'habitat',
+    model: 'habitat',
+    walkPos: [-30, 60],
+    score: 150,
+    comms: 'HABITAT MODULE A — LIFE SUPPORT NOMINAL',
+    name: 'HABITAT MODULE A',
+    targetHeight: 5.5
+  },
+  {
+    id: 'habitat-b',
+    kind: 'habitat',
+    model: 'habitat',
+    walkPos: [-12, 60],
+    score: 150,
+    comms: 'HABITAT MODULE B — STORES READY',
+    name: 'HABITAT MODULE B',
+    targetHeight: 5.5
+  },
+  {
+    id: 'atlas-6',
+    kind: 'atlas',
+    model: 'atlas6',
+    walkPos: [80, 80],
+    score: 250,
+    comms: 'FRIENDSHIP 7 — MERCURY-ATLAS 6 LAUNCH VEHICLE',
+    name: 'ATLAS 6 (FRIENDSHIP 7)',
+    targetHeight: 14
   }
 ];
 

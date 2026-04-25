@@ -23,6 +23,8 @@ import {
   DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
   TRANSITION_WIND_VOL,
   HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
+  MODEL_PATHS, LANDMARKS,
+  TERRAIN_TILE_POSITIONS, TERRAIN_TILE_SIZE, TERRAIN_TILE_SINK,
   MODE
 } from '../Constants.js';
 import {
@@ -38,6 +40,7 @@ import { Sounds } from '../Sound.js';
 import { effectiveFuelGain } from '../Progression.js';
 import { getQuality, onQualityChange } from '../Quality.js';
 import { getSharedTexture } from '../AssetCache.js';
+import { loadModel, loadSTL, placeOnGround } from '../ModelCache.js';
 
 let scene = null;
 let camera = null;
@@ -50,6 +53,14 @@ let disposables = [];
 let footprints = [];           // pooled fading prints behind the astronaut
 let footprintCursor = 0;       // ring-buffer write index
 let lastFootprintPos = null;   // THREE.Vector3 — last spot we dropped a print
+
+// NASA 3D Resources GLB integration. When the file is present + decoded
+// these references hold the swapped-in mesh; the procedural primitive
+// underneath is hidden but kept around as a fallback. `null` means we're
+// running on the procedural fallback (LOW_END device or missing file).
+let astronautModel = null;     // Mercury Spacesuit GLB scene
+let astronautProceduralVisible = true;
+let landerModel3D = null;      // Apollo Lunar Module GLB scene
 let onReturnToLanderCallback = null;
 
 // Camera-orbit state — yaw also rotates the astronaut (strict chase cam).
@@ -147,7 +158,10 @@ export const WalkMode = {
     canvasEl = null;
     astronaut = null;
     astronautParts = null;
+    astronautModel = null;
+    astronautProceduralVisible = true;
     landerModel = null;
+    landerModel3D = null;
     interactables = [];
     footprints = [];
     footprintCursor = 0;
@@ -454,6 +468,10 @@ function groundHeight(x, z) {
 }
 
 function buildGround() {
+  // Procedural sin-displaced plane stays as the SOURCE OF TRUTH for ground
+  // height — astronaut, footprints, landmarks all sample groundHeight(x,z).
+  // This way swapping in / failing to swap in the STL never affects collision
+  // or placement; the STL is purely visual cladding on top.
   const size = WALK_PLAY_RADIUS * 2.4;
   const segs = 128;
   const geom = new THREE.PlaneGeometry(size, size, segs, segs);
@@ -469,6 +487,59 @@ function buildGround() {
   const mesh = new THREE.Mesh(geom, mat);
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
+
+  // Async upgrade: tile the NASA Apollo 11 height-map STL across the play
+  // area as visual cladding. The STL is "thicker than needed" — it's a
+  // 3D-printable height block — so we sink each tile by TERRAIN_TILE_SINK
+  // units. From astronaut height the buried bottom is invisible; only the
+  // top surface reads. The procedural plane underneath fills any gap.
+  loadSTL(MODEL_PATHS.apollo11Site)
+    .then(stlGeom => {
+      if (!scene) return;
+      const tileMat = new THREE.MeshLambertMaterial({
+        color: 0x7c7c84, flatShading: true
+      });
+      disposables.push({ material: tileMat });
+      // Compute a uniform scale so the longest STL dimension fits
+      // TERRAIN_TILE_SIZE world units. Centered per-tile via geometry
+      // bounding box so each instance lines up on its anchor.
+      stlGeom.computeBoundingBox();
+      const bb = stlGeom.boundingBox;
+      const sizeX = bb.max.x - bb.min.x;
+      const sizeY = bb.max.y - bb.min.y;
+      const sizeZ = bb.max.z - bb.min.z;
+      const longest = Math.max(sizeX, sizeY, sizeZ) || 1;
+      const tileScale = TERRAIN_TILE_SIZE / longest;
+      // STL files commonly use Z-up; rotate to Y-up if the model was
+      // exported as a horizontal slab seen from above (Z is the "thickness"
+      // axis). We detect by which axis is shortest — the thin one is the
+      // height for a top-down lunar terrain.
+      const shortest = Math.min(sizeX, sizeY, sizeZ);
+      const needsZupFix = (shortest === sizeZ);
+
+      for (const [tx, tz] of TERRAIN_TILE_POSITIONS) {
+        const tile = new THREE.Mesh(stlGeom, tileMat);
+        if (needsZupFix) tile.rotation.x = -Math.PI / 2;
+        tile.scale.setScalar(tileScale);
+        // Center the tile horizontally on (tx, tz) and sink it so the
+        // visible top surface meets the procedural ground level near the
+        // anchor point (groundHeight is small relative to tile height).
+        tile.updateMatrixWorld(true);
+        const tbb = new THREE.Box3().setFromObject(tile);
+        const tcx = (tbb.min.x + tbb.max.x) / 2;
+        const tcz = (tbb.min.z + tbb.max.z) / 2;
+        tile.position.set(
+          tx - tcx,
+          groundHeight(tx, tz) - TERRAIN_TILE_SINK,
+          tz - tcz
+        );
+        scene.add(tile);
+      }
+      console.log(`[WalkMode] Apollo 11 terrain tiles active (${TERRAIN_TILE_POSITIONS.length})`);
+      // Note: STL geometry is owned by ModelCache (shared by every tile)
+      // and is NOT pushed to disposables — exit() leaves it in the cache.
+    })
+    .catch(() => { /* keep procedural ground as the only visual */ });
 }
 
 // ---------- Boot-print trail ----------
@@ -646,40 +717,83 @@ function buildAstronaut() {
   astronautParts = { leftArm, rightArm, leftLeg, rightLeg };
 
   scene.add(astronaut);
+
+  // Async upgrade to the NASA Mercury Spacesuit GLB. Static mesh — no
+  // skeleton — so updateWalkAnim() drives a procedural bob + sway in
+  // place of limb swings. Fallback path keeps the procedural humanoid.
+  loadModel(MODEL_PATHS.spacesuit)
+    .then(model => {
+      if (!astronaut) return;             // mode already exited
+      placeOnGround(model, 0, 0, 0, 3.2);
+      astronaut.add(model);
+      astronautModel = model;
+      // Hide every procedural mesh under the astronaut group (helmet,
+      // torso, limbs, feet) without removing them — keeps disposables
+      // intact and lets us flip back if needed.
+      astronaut.traverse(child => {
+        if (child === astronaut || child === model) return;
+        if (model.getObjectById(child.id)) return;  // descendant of new model
+        if (child.isMesh || child.isGroup) child.visible = false;
+      });
+      astronautProceduralVisible = false;
+      console.log('[WalkMode] Mercury Spacesuit GLB active');
+    })
+    .catch(() => { /* procedural humanoid keeps the role */ });
 }
 
 function updateWalkAnim(dt, moving) {
   if (moving) walkPhase += dt * 7;
-  const swing = moving ? Math.sin(walkPhase) * 0.7 : Math.sin(walkPhase) * 0; // 0 when stopped
-  astronautParts.leftLeg.rotation.x  =  swing;
-  astronautParts.rightLeg.rotation.x = -swing;
-  astronautParts.leftArm.rotation.x  = -swing * 0.6;
-  astronautParts.rightArm.rotation.x =  swing * 0.6;
+  // Procedural humanoid → swing limbs (only when those meshes are still
+  // visible; the spacesuit GLB hides them in favor of a different motion).
+  if (astronautProceduralVisible && astronautParts) {
+    const swing = moving ? Math.sin(walkPhase) * 0.7 : 0;
+    astronautParts.leftLeg.rotation.x  =  swing;
+    astronautParts.rightLeg.rotation.x = -swing;
+    astronautParts.leftArm.rotation.x  = -swing * 0.6;
+    astronautParts.rightArm.rotation.x =  swing * 0.6;
+  }
+  // Mercury Spacesuit GLB is unrigged — bones and skin weights aren't
+  // baked in, so we can't drive limb deformation at runtime. Substitute a
+  // procedural BOB (vertical bounce) + SWAY (subtle z-roll) tied to the
+  // walk phase. Reads as motion without claiming to be limb animation.
+  // Reset to neutral while idle so the suit settles cleanly.
+  if (astronautModel) {
+    astronautModel.position.y = moving ? Math.sin(walkPhase) * 0.12 : 0;
+    astronautModel.rotation.z = moving ? Math.sin(walkPhase * 2) * 0.04 : 0;
+  }
 }
 
 function buildParkedLander() {
   // Visual continuity: reuse the same texture as the flying lander, shared
   // via AssetCache so we don't upload the PNG twice on low-memory devices.
+  // Stays as the fallback while the Apollo Lunar Module GLB tries to load.
   const tex = getSharedTexture('textures/lander.png');
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
-  // Sprite size 0.8 × LANDER_SCALE — at scale 24 that's 19.2 world units,
-  // about 4–5× astronaut height which feels right next to a humanoid.
-  // Previous 1.6× looked like a 38-unit colossus floating overhead.
   const size = LANDER_SCALE * 0.8;
   landerModel = new THREE.Sprite(mat);
   landerModel.scale.set(size, size, 1);
   const lx = 0, lz = 0;
-  // Y offset accounts for the lander.png's transparent bottom margin: the
-  // visible foot pads end at pixel y=122 of 128, so the visible bottom is
-  // at sprite_center_y - size * (122/128 - 0.5) = sprite_center_y - size *
-  // 0.453. Setting center_y = ground + size * 0.453 puts the visible feet
-  // exactly on the surface instead of floating above it.
   landerModel.position.set(lx, groundHeight(lx, lz) + size * 0.453, lz);
   scene.add(landerModel);
-  // Note: the cached texture is NOT disposed — AssetCache owns it.
   disposables.push({ material: mat });
+
+  // Async upgrade to the NASA Apollo Lunar Module GLB. If it loads, hide
+  // the sprite and add the model as a sibling at the same world spot.
+  loadModel(MODEL_PATHS.apolloLM)
+    .then(model => {
+      if (!scene) return;                 // mode already exited
+      landerModel3D = model;
+      placeOnGround(model, lx, lz, groundHeight(lx, lz), LANDER_SCALE * 0.7);
+      scene.add(model);
+      // Hide the placeholder sprite. Keep landerModel as the proximity
+      // anchor so existing distance checks (boarding, breadcrumb origin)
+      // keep working without changes.
+      landerModel.visible = false;
+      console.log('[WalkMode] Apollo Lunar Module GLB active');
+    })
+    .catch(() => { /* keep sprite fallback — already placed */ });
 }
 
 // ---------- Phase-4 interactable system ----------
@@ -710,6 +824,14 @@ function spawnInteractables() {
   for (const site of APOLLO_SITES) {
     const [sx, sz] = site.walkPos;
     const it = buildApolloSite(site, sx, sz);
+    if (it) interactables.push(it);
+  }
+
+  // Static landmarks (habitats + Atlas 6) — each tries to load its NASA
+  // GLB; on failure or LOW_END the placeholder primitive stays.
+  for (const spec of LANDMARKS) {
+    const [sx, sz] = spec.walkPos;
+    const it = buildLandmark(spec, sx, sz);
     if (it) interactables.push(it);
   }
 
@@ -909,6 +1031,19 @@ function buildApolloSite(site, x, z) {
   group.add(base);
   disposables.push({ geometry: baseGeom, material: baseMat });
 
+  // Async upgrade: replace the cylinder placeholder with a smaller copy
+  // of the Apollo Lunar Module GLB so the Apollo 11 site reads as the
+  // actual descent stage left behind. Falls back silently if the GLB
+  // isn't available.
+  loadModel(MODEL_PATHS.apolloLM)
+    .then(model => {
+      if (!group.parent) return;
+      placeOnGround(model, 0, 0, 0, 5);
+      group.add(model);
+      base.visible = false;
+    })
+    .catch(() => { /* keep the cylinder placeholder */ });
+
   // Flag pole + cloth
   const poleGeom = new THREE.CylinderGeometry(0.06, 0.06, 4.5, 8);
   const poleMat  = new THREE.MeshLambertMaterial({ color: 0xdadade });
@@ -965,6 +1100,75 @@ function buildApolloSite(site, x, z) {
   };
 }
 
+/**
+ * Build a static-landmark interactable (habitat / Atlas 6 / etc.). The
+ * primitive placeholder appears immediately; the NASA GLB swaps in once
+ * loadModel() resolves. Either way the same interactable record is
+ * returned so the breadcrumb-trail + tap-to-interact flow doesn't care.
+ */
+function buildLandmark(spec, x, z) {
+  const group = new THREE.Group();
+  group.position.set(x, groundHeight(x, z), z);
+
+  // Primitive placeholder: a chunky vertical capsule so the player sees
+  // SOMETHING at the spot before the GLB lands. Different colors per
+  // landmark kind keep them distinguishable on a low-end / offline boot.
+  const placeholderColor =
+    spec.kind === 'habitat' ? 0xc0c0c8 :
+    spec.kind === 'atlas'   ? 0xeeeeee : 0x9999aa;
+  const ph = makeLandmarkPlaceholder(spec, placeholderColor);
+  group.add(ph);
+
+  scene.add(group);
+
+  // Async upgrade to the GLB.
+  const path = MODEL_PATHS[spec.model];
+  if (path) {
+    loadModel(path)
+      .then(model => {
+        if (!scene) return;
+        // Compute the right scale + ground placement, then attach to the
+        // landmark group so it shares the group's position.
+        placeOnGround(model, 0, 0, 0, spec.targetHeight ?? 5);
+        group.add(model);
+        ph.visible = false;
+        console.log(`[WalkMode] ${spec.id} GLB active`);
+      })
+      .catch(() => { /* placeholder stays visible */ });
+  }
+
+  return {
+    type: 'landmark',
+    object3d: group,
+    used: false,
+    spin: 0,
+    landmark: spec,
+    trailMarkers: []
+  };
+}
+
+/**
+ * Distinct primitive placeholder per landmark kind so something visible
+ * appears at the spot before the GLB resolves.
+ */
+function makeLandmarkPlaceholder(spec, color) {
+  let geom;
+  if (spec.kind === 'atlas') {
+    // Tall capsule for the rocket — narrow + tall.
+    geom = new THREE.CylinderGeometry(0.7, 1.0, spec.targetHeight ?? 12, 12);
+  } else if (spec.kind === 'habitat') {
+    // Stout dome-ish cylinder for the habitat module.
+    geom = new THREE.CylinderGeometry(2.2, 2.4, spec.targetHeight ?? 5, 14);
+  } else {
+    geom = new THREE.BoxGeometry(2, 3, 2);
+  }
+  const mat = new THREE.MeshLambertMaterial({ color });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.y = (spec.targetHeight ?? 5) / 2;
+  disposables.push({ geometry: geom, material: mat });
+  return mesh;
+}
+
 function pickClosestInteractable() {
   let best = null;
   let bestDist = WALK_INTERACT_RADIUS;
@@ -979,6 +1183,9 @@ function pickClosestInteractable() {
 function promptFor(it) {
   if (it.type === 'apollo') {
     return `PRESS E — ${it.apollo.name}`;
+  }
+  if (it.type === 'landmark') {
+    return it.used ? '' : `PRESS E — ${it.landmark.name}`;
   }
   const spec = INTERACTABLE_TYPES[it.type];
   if (it.type === 'damaged') {
@@ -1005,6 +1212,23 @@ function performInteraction(it) {
     it.used = true;
     // Leave the landmark standing so the player sees it on repeat visits;
     // just hide its breadcrumb trail.
+    hideTrailMarkers(it);
+    if (justDone.length) {
+      setTimeout(() => showComms(`OBJECTIVE COMPLETE: ${firstObjectiveLabel(justDone[0])}`), 1100);
+    }
+    return;
+  }
+
+  // Static landmarks (habitats, Atlas 6) — same shape as Apollo: score +
+  // comms, leave the model standing.
+  if (it.type === 'landmark') {
+    const gain = it.landmark.score | 0;
+    updateState(s => {
+      s.score += gain;
+      justDone = refreshObjectives();
+    }, 'pickup-landmark');
+    showComms(it.landmark.comms || `+${gain} SCORE — ${it.landmark.name}`);
+    it.used = true;
     hideTrailMarkers(it);
     if (justDone.length) {
       setTimeout(() => showComms(`OBJECTIVE COMPLETE: ${firstObjectiveLabel(justDone[0])}`), 1100);

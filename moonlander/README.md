@@ -93,6 +93,21 @@ python3 -m http.server 8000
   stdlib zlib; WAVs synthesized with stdlib `struct`). Replace them with
   your own MP3s/PNGs any time — filenames live in `js/Sound.js` and
   `js/modes/LanderMode.js` / `js/modes/WalkMode.js`.
+- 3D models in `assets/nasa_models/` come from NASA's public-domain
+  3D Resources catalog:
+  https://github.com/nasa/NASA-3D-Resources/tree/11ebb4ee043715aefbba6aeec8a61746fad67fa7/3D%20Models
+  Public-domain works of the U.S. Government per 17 U.S.C. § 105.
+  Used in walk mode for the parked Apollo Lunar Module, the Apollo 11
+  Tranquility-Base height-map terrain, the Mercury Spacesuit astronaut,
+  the Habitat Demonstration Unit landmarks, and the Atlas 6 / Friendship 7
+  rocket. Each load is async with a procedural fallback so the game still
+  runs offline or on low-end devices where the files are skipped.
+
+  **Rigging note for the Mercury Spacesuit:** the GLB ships as a static
+  mesh (no bones / skin weights), so `js/modes/WalkMode.js:updateWalkAnim`
+  drives a procedural bob + sway in place of limb animation. Proper
+  walking-limb motion would need a Blender pass to add a skeleton and
+  paint vertex weights, then a re-export.
 
 ## License
 
