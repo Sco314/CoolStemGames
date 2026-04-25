@@ -21,7 +21,11 @@ name is Space Racer).
 | Main menu / game over | ✅ | High-score persistence (top 10) and 6 achievements |
 | Settings | ✅ | Master volume, invert-Y, fullscreen, persisted in localStorage |
 | Mobile | ✅ | Letterbox or full-viewport, touch joystick + thrust buttons, screen-swipe camera, **tap-on-canvas to interact** (no E button needed), top-right mute toggle, top-left satellite-map button |
-| Satellite map | ✅ | Top-left button opens a top-down view of the play area showing astronaut, lander, every objective + landmark, color-coded; updates live |
+| Satellite map | ✅ | Top-left button opens a top-down view; **gated behind lander proximity** with a "CLIMBING LADDER" comms beat. Off-lander taps surface "RETURN TO LANDER" |
+| Lander HP | ✅ | New HULL gauge (color-coded). Crashes shave LANDER_CRASH_DAMAGE per impact; HP=0 wrecks the craft and ends the run alongside fuel-empty |
+| Carry-and-deposit | ✅ | Fuel drums and repair parts are carried (HUD shows CARRY), then stowed at the lander with `E`/tap. Stow message reports `+FUEL · +HP` |
+| Repair parts | ✅ | New `'part'` interactable spawned at the current Apollo site; +25 HP per part on stow |
+| Apollo levels | ✅ | Walk scene shows Apollo 11 at level 0, Apollo 12 at level 1+. Registry is `APOLLO_SITES`; add 14/15/16/17 entries to extend |
 | NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit (×2), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks |
 | Adaptive quality | ✅ | Particle pool scales by `Device.LOW_END`; FPS-driven fallback drops emit rate further if average FPS < 30 |
 | Audio | ⚠️ | Synthesized .wav placeholders; drop in real .mp3s and update paths in `js/Sound.js` |
@@ -30,20 +34,21 @@ name is Space Racer).
 
 Things explicitly deferred to a follow-up PR:
 
-- **Lander damage + repair loop.** Crashing reduces lander HP; below
-  threshold the craft can't fly until a repair part is brought back.
-- **Astronaut HP + health packs.** Separate pool, refilled at habitats
-  or by collecting health packs at Apollo sites.
-- **Carry-and-deposit fuel.** Currently picking up a fuel drum auto-
-  refuels the lander. Pending change: drum becomes a carried inventory
-  item; only deposits when the astronaut walks back to the lander.
-- **Apollo 12 / 14 / 15 / 16 / 17 sites.** Each tied to a successful
-  landing level (level 2 = Apollo 12, etc.) with its own height-map STL
-  and curated landmarks. Phase 8 wires up the registry; only Apollo 11
-  is populated today.
-- **Ladder-climb animation.** The map is currently always-accessible
-  via the corner button. Lore-correct path is "walk to lander → climb
-  ladder → connect to satellite → see map".
+- **Astronaut HP + health packs.** Separate pool from lander HP. Walk
+  mode currently has no damage source for the astronaut, so the pool
+  isn't introduced until a damage source (falls / suit punctures /
+  habitat heals) lands.
+- **Apollo 14 / 15 / 16 / 17 sites.** The registry is in place; new
+  entries in `APOLLO_SITES` immediately rotate by level. Apollo 11 is
+  level 0, Apollo 12 is level 1+; 14–17 just need their `walkPos` +
+  artifact data filled in (and ideally height-map STLs added to
+  `assets/nasa_models/`).
+- **Per-Apollo terrain.** All levels currently share the Apollo 11
+  height-map STL tiles. Each Apollo destination should swap to its
+  own STL once the asset files arrive.
+- **Ladder-climb 3D animation.** The map gate is currently a comms
+  beat ("CLIMBING LADDER…") + 750 ms delay. A scripted up-the-ladder
+  motion of the astronaut model would sell the moment.
 - **Mercury Spacesuit rigging.** GLB ships unrigged so we drive a
   procedural bob+sway in `updateWalkAnim`. Real walking-limb animation
   needs a Blender pass to add a skeleton + skin weights.

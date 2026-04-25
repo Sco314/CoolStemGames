@@ -234,9 +234,10 @@ function handleLanded(result) {
 function handleCrashed(result) {
   console.log('💥 Crashed:', result.reason);
   const fuelGone = GameState.fuel.current <= 0;
+  const wrecked  = !!result?.wrecked || GameState.lander?.wrecked;
   setTimeout(() => {
-    if (fuelGone) {
-      openGameOver(result.reason);
+    if (fuelGone || wrecked) {
+      openGameOver(wrecked ? result.reason + ' (HULL DESTROYED)' : result.reason);
     } else {
       goToMode(LanderMode, { onLanded: handleLanded, onCrashed: handleCrashed });
     }

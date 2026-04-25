@@ -192,6 +192,12 @@ export const INTERACTABLE_TYPES = Object.freeze({
     color:        0xaa3030,
     costKits:     1,
     score:        500
+  },
+  part: {
+    label:  'REPAIR PART',
+    prompt: 'PRESS E TO PICK UP REPAIR PART',
+    color:  0x66ff88,
+    hp:     25      // applied to GameState.lander.hp on stow at the lander
   }
 });
 
@@ -214,18 +220,37 @@ export const BEGINNER_PAD_TOLERANCE = 2;  // world units
 // landable) are filtered out so they don't get multiplier labels.
 export const MIN_PAD_WIDTH = 10;
 
-// Apollo landing sites placed in walk mode at fixed positions. For now
-// only Apollo 11 — follow-up PR will add 12/14/15/16/17 along with the
-// damage + repair-part mechanic that makes them structurally meaningful.
+// Apollo landing sites placed in walk mode at fixed positions. Each entry
+// also drops a `part` (repair-part) interactable next to its landmark when
+// the site is the current level's destination. Add 14/15/16/17 here and
+// they'll auto-rotate by level (level→index mapping below).
 export const APOLLO_SITES = [
   {
     id: 'apollo-11',
     name: 'APOLLO 11 (TRANQUILITY BASE)',
-    walkPos: [110, -70],           // [x, z] inside the walk-mode radius
+    walkPos: [110, -70],
     artifactScore: 300,
     comms: 'APOLLO 11 ARTIFACT COLLECTED — TRANQUILITY BASE'
+  },
+  {
+    id: 'apollo-12',
+    name: 'APOLLO 12 (OCEAN OF STORMS)',
+    walkPos: [-90, -90],
+    artifactScore: 350,
+    comms: 'APOLLO 12 ARTIFACT COLLECTED — OCEAN OF STORMS'
   }
 ];
+
+/**
+ * Maps GameState.level → APOLLO_SITES index for the "current Apollo
+ * destination" the walk scene advertises (breadcrumb trail + repair-part
+ * pickup). Out-of-range levels wrap, so once 14/15/16/17 are added the
+ * loop keeps rotating destinations.
+ */
+export function apolloSiteForLevel(level) {
+  if (APOLLO_SITES.length === 0) return null;
+  return APOLLO_SITES[level % APOLLO_SITES.length];
+}
 
 // ---------- NASA 3D Resources model paths (Phase 8) ----------
 // Files live under moonlander/assets/nasa_models/. Source repo:
@@ -363,6 +388,14 @@ export const PERFECT_ANGLE_MAX      = 1.5 * (Math.PI / 180);
 // Hot-swap achievement: land with fuel below this, refuel up past this.
 export const HOT_SWAP_LOW_FUEL      = 100;
 export const HOT_SWAP_HIGH_FUEL     = 800;
+
+// ---------- Lander damage + repair (Phase 8 PR B) ----------
+// The lander tracks an HP pool separate from fuel. Every crash takes a
+// chunk; HP <= 0 means the craft is wrecked and the run ends. Repair
+// parts collected at Apollo sites and stowed at the lander restore HP.
+export const LANDER_MAX_HP        = 100;
+export const LANDER_CRASH_DAMAGE  = 25;     // hp lost per crash
+export const LANDER_REPAIR_PER_PART = 25;   // hp restored per repair part stowed
 
 // ---------- Mode identifiers ----------
 // Use strings so console logs and save files are human-readable.

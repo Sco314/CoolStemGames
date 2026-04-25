@@ -19,12 +19,13 @@ import {
   WALK_PLAY_RADIUS, WALK_MOUSE_SENSITIVITY,
   WALK_PITCH_MIN, WALK_PITCH_MAX,
   WALK_GROUND_AMPLITUDE, WALK_CRATER_COUNT,
-  INTERACTABLE_TYPES, APOLLO_SITES,
+  INTERACTABLE_TYPES, APOLLO_SITES, apolloSiteForLevel,
   DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
   TRANSITION_WIND_VOL,
   HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
   MODEL_PATHS, LANDMARKS, LEVEL1_FIXED_LOOT,
   TERRAIN_TILE_POSITIONS, TERRAIN_TILE_SIZE, TERRAIN_TILE_SINK,
+  LANDER_REPAIR_PER_PART,
   MODE
 } from '../Constants.js';
 import {
@@ -260,8 +261,15 @@ export const WalkMode = {
     } else {
       const distToLander = astronaut.position.distanceTo(landerModel.position);
       if (distToLander < WALK_INTERACT_RADIUS) {
-        setCenterMessage('PRESS E TO BOARD LANDER');
-        if (ePressed) onReturnToLanderCallback();
+        // Carrying anything? First E stows everything (refuels +
+        // restores HP). Empty hands? E boards the lander.
+        if (GameState.carrying.length > 0) {
+          setCenterMessage('PRESS E TO STOW CARGO');
+          if (ePressed) stowCarryAtLander();
+        } else {
+          setCenterMessage('PRESS E TO BOARD LANDER');
+          if (ePressed) onReturnToLanderCallback();
+        }
       } else {
         setCenterMessage('');
       }
@@ -301,11 +309,17 @@ export const WalkMode = {
       }
       return { kind, x: p.x, z: p.z, used: it.used, color, label };
     });
+    const distToLander = astronaut.position.distanceTo(landerModel.position);
     return {
       bounds: WALK_PLAY_RADIUS,
       astronaut: { x: astronaut.position.x, z: astronaut.position.z, yaw: yawRad },
       lander:    { x: landerModel.position.x, z: landerModel.position.z },
-      items
+      items,
+      // The satellite-map overlay is gated behind being at the lander
+      // (lore: you climb the ladder, jack into the uplink). HUD reads
+      // this flag on map-button click and either plays a "climbing" beat
+      // or rejects with a "REACH THE LANDER FIRST" comms blip.
+      nearLander: distToLander < WALK_INTERACT_RADIUS * 1.6
     };
   },
 
@@ -873,12 +887,17 @@ function spawnInteractables() {
     }
   }
 
-  // Apollo landmarks. For now only Apollo 11 is defined; follow-up PR
-  // will add 12/14/15/16/17 with the damage/repair-part loop.
-  for (const site of APOLLO_SITES) {
-    const [sx, sz] = site.walkPos;
-    const it = buildApolloSite(site, sx, sz);
-    if (it) interactables.push(it);
+  // Current-level Apollo landmark + a repair part next to it. The Apollo
+  // site rotates by GameState.level (level 0 = Apollo 11, level 1 =
+  // Apollo 12). The repair part offers a tangible reason to walk there:
+  // pick it up, carry it back to the lander, restore HP.
+  const currentSite = apolloSiteForLevel(GameState.level);
+  if (currentSite) {
+    const [sx, sz] = currentSite.walkPos;
+    const apollo = buildApolloSite(currentSite, sx, sz);
+    if (apollo) interactables.push(apollo);
+    const part = buildInteractable('part', sx + 6, sz + 4);
+    if (part) interactables.push(part);
   }
 
   // Static landmarks (habitats + Atlas 6) — each tries to load its NASA
@@ -912,6 +931,7 @@ function buildInteractable(type, x, z) {
     case 'repair':  buildRepairCrate(group, spec); break;
     case 'sample':  buildSample(group, spec);      spin = 1.2; break;
     case 'damaged': buildDamagedProbe(group, spec); break;
+    case 'part':    buildRepairPart(group, spec);  spin = 0.6; break;
   }
 
   scene.add(group);
@@ -1064,6 +1084,28 @@ function buildDamagedProbe(group, spec) {
   ant.position.set(0.7, 2.0, 0);
   ant.rotation.z = -0.5;
   group.add(ant);
+}
+
+/**
+ * Repair-part interactable. A small green octahedron on a pedestal — picks
+ * up into the carrying inventory; deposit at the lander to restore HP.
+ */
+function buildRepairPart(group, spec) {
+  const geom = new THREE.OctahedronGeometry(0.6, 0);
+  const mat = new THREE.MeshLambertMaterial({
+    color: spec.color, emissive: 0x123a18, emissiveIntensity: 0.55
+  });
+  const crystal = new THREE.Mesh(geom, mat);
+  crystal.position.y = 1.2;
+  group.add(crystal);
+  disposables.push({ geometry: geom, material: mat });
+
+  const padGeom = new THREE.CylinderGeometry(0.7, 0.7, 0.15, 14);
+  const padMat  = new THREE.MeshLambertMaterial({ color: 0x444450 });
+  const pad = new THREE.Mesh(padGeom, padMat);
+  pad.position.y = 0.08;
+  group.add(pad);
+  disposables.push({ geometry: padGeom, material: padMat });
 }
 
 /**
@@ -1294,21 +1336,23 @@ function performInteraction(it) {
 
   switch (it.type) {
     case 'fuel': {
+      // No more auto-deposit. Carrying it back to the lander is the loop.
       const scaled = effectiveFuelGain(GameState.level, spec.amount);
-      const room = GameState.fuel.capacity - GameState.fuel.current;
-      const gained = Math.min(scaled, room);
       updateState(s => {
-        s.fuel.current += gained;
-        if (s.isAlerted && s.fuel.current >= s.fuel.capacity * 0.3) s.isAlerted = false;
+        s.carrying.push({ type: 'fuel', amount: scaled });
         justDone = refreshObjectives();
       }, 'pickup-fuel');
-      showComms(`+${gained | 0} FUEL — TANKS TOPPED UP`);
-      // Hot-swap achievement: landed with critically low fuel, refueled past
-      // the high threshold.
-      if ((GameState.lastLanding.fuelAtLanding ?? Infinity) < HOT_SWAP_LOW_FUEL &&
-          GameState.fuel.current >= HOT_SWAP_HIGH_FUEL) {
-        showAchievementToast(unlockAchievement('hot-swap-refuel'));
-      }
+      showComms(`PICKED UP FUEL DRUM (+${scaled | 0} ON STOW)`);
+      break;
+    }
+    case 'part': {
+      // Repair part — carry to the lander to restore HP.
+      const hp = spec.hp || LANDER_REPAIR_PER_PART;
+      updateState(s => {
+        s.carrying.push({ type: 'part', amount: hp });
+        justDone = refreshObjectives();
+      }, 'pickup-part');
+      showComms(`PICKED UP REPAIR PART (+${hp} HP ON STOW)`);
       break;
     }
     case 'repair': {
@@ -1371,4 +1415,46 @@ function performInteraction(it) {
 function firstObjectiveLabel(id) {
   const o = GameState.objectives.find(x => x.id === id);
   return o ? o.label.toUpperCase() : id;
+}
+
+/**
+ * Apply every item in GameState.carrying to the lander and clear the
+ * carry stack. Fuel goes into the tank (capped); repair parts add HP
+ * (capped at maxHp). Surfaces a single comms summary so the player
+ * sees what changed.
+ */
+function stowCarryAtLander() {
+  if (!GameState.carrying || GameState.carrying.length === 0) return;
+  let fuelGained = 0;
+  let hpGained = 0;
+  updateState(s => {
+    for (const item of s.carrying) {
+      if (item.type === 'fuel') {
+        const room = s.fuel.capacity - s.fuel.current;
+        const got = Math.min(item.amount, room);
+        s.fuel.current += got;
+        fuelGained += got;
+      } else if (item.type === 'part') {
+        const room = s.lander.maxHp - s.lander.hp;
+        const got = Math.min(item.amount, room);
+        s.lander.hp += got;
+        hpGained += got;
+      }
+    }
+    s.carrying = [];
+    if (s.isAlerted && s.fuel.current >= s.fuel.capacity * 0.3) s.isAlerted = false;
+  }, 'stow-cargo');
+
+  // Hot-swap achievement still applies on stow if the player landed
+  // dangerously low and refueled past the high threshold.
+  if (fuelGained > 0 &&
+      (GameState.lastLanding.fuelAtLanding ?? Infinity) < HOT_SWAP_LOW_FUEL &&
+      GameState.fuel.current >= HOT_SWAP_HIGH_FUEL) {
+    showAchievementToast(unlockAchievement('hot-swap-refuel'));
+  }
+
+  const parts = [];
+  if (fuelGained > 0) parts.push(`+${fuelGained | 0} FUEL`);
+  if (hpGained > 0)   parts.push(`+${hpGained | 0} HP`);
+  showComms(parts.length ? `STOWED — ${parts.join(' · ')}` : 'NOTHING TO STOW');
 }

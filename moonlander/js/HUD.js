@@ -19,8 +19,11 @@ const el = {
   score:   document.getElementById('hud-score'),
   time:    document.getElementById('hud-time'),
   fuel:    document.getElementById('hud-fuel'),
+  hull:    document.getElementById('hud-hull'),
   kits:    document.getElementById('hud-kits'),
   samples: document.getElementById('hud-samples'),
+  carry:    document.getElementById('hud-carry'),
+  carryRow: document.getElementById('hud-carry-row'),
   alert:   document.getElementById('hud-alert'),
   alt:     document.getElementById('hud-alt'),
   hspeed:  document.getElementById('hud-hspeed'),
@@ -130,8 +133,10 @@ function bindOverlayButtons() {
   // profile-level flag so the card doesn't reappear next run.
   overlay.walkTutorialClose?.addEventListener('click', dismissWalkTutorial);
 
-  // Satellite map open/close.
-  overlay.mapBtn?.addEventListener('click', () => showMap());
+  // Satellite map open/close. Gated behind lander proximity per the
+  // ladder-climb lore — the player has to walk to the lander before the
+  // satellite uplink is available.
+  overlay.mapBtn?.addEventListener('click', () => requestOpenMap());
   overlay.btnCloseMap?.addEventListener('click', () => hideMap());
 }
 
@@ -143,6 +148,24 @@ function bindOverlayButtons() {
  */
 export function setMapDataProvider(fn) {
   mapDataProvider = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * Click handler for the corner MAP button. If the astronaut is at the
+ * lander, plays a brief "climbing ladder" comms beat before showing the
+ * overlay. Otherwise rejects with a comms blip telling the player where
+ * to go. Direct showMap() callers (e.g. tests) skip the gate.
+ */
+function requestOpenMap() {
+  if (!mapDataProvider) return;
+  const data = mapDataProvider();
+  if (!data) return;
+  if (!data.nearLander) {
+    showComms('UPLINK UNAVAILABLE — RETURN TO LANDER');
+    return;
+  }
+  showComms('CLIMBING LADDER… ACCESSING SATELLITE UPLINK');
+  setTimeout(() => showMap(), 750);
 }
 
 export function showMap() {
@@ -425,6 +448,26 @@ function onStateChange(state /*, changeKey */) {
   el.fuel.textContent  = pad(state.fuel.current.toFixed(0), 4);
   el.kits.textContent    = state.supplies.repairKits;
   el.samples.textContent = state.supplies.scienceSamples;
+  if (el.hull && state.lander) {
+    el.hull.textContent = `${state.lander.hp | 0}/${state.lander.maxHp | 0}`;
+    const hpFrac = state.lander.maxHp ? state.lander.hp / state.lander.maxHp : 0;
+    const hullState = hpFrac <= 0.2 ? 'danger' : hpFrac <= 0.5 ? 'warn' : 'ok';
+    setGaugeClass(el.hull, hullState);
+  }
+  if (el.carryRow && el.carry) {
+    const carry = state.carrying || [];
+    if (carry.length === 0) {
+      el.carryRow.hidden = true;
+    } else {
+      el.carryRow.hidden = false;
+      // Group by type so we don't show "FUEL × 3 / FUEL × 3 / PART × 5"
+      const counts = {};
+      for (const c of carry) counts[c.type] = (counts[c.type] || 0) + 1;
+      el.carry.textContent = Object.entries(counts)
+        .map(([t, n]) => `${t.toUpperCase()}×${n}`)
+        .join(' · ');
+    }
+  }
 
   // Fuel gauge color — green at comfortable, amber at "plan your descent",
   // red at critical. Matches the low-fuel alarm threshold at 30%.
