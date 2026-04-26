@@ -1995,6 +1995,16 @@ const ACHIEVEMENTS = [
     fact: '55 straight clicks. Your dopamine loop just peaked.' },
   { id: 'golden_touch', emblem: '✨', title: 'Seized the Moment',   unlock: 'Catch a Golden Moment',
     fact: 'Variable-ratio reinforcement — not knowing when the next reward will come — is the most engaging pattern in psychology. You just experienced it.' },
+
+  // Late-game recognition (added in v2.0.2)
+  { id: 'token_millionaire', emblem: '💰', title: 'Token Millionaire', unlock: 'Earn 1,000,000 lifetime Boost Tokens',
+    fact: 'A million tokens — a thousand thousands. Compound progress is how empires, forests, and Fibonacci sequences all eventually reach incomprehensible scale.' },
+  { id: 'fib_in_index',      emblem: '🪡', title: 'Fibonacci-in-Index', unlock: 'Reach a Fibonacci number whose position is itself Fibonacci (8, 13, 21, 34, 55, 89, 144)',
+    fact: 'These are the rare doubly-Fibonacci numbers — their position in the sequence is itself a Fibonacci number. Mathematicians call them "Fibonacci-in-index" terms.' },
+  { id: 'weekly_dynast',     emblem: '👑', title: 'Weekly Dynast',     unlock: 'Finish on the podium of three weekly challenges',
+    fact: 'Three weekly podiums means you showed up reliably across three different challenge types. Consistency beats spike performance every time.' },
+  { id: 'skin_collector',    emblem: '🎨', title: 'Skin Collector',    unlock: 'Unlock every skin',
+    fact: 'You climbed all the way to the highest skin unlock. Every theme is yours; switch them whenever the mood changes.' },
 ];
 
 // ─── Tier 3: Gallery ("Found in Nature") catalog ──────────────────
@@ -3677,6 +3687,19 @@ function checkAchievements() {
 
   if (state.n === 0) unlock('zero');
   if (state._dragExploredNs && state._dragExploredNs.size >= 5) unlock('explorer');
+
+  // v2.0.2 late-game recognition. Token Millionaire reads from the
+  // lifetime counter (resets-immune); Fibonacci-in-Index fires when
+  // your highest |n| is itself a Fibonacci number (8, 13, 21, 34,
+  // 55, 89, 144); Weekly Dynast counts podium entries (rank 1-3) in
+  // the persisted championBadges array; Skin Collector requires every
+  // entry in the SKINS catalog to be unlocked.
+  if ((state.boostTokensLifetime || 0) >= 1_000_000) unlock('token_millionaire');
+  const FIB_IN_INDEX = [8, 13, 21, 34, 55, 89, 144];
+  if (FIB_IN_INDEX.includes(state.highestAbsN)) unlock('fib_in_index');
+  const podiums = (state.weekly.championBadges || []).filter(b => b.rank >= 1 && b.rank <= 3).length;
+  if (podiums >= 3) unlock('weekly_dynast');
+  if (SKINS.every(s => state.highestAbsN >= s.unlock)) unlock('skin_collector');
 
   // Completionist — all OTHER achievements owned
   const others = ACHIEVEMENTS.filter(a => a.id !== 'collector');
