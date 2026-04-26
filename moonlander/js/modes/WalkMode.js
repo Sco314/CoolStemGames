@@ -19,7 +19,7 @@ import {
   WALK_PLAY_RADIUS, WALK_MOUSE_SENSITIVITY,
   WALK_PITCH_MIN, WALK_PITCH_MAX,
   WALK_GROUND_AMPLITUDE, WALK_CRATER_COUNT,
-  INTERACTABLE_TYPES, APOLLO_SITES, apolloSiteForLevel,
+  INTERACTABLE_TYPES, APOLLO_SITES, apolloSiteForLevel, apolloSiteStlPath,
   DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
   TRANSITION_WIND_VOL,
   HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
@@ -36,7 +36,7 @@ import { Input } from '../Input.js';
 import {
   setCenterMessage, showComms, showAchievementToast,
   showWalkTutorial, hideWalkTutorial,
-  setMapDataProvider, hideMap, resetStemSession,
+  setMapDataProvider, setLadderProviders, hideMap, resetStemSession,
   showMissionMessage
 } from '../HUD.js';
 import { Sounds } from '../Sound.js';
@@ -47,6 +47,7 @@ import { loadModel, loadSTL, placeOnGround } from '../ModelCache.js';
 import * as Story from '../Story.js';
 import { Alien } from './walk/Alien.js';
 import { ALIEN_MIN_LEVEL, ALIEN_SPAWN_CHANCE } from '../Constants.js';
+import { LOW_END } from '../Device.js';
 
 let scene = null;
 let camera = null;
@@ -111,7 +112,14 @@ export const WalkMode = {
     canvasEl = context.canvas;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a1a);
+    // Batch 5 #20: starfield panorama as scene.background. LOW_END skips
+    // the texture load (extra GPU upload not worth it on cheap devices)
+    // and falls back to the solid color.
+    if (LOW_END) {
+      scene.background = new THREE.Color(0x0a0a1a);
+    } else {
+      scene.background = getSharedTexture('textures/starfield.png');
+    }
     // Fog is cosmetic but adds a depth-cue shader cost; the adaptive quality
     // controller toggles it off when FPS tanks.
     if (getQuality() !== 'low') scene.fog = new THREE.Fog(0x0a0a1a, 60, 320);
@@ -126,6 +134,7 @@ export const WalkMode = {
     buildLighting();
     buildGround();
     buildCraters();
+    buildEarth();
     buildAstronaut();
     buildParkedLander();
     // Rebuild the objectives list from career + this level's Apollo briefs
@@ -148,6 +157,13 @@ export const WalkMode = {
     // Wire up the satellite-map button by handing HUD a function that
     // returns the current snapshot. Cleared on exit.
     setMapDataProvider(() => this.getMapData());
+    // Batch 5 #9 — hand HUD the scripted climb / descend functions so
+    // requestOpenMap() drives an actual visible animation rather than a
+    // 750 ms timeout. Cleared on exit().
+    setLadderProviders({
+      climb:   (onTop)  => this.startLadderClimb(onTop),
+      descend: (onDone) => this.startLadderDescend(onDone)
+    });
     // Per-walk-session caps: STEM challenges (Batch 2 #3) reset so the
     // player can answer a few each trip, not just once per page load.
     resetStemSession();
@@ -179,6 +195,7 @@ export const WalkMode = {
     // Tear down the satellite map's data link so HUD doesn't poll a dead
     // walk session, and hide the overlay if it was open.
     setMapDataProvider(null);
+    setLadderProviders(null);
     hideMap();
 
     for (const d of disposables) {
@@ -217,13 +234,26 @@ export const WalkMode = {
     if (scripted) {
       scripted.t = Math.min(1, scripted.t + dt / scripted.duration);
       const t = scripted.t;
-      astronaut.position.x = lerp(scripted.startPos.x, scripted.endPos.x, t);
-      astronaut.position.z = lerp(scripted.startPos.z, scripted.endPos.z, t);
-      astronaut.position.y = groundHeight(astronaut.position.x, astronaut.position.z);
-      yawRad = lerpAngle(scripted.startYaw, scripted.endYaw, t);
-      astronaut.rotation.y = yawRad;
-      updateWalkAnim(dt, true);
-      updateChaseCamera();
+      if (scripted.kind === 'climb-up' || scripted.kind === 'climb-down') {
+        // Pure vertical lift up the lander side. Y is the only axis that
+        // animates; xz stay locked and the astronaut faces the lander
+        // (already set when the climb started).
+        astronaut.position.x = scripted.startPos.x;
+        astronaut.position.z = scripted.startPos.z;
+        const yEase = t * t * (3 - 2 * t);
+        astronaut.position.y = lerp(scripted.startPos.y, scripted.endPos.y, yEase);
+        astronaut.rotation.y = scripted.startYaw;
+        updateWalkAnim(dt, true);
+        updateChaseCamera();
+      } else {
+        astronaut.position.x = lerp(scripted.startPos.x, scripted.endPos.x, t);
+        astronaut.position.z = lerp(scripted.startPos.z, scripted.endPos.z, t);
+        astronaut.position.y = groundHeight(astronaut.position.x, astronaut.position.z);
+        yawRad = lerpAngle(scripted.startYaw, scripted.endYaw, t);
+        astronaut.rotation.y = yawRad;
+        updateWalkAnim(dt, true);
+        updateChaseCamera();
+      }
       if (t >= 1) {
         const done = scripted.onDone;
         scripted = null;
@@ -416,6 +446,53 @@ export const WalkMode = {
       onDone
     };
     setCenterMessage('');
+  },
+
+  /**
+   * Batch 5 #9: scripted up-the-ladder climb. Used when opening the
+   * satellite map — replaces the old 750 ms blind timeout in HUD with an
+   * actual visible motion. Astronaut is already at the lander when this
+   * fires (HUD checks via the data provider). Translates +Y over ~1.4 s,
+   * then fires onTop.
+   */
+  startLadderClimb(onTop = () => {}) {
+    const sp = astronaut.position.clone();
+    // Face the lander so the chase camera frames the climb cleanly.
+    const dx = landerModel.position.x - sp.x;
+    const dz = landerModel.position.z - sp.z;
+    const facingYaw = Math.atan2(-dx, -dz);
+    yawRad = facingYaw;
+    scripted = {
+      kind: 'climb-up',
+      t: 0,
+      duration: 1.4,
+      startPos: sp,
+      endPos: new THREE.Vector3(sp.x, sp.y + 4.2, sp.z),
+      startYaw: facingYaw,
+      endYaw: facingYaw,
+      onDone: onTop
+    };
+    setCenterMessage('CLIMBING LADDER…');
+  },
+
+  /**
+   * Reverse of startLadderClimb — returns the astronaut to the ground.
+   * Called when the satellite map closes.
+   */
+  startLadderDescend(onDone = () => {}) {
+    const sp = astronaut.position.clone();
+    const groundY = groundHeight(sp.x, sp.z);
+    scripted = {
+      kind: 'climb-down',
+      t: 0,
+      duration: 1.0,
+      startPos: sp,
+      endPos: new THREE.Vector3(sp.x, groundY, sp.z),
+      startYaw: yawRad,
+      endYaw: yawRad,
+      onDone
+    };
+    setCenterMessage('');
   }
 };
 
@@ -580,12 +657,22 @@ function buildGround() {
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
 
-  // Async upgrade: tile the NASA Apollo 11 height-map STL across the play
-  // area as visual cladding. The STL is "thicker than needed" — it's a
-  // 3D-printable height block — so we sink each tile by TERRAIN_TILE_SINK
-  // units. From astronaut height the buried bottom is invisible; only the
-  // top surface reads. The procedural plane underneath fills any gap.
-  loadSTL(MODEL_PATHS.apollo11Site)
+  // Async upgrade: tile the NASA height-map STL across the play area as
+  // visual cladding. The STL is "thicker than needed" — it's a 3D-
+  // printable height block — so we sink each tile by TERRAIN_TILE_SINK
+  // units. From astronaut height the buried bottom is invisible; only
+  // the top surface reads. The procedural plane underneath fills gaps.
+  //
+  // Batch 5 #23: try the per-Apollo path first (e.g. Apollo 12 / 14 /
+  // 15 / 16 / 17 - Landing Site.stl) and fall back to the bundled
+  // Apollo 11 STL if it's missing. Only Apollo 11 ships today; dropping
+  // additional NASA STLs into assets/nasa_models/ activates them
+  // automatically with no further code change.
+  const perLevelStl = apolloSiteStlPath(GameState.level);
+  const stlPromise = (perLevelStl && perLevelStl !== MODEL_PATHS.apollo11Site)
+    ? loadSTL(perLevelStl).catch(() => loadSTL(MODEL_PATHS.apollo11Site))
+    : loadSTL(MODEL_PATHS.apollo11Site);
+  stlPromise
     .then(stlGeom => {
       if (!scene) return;
       const tileMat = new THREE.MeshLambertMaterial({
@@ -698,23 +785,58 @@ function dropFootprintIfMoved() {
 }
 
 function buildCraters() {
-  const ringMat = new THREE.MeshBasicMaterial({
-    color: 0x3a3a42, transparent: true, opacity: 0.65, side: THREE.DoubleSide
+  // Batch 5 #15: textured circular decals replace the old empty rings.
+  // The PNG carries its own alpha (transparent outside the disc, soft
+  // inside). If the texture is missing the loader returns a placeholder
+  // and the decals fall back to a flat dark fill, which still reads as
+  // craters at distance.
+  const tex = getSharedTexture('textures/crater.png');
+  const craterMat = new THREE.MeshBasicMaterial({
+    map: tex, color: 0xffffff,
+    transparent: true, opacity: 0.92, side: THREE.DoubleSide,
+    depthWrite: false
   });
-  disposables.push({ material: ringMat });
+  disposables.push({ material: craterMat });
 
   for (let i = 0; i < WALK_CRATER_COUNT; i++) {
     const cx = (Math.random() * 2 - 1) * WALK_PLAY_RADIUS * 0.9;
     const cz = (Math.random() * 2 - 1) * WALK_PLAY_RADIUS * 0.9;
-    const outer = 3 + Math.random() * 8;
-    const inner = outer * (0.55 + Math.random() * 0.2);
-    const ringGeom = new THREE.RingGeometry(inner, outer, 24);
-    ringGeom.rotateX(-Math.PI / 2);
-    const ring = new THREE.Mesh(ringGeom, ringMat);
-    ring.position.set(cx, groundHeight(cx, cz) + 0.05, cz);
-    scene.add(ring);
-    disposables.push({ geometry: ringGeom });
+    const size = 6 + Math.random() * 16;
+    const decalGeom = new THREE.PlaneGeometry(size, size);
+    decalGeom.rotateX(-Math.PI / 2);
+    const decal = new THREE.Mesh(decalGeom, craterMat);
+    // Slight Y offset so the decal sits just above the ground without
+    // z-fighting with the displaced plane.
+    decal.position.set(cx, groundHeight(cx, cz) + 0.06, cz);
+    decal.rotation.y = Math.random() * Math.PI * 2;
+    scene.add(decal);
+    disposables.push({ geometry: decalGeom });
   }
+}
+
+/**
+ * Batch 5 #21: Earth hangs in the sky — a textured sphere placed far
+ * above the play area. Skipped on LOW_END. The texture has soft
+ * continents + clouds painted on a transparent disc; we apply it via
+ * MeshBasicMaterial so it doesn't need lighting (Earth is its own
+ * source of imagery here, not a lit object).
+ */
+function buildEarth() {
+  if (LOW_END) return;
+  const tex = getSharedTexture('textures/earth.png');
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthWrite: false
+  });
+  const geom = new THREE.SphereGeometry(40, 32, 24);
+  const earth = new THREE.Mesh(geom, mat);
+  // Place high in the south-west sky; far enough away that the player
+  // can't walk around it. Walk-mode camera is around y=4 so y=180 puts
+  // it well above the horizon.
+  earth.position.set(-220, 180, -260);
+  // Tilt so the continents face the camera at typical pitch.
+  earth.rotation.set(-0.3, 0.4, 0);
+  scene.add(earth);
+  disposables.push({ geometry: geom, material: mat });
 }
 
 function buildAstronaut() {

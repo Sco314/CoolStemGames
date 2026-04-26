@@ -227,6 +227,32 @@
     <p class="walk-tutorial-foot">This card only shows once.</p>
   </aside>
 
+  <!-- Batch 5 #22: first-time lander-mode tutorial. Mirrors the walk
+       tutorial — shown once per profile (GameState.flags.landerTutorialSeen)
+       when the player first arrives in lander mode. -->
+  <aside id="lander-tutorial" class="walk-tutorial" hidden>
+    <button class="walk-tutorial-close" id="lander-tutorial-close" aria-label="Close tutorial">×</button>
+    <h3>WELCOME TO THE LANDER</h3>
+    <h4>2D LANDING</h4>
+    <ul class="controls">
+      <li><kbd>↑</kbd> <span>thrust</span></li>
+      <li><kbd>←</kbd> <kbd>→</kbd> <span>rotate</span></li>
+      <li>Touch a flat pad with both feet at low speed and near-vertical angle.</li>
+    </ul>
+    <h4>WATCH THE GAUGES</h4>
+    <ul class="bullet">
+      <li><span class="pill fuel">FUEL</span> — runs out, run ends. Stow drums on the moon to refill.</li>
+      <li><span class="pill kit">HULL</span> — crashes shave HP. Stow repair parts to restore.</li>
+      <li><span class="pill sample">HEALTH</span> — the astronaut's suit. Heal at habitats.</li>
+    </ul>
+    <h4>BONUS PADS</h4>
+    <ul class="bullet">
+      <li><kbd>X2</kbd> <kbd>X3</kbd> <kbd>X5</kbd> multiply the landing score.</li>
+      <li>Beginner pads (no multiplier) drop a fuel drum on the moon.</li>
+    </ul>
+    <p class="walk-tutorial-foot">This card only shows once.</p>
+  </aside>
+
   <div id="game-over" class="overlay" hidden>
     <h1>MISSION OVER</h1>
     <div class="go-row">FINAL SCORE <span id="go-score">0</span></div>
@@ -259,8 +285,13 @@
 
   <div id="achievement-toast" class="toast" hidden>
     <div class="toast-label">ACHIEVEMENT UNLOCKED</div>
-    <div class="toast-title"></div>
-    <div class="toast-desc"></div>
+    <div class="toast-row">
+      <div class="toast-icon" id="toast-icon" aria-hidden="true"></div>
+      <div class="toast-text">
+        <div class="toast-title"></div>
+        <div class="toast-desc"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Mission Control text messages (Batch 2 #5). A longer-form panel
