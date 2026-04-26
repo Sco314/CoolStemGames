@@ -14,13 +14,14 @@ name is Space Racer).
 | Area | Done? | Notes |
 |---|---|---|
 | 2D Lander mode | ✅ | 3-circle collision, foot/edge tolerances, X2/X3/X5 bonus pads, beginner pads with fuel-drum sprites |
+| Collision feedback | ✅ | Velocity-scaled crash explosion + camera shake, dust puff at each foot on soft landing, glancing-scrape sparks (mostly tangential body hits bounce + nick HP instead of ending the run) |
 | Lander texture | ✅ | 256×256 pixel-art `textures/lander.png` (foiled descent stage, ascent cabin with triangular window, four splayed legs, foot pads) |
 | 3D Walk mode | ✅ | Procedural astronaut OR NASA Mercury Spacesuit GLB, displaced moon ground OR tiled Apollo 11 STL, footprint trail (permanent), color-coded breadcrumb rings + beacon pillars to objectives |
 | Mode transitions | ✅ | Letterbox + fade-through-black + audio crossfade, scripted disembark/embark |
 | HUD | ✅ | Live telemetry with green/yellow/red color coding for V-SPEED / H-SPEED / ANGLE / FUEL |
 | Main menu / game over | ✅ | High-score persistence (top 10) and 6 achievements |
 | Settings | ✅ | Master volume, invert-Y, fullscreen, persisted in localStorage |
-| Mobile | ✅ | Letterbox or full-viewport, touch joystick + thrust buttons, screen-swipe camera, **tap-on-canvas to interact** (no E button needed), top-right mute toggle, top-left satellite-map button |
+| Mobile | ✅ | Letterbox or full-viewport, touch joystick + thrust buttons, screen-swipe camera, **tap-on-canvas to interact** (no E button needed), top-right mute toggle, top-left satellite-map button. **iOS Safari URL-bar resize handled via `visualViewport`** so the canvas tracks every URL-bar dismiss / orientation change |
 | Satellite map | ✅ | Top-left button opens a top-down view; **gated behind lander proximity** with a "CLIMBING LADDER" comms beat. Off-lander taps surface "RETURN TO LANDER" |
 | Lander HP | ✅ | New HULL gauge (color-coded). Crashes shave LANDER_CRASH_DAMAGE per impact; HP=0 wrecks the craft and ends the run alongside fuel-empty |
 | Astronaut HP | ✅ | New HEALTH gauge (color-coded). Health-pack pickups at Apollo sites and habitat heals top up `GameState.astronaut.hp` |
@@ -30,7 +31,8 @@ name is Space Racer).
 | Apollo levels | ✅ | Apollo 11/12/14/15/16/17 all in `APOLLO_SITES`; level mods through the registry, so each run rotates the active destination |
 | Per-level objectives | ✅ | `LEVEL_OBJECTIVES` (keyed by Apollo site id) merges with the career list — every destination has its own mini brief (visit, collect, stow, heal) |
 | STEM math challenges | ✅ | Corner `STEM` button opens a modal with O₂/fuel/fall-speed/walk-time questions (`js/MathChallenge.js`); 3 attempts per session; `GameState.stats.mathSolved` persists |
-| Mission Control messages | ✅ | `MISSION_MESSAGES` catalog in Constants; `HUD.showMissionMessage(key)` panel fades in on first landing, first Apollo, habitat reach, fuel/part stow, hull critical |
+| Mission Control messages | ✅ | `MISSION_MESSAGES` catalog in Constants; `HUD.showMissionMessage(key)` panel fades in on first landing, first Apollo, habitat reach, fuel/part stow, hull critical, low-fuel-return |
+| Return-to-lander signposting | ✅ | Tall yellow beacon over the parked lander, "CARGO STOWED IN PACK — RETURN TO LANDER TO DEPOSIT" comms cadence when the astronaut wanders with items, low-fuel `lowFuelReturn` CAPCOM panel, synthetic "Return to the lander and board" objective always at the foot of the per-level brief |
 | Story progression | ✅ | `js/Story.js` fires per-Apollo intro on `WalkMode.enter` and outro on the first successful landing of that level. One-time STEM nudge if the player hasn't tried any math challenges by their second walk. Beats gated by `GameState.flags` so each fires once per save |
 | Carry-summary beat | ✅ | Walk→lander cinematic shows a `STOWED THIS TRIP` panel with the totals just stowed, snapshot from `GameState.lastStowed` and cleared on transition exit |
 | Alien encounter | ✅ | Procedural critter (`js/modes/walk/Alien.js`) spawns at level ≥ 2 with a 45% per-session chance, drifts toward the astronaut, swipes one carried item on contact, then fades out. First encounter unlocks the `CLOSE ENCOUNTER` achievement |

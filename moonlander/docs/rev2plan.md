@@ -616,3 +616,103 @@ For each new asset, the manual check is:
 
 Then sanity test the round trip on desktop + a touch device, the same way
 PR #66's test plan describes.
+
+---
+
+## Hotfix — return-to-lander signposting + iOS Safari sizing + collision visuals
+
+Bundled into a single PR on top of Batch 5 polish. Three orthogonal
+fixes, each small enough to review quickly.
+
+### 1 — Return-to-lander signposting
+
+Symptom: once the player has collected loot and ticked the Apollo
+objective, nothing tells them to walk back to the lander, stow cargo,
+and board for take-off.
+
+What landed:
+
+- **Lander beacon pillar.** New `buildLanderBeacon()` in
+  `js/modes/WalkMode.js` plants a tall warm-yellow cylinder at the
+  parked lander on every walk-mode entry. Visible from anywhere in the
+  play area; constants in `js/Constants.js` (`LANDER_BEACON_*`).
+- **Synthetic "return to the lander" objective.** Added to
+  `js/GameState.js`; `setObjectivesForLevel(level)` always appends it
+  as the final entry. Predicate is `s.flags.boardedThisLevel`.
+- **Flag wiring.** WalkMode flips `flags.boardedThisLevel = true` the
+  moment the astronaut presses E next to the lander; LanderMode's
+  `resolveLanding()` clears it so the next level re-arms; `startNewRun`
+  re-initializes it alongside the rest of `flags`.
+- **Cargo reminder.** `updateReturnToLanderSignposting()` in WalkMode
+  fires `showComms('CARGO STOWED IN PACK — RETURN TO LANDER TO DEPOSIT')`
+  on a `CARGO_REMINDER_INTERVAL_S` cadence whenever the astronaut has
+  carry items AND is `CARGO_REMINDER_MIN_DIST` from the lander.
+- **Low-fuel CAPCOM beat.** `MISSION_MESSAGES.lowFuelReturn` fires once
+  per walk session via `flags.lowFuelReturnFired` when fuel drops
+  under `LOW_FUEL_RETURN_FRAC`; flag clears in `WalkMode.enter()`.
+
+### 2 — iOS Safari canvas sizing
+
+Symptom: on iPhone Safari the WebGL canvas locked to ~55 % of the
+viewport height; the rest was solid black with the joystick floating
+in the void.
+
+What landed:
+
+- `js/Main.js:onResize()` now prefers `window.visualViewport.{width,
+  height}` over `window.inner*` so URL-bar dismiss / show events
+  re-fit correctly.
+- New `visualViewport.resize` and `.scroll` listeners alongside the
+  existing `window.resize`. `boot()` also re-fires `onResize` on the
+  next animation frame plus a 250 ms safety timeout to catch any
+  post-load layout settle.
+- `index.html` viewport meta gains `viewport-fit=cover,
+  interactive-widget=overlays-content`.
+
+### 3 — Lander collision visuals
+
+Symptom: collision feedback was binary — text on landing, fixed-size
+explosion on crash. No way to tell a 1 m/s grace landing from a
+nose-dive, and grazing terrain ridges instantly killed the run.
+
+What landed (all reusing the existing `ParticleSystemExplosion` pool —
+no new particle systems, no new pool memory):
+
+- **Velocity-scaled crash explosion.** `LanderMode.resolveCrash()`
+  computes `impactSpeed = hypot(velX, velY)`, lerps a `t ∈ [0,1]`
+  from `IMPACT_VELOCITY_SOFT` to `IMPACT_VELOCITY_HARD`, and passes
+  `count`, `speedMax`, `lifetimeMax` overrides into
+  `explosionParticles.emit(opts)`.
+- **Camera shake on crash.** Linear-decay over `CRASH_SHAKE_DURATION`
+  using `applyCameraShake(dt)`; amplitude scales with `t`. Snapshot of
+  `cameraBaseX/Y` per frame so it doesn't drift, and continues to play
+  while `landingResolved` is true so the explosion reads kinetically.
+- **Dust puff on soft landing.** `emitLandingDust()` in LanderMode fires
+  two small gray bursts at the foot-collider world positions before
+  `resolveLanding()` runs.
+- **Glancing-scrape sparks.** `classifyBodyHit()` splits body-circle
+  contacts: high `|vNormal|` (nose-dive into a wall) → existing crash
+  path; low `|vNormal|` (sliding along a ridge) → `resolveScrape()`
+  emits a small white→amber spark burst at the contact point, deducts
+  `SCRAPE_DAMAGE_HP`, and pushes the lander away by `SCRAPE_BOUNCE`
+  along the segment normal. Cooldown via `lastScrapeAt` prevents
+  per-frame spam. A scrape that takes the last hp escalates to
+  `resolveCrash('HULL FAILED ON SCRAPE')`.
+- **Particles.js extension.** `ParticleSystemExplosion.emit(opts)` now
+  accepts per-call overrides (`count`, `colorStart`, `colorEnd`,
+  `speedMin/Max`, `lifetimeMin/Max`, `originX/Y`, `gravityScale`).
+  Default behavior (no opts) matches the legacy crash burst exactly.
+  Per-particle override slots get cleared when a particle expires.
+- **Tunables.** All knobs in `js/Constants.js` under "Collision
+  visuals" — `IMPACT_VELOCITY_*`, `DUST_PUFF_*`, `CRASH_EXPLOSION_*`,
+  `CRASH_SHAKE_*`, `SCRAPE_*`.
+
+### Verification
+
+End-to-end manual test on https://coolstemgames.com/moonlander/ — see
+the Test plan in the hotfix PR for the full checklist (beacon visibility,
+cargo reminder cadence, low-fuel panel one-shot, objective tick-on-board,
+flag re-arm after landing, iOS URL-bar resize on real device, dust puff
+at feet, velocity-scaled explosion, camera shake decay, scrape sparks +
+bounce + HP nick + cooldown, hard regression on nose-dive crashes).
+

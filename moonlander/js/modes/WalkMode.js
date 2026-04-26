@@ -26,6 +26,10 @@ import {
   MODEL_PATHS, LANDMARKS, LEVEL1_FIXED_LOOT,
   TERRAIN_TILE_POSITIONS, TERRAIN_TILE_SIZE, TERRAIN_TILE_SINK,
   LANDER_REPAIR_PER_PART, HABITAT_HEAL_AMOUNT, HEALTH_PACK_AMOUNT,
+  LANDER_BEACON_COLOR, LANDER_BEACON_HEIGHT,
+  LANDER_BEACON_RADIUS, LANDER_BEACON_OPACITY,
+  CARGO_REMINDER_INTERVAL_S, CARGO_REMINDER_MIN_DIST,
+  LOW_FUEL_RETURN_FRAC,
   MODE
 } from '../Constants.js';
 import {
@@ -94,6 +98,13 @@ let onCanvasTouchMove = null;
 let onCanvasTouchEnd = null;
 let unsubQuality = null;
 
+// Return-to-lander signposting: throttle the "cargo waiting" comms blip
+// so we don't spam the same line every frame the player is wandering.
+// `walkSessionElapsed` is incremented in update() and powers both the
+// reminder cadence and the low-fuel-return gate (both reset in enter()).
+let walkSessionElapsed = 0;
+let lastCargoReminderAt = -Infinity;
+
 // Mobile touch state — a one-finger drag rotates astronaut yaw + camera
 // pitch (replaces unreachable pointer-lock); a quick tap with little
 // movement triggers the closest in-range interactable.
@@ -137,11 +148,20 @@ export const WalkMode = {
     buildEarth();
     buildAstronaut();
     buildParkedLander();
+    // Tall yellow pillar over the parked lander so the player can find
+    // home from anywhere in the play area. Always on (not gated on cargo).
+    buildLanderBeacon();
     // Rebuild the objectives list from career + this level's Apollo briefs
     // BEFORE spawning loot, so the HUD can show the full list immediately.
     setObjectivesForLevel(GameState.level);
     spawnInteractables();
     buildFootprintPool();
+
+    // Reset per-walk-session signposting state so reminders don't carry
+    // over from the previous trip's timestamps.
+    walkSessionElapsed = 0;
+    lastCargoReminderAt = -Infinity;
+    if (GameState.flags) GameState.flags.lowFuelReturnFired = false;
 
     // Spawn next to the parked lander, facing away from it.
     astronaut.position.set(6, 0, 6);
@@ -262,6 +282,10 @@ export const WalkMode = {
       return;
     }
 
+    // Walk-session clock for cadence-based comms (cargo / low-fuel reminders).
+    walkSessionElapsed += dt;
+    updateReturnToLanderSignposting();
+
     // --- movement in the astronaut's facing direction ---
     astronaut.rotation.y = yawRad;
     const fwdX = -Math.sin(yawRad);
@@ -335,7 +359,14 @@ export const WalkMode = {
           if (ePressed) stowCarryAtLander();
         } else {
           setCenterMessage('PRESS E TO BOARD LANDER');
-          if (ePressed) onReturnToLanderCallback();
+          if (ePressed) {
+            // Tick the synthetic "return to the lander" objective the moment
+            // the astronaut commits to climbing in. LanderMode.resolveLanding
+            // clears it for the next level.
+            updateState(s => { s.flags.boardedThisLevel = true; }, 'boarded');
+            refreshObjectives();
+            onReturnToLanderCallback();
+          }
         }
       } else {
         setCenterMessage('');
@@ -497,6 +528,43 @@ export const WalkMode = {
 };
 
 // ---------- helpers ----------
+
+/**
+ * Per-frame nudges that point the player back at the lander:
+ *   - "CARGO STOWED IN PACK …" comms blip if they've been wandering with
+ *     items in their pack for CARGO_REMINDER_INTERVAL_S, far enough from
+ *     the lander to actually need the prompt.
+ *   - One-shot CAPCOM panel when fuel drops below LOW_FUEL_RETURN_FRAC.
+ *     `flags.lowFuelReturnFired` gates it so it only fires once per walk
+ *     session (cleared on WalkMode.enter).
+ * Both are skipped during the scripted disembark/embark animation since
+ * the player has no agency there.
+ */
+function updateReturnToLanderSignposting() {
+  if (scripted) return;
+  if (!astronaut || !landerModel) return;
+
+  // Distance check shared between the two reminders.
+  const dx = astronaut.position.x - landerModel.position.x;
+  const dz = astronaut.position.z - landerModel.position.z;
+  const distSq = dx * dx + dz * dz;
+  const farEnough = distSq > CARGO_REMINDER_MIN_DIST * CARGO_REMINDER_MIN_DIST;
+
+  if ((GameState.carrying?.length || 0) > 0 &&
+      farEnough &&
+      walkSessionElapsed - lastCargoReminderAt >= CARGO_REMINDER_INTERVAL_S) {
+    showComms('CARGO STOWED IN PACK — RETURN TO LANDER TO DEPOSIT');
+    lastCargoReminderAt = walkSessionElapsed;
+  }
+
+  const cap  = GameState.fuel?.capacity || 0;
+  const cur  = GameState.fuel?.current  || 0;
+  const frac = cap > 0 ? cur / cap : 1;
+  if (frac < LOW_FUEL_RETURN_FRAC && !GameState.flags?.lowFuelReturnFired) {
+    showMissionMessage('lowFuelReturn');
+    if (GameState.flags) GameState.flags.lowFuelReturnFired = true;
+  }
+}
 
 function bindMouse() {
   onMouseMove = (e) => {
@@ -1008,6 +1076,32 @@ function buildParkedLander() {
       console.log('[WalkMode] Apollo Lunar Module GLB active');
     })
     .catch(() => { /* keep sprite fallback — already placed */ });
+}
+
+/**
+ * Plant a tall yellow pillar over the parked lander. Visible from across
+ * the play area so the player has a constant reference point for "home"
+ * regardless of where their wandering took them. Mirrors the destination
+ * pillar style used by `buildTrailMarkers()` but taller, brighter, and
+ * always on (not gated on a specific interactable being alive).
+ */
+function buildLanderBeacon() {
+  if (!landerModel) return;
+  const lx = landerModel.position.x;
+  const lz = landerModel.position.z;
+  const geom = new THREE.CylinderGeometry(
+    LANDER_BEACON_RADIUS, LANDER_BEACON_RADIUS, LANDER_BEACON_HEIGHT, 8
+  );
+  const mat  = new THREE.MeshBasicMaterial({
+    color: LANDER_BEACON_COLOR,
+    transparent: true,
+    opacity: LANDER_BEACON_OPACITY,
+    depthWrite: false
+  });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.set(lx, groundHeight(lx, lz) + LANDER_BEACON_HEIGHT / 2, lz);
+  scene.add(mesh);
+  disposables.push({ geometry: geom, material: mat });
 }
 
 // ---------- Phase-4 interactable system ----------

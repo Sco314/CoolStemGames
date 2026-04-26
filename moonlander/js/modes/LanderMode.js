@@ -24,6 +24,18 @@ import {
   CAMERA_ZOOM_ALTITUDE, CAMERA_ZOOM_FACTOR,
   PERFECT_FUEL_FRAC, PERFECT_VELOCITY_MAX, PERFECT_CENTER_FRAC, PERFECT_ANGLE_MAX,
   LANDER_CRASH_DAMAGE,
+  IMPACT_VELOCITY_SOFT, IMPACT_VELOCITY_HARD,
+  DUST_PUFF_COUNT, DUST_PUFF_COLOR_START, DUST_PUFF_COLOR_END,
+  DUST_PUFF_SPEED_MIN, DUST_PUFF_SPEED_MAX,
+  DUST_PUFF_LIFETIME_MIN, DUST_PUFF_LIFETIME_MAX, DUST_PUFF_GRAVITY,
+  CRASH_EXPLOSION_COUNT_MIN, CRASH_EXPLOSION_COUNT_MAX,
+  CRASH_EXPLOSION_SPEED_MAX_MIN, CRASH_EXPLOSION_SPEED_MAX_MAX,
+  CRASH_EXPLOSION_LIFETIME_MAX_MIN, CRASH_EXPLOSION_LIFETIME_MAX_MAX,
+  CRASH_SHAKE_BASE, CRASH_SHAKE_PEAK_MUL, CRASH_SHAKE_DURATION,
+  SCRAPE_VELOCITY_THRESHOLD, SCRAPE_DAMAGE_HP, SCRAPE_BOUNCE,
+  SCRAPE_PARTICLE_COUNT, SCRAPE_COLOR_START, SCRAPE_COLOR_END,
+  SCRAPE_SPEED_MIN, SCRAPE_SPEED_MAX,
+  SCRAPE_LIFETIME_MIN, SCRAPE_LIFETIME_MAX, SCRAPE_GRAVITY, SCRAPE_COOLDOWN_S,
   ORTHO_NEAR, ORTHO_FAR, MODE
 } from '../Constants.js';
 import { GameState, update as updateState, notify, unlockAchievement } from '../GameState.js';
@@ -63,6 +75,16 @@ let onLandedCallback = null;
 let onCrashedCallback = null;
 let landingResolved = false;     // guard so we only resolve once per life
 
+// Collision-visuals state. shake decays from `amplitude` over `duration`
+// seconds; lastScrapeAt prevents the per-frame body-circle test from
+// spamming dozens of bursts while sliding along a ridge.
+let shakeAmplitude = 0;
+let shakeT = 0;
+let cameraBaseX = 0, cameraBaseY = 0;  // sane camera pos snapshotted before shake
+let lastScrapeAt = -Infinity;
+let modeElapsed = 0;             // seconds since enter() — drives scrape cooldown
+let scrapeBannerClearAt = 0;     // modeElapsed at which to clear "HULL SCRAPE" text
+
 export const LanderMode = {
   /**
    * @param {object} context - { renderer, canvas }
@@ -75,6 +97,15 @@ export const LanderMode = {
     onLandedCallback  = callbacks.onLanded  || (() => {});
     onCrashedCallback = callbacks.onCrashed || (() => {});
     landingResolved = false;
+    // Reset collision-visuals state so a new life never inherits the
+    // previous attempt's residual shake or scrape cooldown.
+    shakeAmplitude = 0;
+    shakeT = 0;
+    cameraBaseX = 0;
+    cameraBaseY = 0;
+    lastScrapeAt = -Infinity;
+    modeElapsed = 0;
+    scrapeBannerClearAt = 0;
     // Clear any leftover center message from the previous life (e.g. the
     // "CRASHED ON UNEVEN TERRAIN" notice) so the next attempt boots fresh.
     setCenterMessage('');
@@ -138,6 +169,13 @@ export const LanderMode = {
     terrainSegments = [];
     thrusterParticles = null;
     explosionParticles = null;
+    shakeAmplitude = 0;
+    shakeT = 0;
+    cameraBaseX = 0;
+    cameraBaseY = 0;
+    lastScrapeAt = -Infinity;
+    modeElapsed = 0;
+    scrapeBannerClearAt = 0;
 
     // Detach lander from scene but DO NOT dispose its meshes — the transition
     // and walk mode may want to render the parked lander visually. Main.js
@@ -151,12 +189,16 @@ export const LanderMode = {
   },
 
   update(dt) {
+    modeElapsed += dt;
     // Particles keep animating across landingResolved so the crash explosion
-    // and any in-flight exhaust can finish their lifetime visibly.
+    // and any in-flight exhaust can finish their lifetime visibly. Camera
+    // shake also keeps decaying so the impact reads kinetically against the
+    // frozen scene (lander.visible is false but the explosion plays on).
     if (landingResolved) {
       if (thrusterParticles) thrusterParticles.emitting = false;
       thrusterParticles?.update(dt);
       explosionParticles?.update(dt);
+      applyCameraShake(dt);
       return;
     }
 
@@ -222,10 +264,22 @@ export const LanderMode = {
 
     // --- camera zoom near ground (final-approach drama) ---
     updateCameraZoom(altitude);
+    // Snapshot the post-zoom "rest" position so applyCameraShake can jitter
+    // around it without drifting. Done every frame so shakes that arrive
+    // at any moment have a fresh base.
+    cameraBaseX = camera.position.x;
+    cameraBaseY = camera.position.y;
+    applyCameraShake(dt);
 
     // --- particle integration ---
     thrusterParticles?.update(dt);
     explosionParticles?.update(dt);
+
+    // --- scrape banner cleanup ---
+    if (scrapeBannerClearAt > 0 && modeElapsed >= scrapeBannerClearAt) {
+      scrapeBannerClearAt = 0;
+      setCenterMessage('');
+    }
 
     // Notify subscribers for per-second-ish updates (score/fuel) less frequently.
     // For now, notify once per update — cheap enough at 60fps with small listeners.
@@ -446,14 +500,15 @@ function checkCollisions() {
   footColliderLeft.getWorldPosition(_leftWorld);
   footColliderRight.getWorldPosition(_rightWorld);
 
-  let bodyHit = false;
+  let bodyContact = null;
   let leftHitIdx = -1;
   let rightHitIdx = -1;
 
   for (let i = 0; i < terrainSegments.length; i++) {
     const seg = terrainSegments[i];
-    if (!bodyHit && circleHitsSegment(_mainWorld, MAIN_COLLIDER_SCALE, seg)) {
-      bodyHit = true;
+    if (!bodyContact) {
+      const hit = circleHitsSegment(_mainWorld, MAIN_COLLIDER_SCALE, seg);
+      if (hit) bodyContact = hit;
     }
     if (leftHitIdx < 0 && circleHitsSegment(_leftWorld, SMALL_COLLIDER_SCALE, seg)) {
       leftHitIdx = i;
@@ -463,9 +518,11 @@ function checkCollisions() {
     }
   }
 
-  // Body-circle contact is always a crash — the hull has hit terrain.
-  if (bodyHit) {
-    resolveCrash('CRASHED ON UNEVEN TERRAIN');
+  // Body-circle contact: a hard normal-aligned impact stays a full crash;
+  // a glancing scrape (mostly tangential motion) emits sparks, bounces the
+  // hull off, and takes a small HP bite without ending the run.
+  if (bodyContact) {
+    classifyBodyHit(bodyContact);
     return;
   }
 
@@ -478,8 +535,68 @@ function checkCollisions() {
   }
 }
 
+/**
+ * Decide whether a body-circle contact is a hard impact (→ crash) or a
+ * glancing scrape (→ sparks + HP nick). The discriminator is the velocity
+ * component along the segment normal: a near-vertical nose-dive into a
+ * wall has a large vNormal; sliding along a ridge has near-zero vNormal.
+ */
+function classifyBodyHit(contact) {
+  const vNormal = velX * contact.nx + velY * contact.ny;
+  if (Math.abs(vNormal) >= SCRAPE_VELOCITY_THRESHOLD) {
+    resolveCrash('CRASHED ON UNEVEN TERRAIN');
+    return;
+  }
+  if (modeElapsed - lastScrapeAt < SCRAPE_COOLDOWN_S) return;
+  resolveScrape(contact, vNormal);
+}
+
+function resolveScrape(contact, vNormal) {
+  lastScrapeAt = modeElapsed;
+  // Push the lander back out of penetration plus a small bounce so the hit
+  // reads as kinetic. vNormal is negative when moving INTO the terrain
+  // (normal points outward), so subtracting it cancels the inward speed.
+  const push = Math.max(0, -vNormal) + SCRAPE_BOUNCE;
+  velX += contact.nx * push;
+  velY += contact.ny * push;
+
+  explosionParticles?.emit({
+    count:        SCRAPE_PARTICLE_COUNT,
+    colorStart:   SCRAPE_COLOR_START,
+    colorEnd:     SCRAPE_COLOR_END,
+    speedMin:     SCRAPE_SPEED_MIN,
+    speedMax:     SCRAPE_SPEED_MAX,
+    lifetimeMin:  SCRAPE_LIFETIME_MIN,
+    lifetimeMax:  SCRAPE_LIFETIME_MAX,
+    originX:      contact.cx,
+    originY:      contact.cy,
+    gravityScale: SCRAPE_GRAVITY
+  });
+
+  // Light HP loss; if it takes the last sliver of hull, escalate to crash
+  // so the existing wrecked-game-over path still triggers.
+  let wreckedNow = false;
+  updateState(s => {
+    s.lander.hp = Math.max(0, (s.lander.hp ?? s.lander.maxHp) - SCRAPE_DAMAGE_HP);
+    if (s.lander.hp <= 0) { s.lander.wrecked = true; wreckedNow = true; }
+  }, 'scraped');
+  if (wreckedNow) {
+    resolveCrash('HULL FAILED ON SCRAPE');
+    return;
+  }
+  setCenterMessage(`HULL SCRAPE  -${SCRAPE_DAMAGE_HP} HP`);
+  scrapeBannerClearAt = modeElapsed + 0.8;
+}
+
+/**
+ * Returns null if the circle [pt, radius] doesn't touch the segment, or a
+ * contact descriptor `{ cx, cy, nx, ny }` if it does:
+ *   cx, cy — closest point on the segment to the circle center (world space)
+ *   nx, ny — unit normal pointing from contact toward the circle center
+ *            (so the body can be pushed back along it on a scrape)
+ * Foot/body callers that only want a boolean still work via truthy check.
+ */
 function circleHitsSegment(pt, radius, seg) {
-  // Closest point on segment [left→right] to pt, then squared-distance check.
   const ax = seg.left.x,  ay = seg.left.y;
   const bx = seg.right.x, by = seg.right.y;
   const dx = bx - ax, dy = by - ay;
@@ -491,7 +608,22 @@ function circleHitsSegment(pt, radius, seg) {
   }
   const cx = ax + t * dx, cy = ay + t * dy;
   const ex = pt.x - cx, ey = pt.y - cy;
-  return (ex * ex + ey * ey) <= radius * radius;
+  const distSq = ex * ex + ey * ey;
+  if (distSq > radius * radius) return null;
+
+  let nx, ny;
+  const dist = Math.sqrt(distSq);
+  if (dist > 1e-6) {
+    nx = ex / dist; ny = ey / dist;
+  } else {
+    // Degenerate: circle center sits exactly on the segment. Fall back to
+    // the segment's geometric normal, biased upward so it points away from
+    // the terrain rather than into it.
+    const segLen = Math.sqrt(lenSq) || 1;
+    nx = -dy / segLen; ny = dx / segLen;
+    if (ny < 0) { nx = -nx; ny = -ny; }
+  }
+  return { cx, cy, nx, ny };
 }
 
 function evaluateLanding(segment, segmentIndex /*, bothFeetOnSamePad */) {
@@ -523,8 +655,32 @@ function evaluateLanding(segment, segmentIndex /*, bothFeetOnSamePad */) {
                   'TOO CLOSE TO EDGE OF TERRAIN';
     resolveCrash(reason);
   } else {
+    emitLandingDust();
     resolveLanding(segment, segmentIndex);
   }
+}
+
+/**
+ * Soft landing → small dust puff at each foot. Reuses the explosion pool
+ * with a gray, slow, short-lived configuration so it reads as moondust
+ * lifting off the pad rather than a fire/explosion.
+ */
+function emitLandingDust() {
+  if (!explosionParticles) return;
+  footColliderLeft.getWorldPosition(_leftWorld);
+  footColliderRight.getWorldPosition(_rightWorld);
+  const dustOpts = {
+    count:        DUST_PUFF_COUNT,
+    colorStart:   DUST_PUFF_COLOR_START,
+    colorEnd:     DUST_PUFF_COLOR_END,
+    speedMin:     DUST_PUFF_SPEED_MIN,
+    speedMax:     DUST_PUFF_SPEED_MAX,
+    lifetimeMin:  DUST_PUFF_LIFETIME_MIN,
+    lifetimeMax:  DUST_PUFF_LIFETIME_MAX,
+    gravityScale: DUST_PUFF_GRAVITY
+  };
+  explosionParticles.emit({ ...dustOpts, originX: _leftWorld.x,  originY: _leftWorld.y  });
+  explosionParticles.emit({ ...dustOpts, originX: _rightWorld.x, originY: _rightWorld.y });
 }
 
 function resolveLanding(segment, segmentIndex) {
@@ -550,6 +706,9 @@ function resolveLanding(segment, segmentIndex) {
     s.landingsCompleted += 1;
     s.level += 1;
     s.score += earned;
+    // Re-arm the synthetic "return to the lander" objective for the next
+    // walk session — it ticks again the moment the astronaut boards.
+    if (s.flags) s.flags.boardedThisLevel = false;
     s.lastLanding.x = lander.position.x;
     s.lastLanding.terrainSegmentIndex = segmentIndex;
     s.lastLanding.surfaceNormal = new THREE.Vector2(0, 1);
@@ -586,7 +745,26 @@ function resolveCrash(reason) {
   Sounds.rocket?.stop();
   Sounds.crash?.play();
   if (thrusterParticles) thrusterParticles.emitting = false;
-  explosionParticles?.emit();
+  // A scrape that escalated may have set this; suppress the cleanup pass
+  // so it doesn't blank the crash message a frame later.
+  scrapeBannerClearAt = 0;
+  // Velocity-scaled explosion + camera shake. Below SOFT, t≈0 → small
+  // burst, gentle shake. Above HARD, t≈1 → full pool, big shake.
+  const impactSpeed = Math.hypot(velX, velY);
+  const t = clamp01(
+    (impactSpeed - IMPACT_VELOCITY_SOFT) /
+    Math.max(1, IMPACT_VELOCITY_HARD - IMPACT_VELOCITY_SOFT)
+  );
+  const burstCount       = Math.round(lerp(CRASH_EXPLOSION_COUNT_MIN,        CRASH_EXPLOSION_COUNT_MAX,        t));
+  const burstSpeedMax    =            lerp(CRASH_EXPLOSION_SPEED_MAX_MIN,    CRASH_EXPLOSION_SPEED_MAX_MAX,    t);
+  const burstLifetimeMax =            lerp(CRASH_EXPLOSION_LIFETIME_MAX_MIN, CRASH_EXPLOSION_LIFETIME_MAX_MAX, t);
+  explosionParticles?.emit({
+    count:       burstCount,
+    speedMax:    burstSpeedMax,
+    lifetimeMax: burstLifetimeMax
+  });
+  shakeAmplitude = CRASH_SHAKE_BASE * lerp(1, CRASH_SHAKE_PEAK_MUL, t);
+  shakeT = CRASH_SHAKE_DURATION;
   // Hide the wreck so the explosion reads as "the lander is gone". A fresh
   // lander mesh is built when the next life enter()s.
   lander.visible = false;
@@ -662,6 +840,28 @@ function computeAltitude(x, y) {
   }
   return 0;
 }
+
+/**
+ * Apply decaying camera shake on top of `cameraBaseX/Y` (snapshotted by
+ * the caller before this runs). Linear amplitude falloff over
+ * CRASH_SHAKE_DURATION; on the last frame snap back to the base so the
+ * camera doesn't park at a sub-pixel offset.
+ */
+function applyCameraShake(dt) {
+  if (shakeT <= 0) return;
+  const a = shakeAmplitude * (shakeT / CRASH_SHAKE_DURATION);
+  camera.position.x = cameraBaseX + (Math.random() - 0.5) * 2 * a;
+  camera.position.y = cameraBaseY + (Math.random() - 0.5) * 2 * a;
+  shakeT = Math.max(0, shakeT - dt);
+  if (shakeT <= 0) {
+    camera.position.x = cameraBaseX;
+    camera.position.y = cameraBaseY;
+    shakeAmplitude = 0;
+  }
+}
+
+function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
+function lerp(a, b, t) { return a + (b - a) * t; }
 
 /**
  * Map a magnitude to a tri-state color flag used by HUD.js:

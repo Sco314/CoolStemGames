@@ -65,10 +65,21 @@ function init() {
 
   window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onGlobalKey);
+  // iOS Safari fires visualViewport.resize when the URL bar tucks away —
+  // window.resize doesn't always. Listen on both so the canvas re-fits.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onResize);
+    window.visualViewport.addEventListener('scroll', onResize);
+  }
 
   // Set canvas size + letterbox now; onResize handles both the renderer
   // size and absolute-position centering.
   onResize();
+  // Re-fit on the next frame and again shortly after — iOS Safari's
+  // post-load layout settle (URL bar slide) often arrives after window.load
+  // and would otherwise leave the canvas locked to a smaller initial size.
+  requestAnimationFrame(onResize);
+  setTimeout(onResize, 250);
 
   // --- shared systems ---
   // Load order matters: initHUD applies settings, so loadSave has to populate
@@ -287,15 +298,20 @@ function onGlobalKey(e) {
  * camera-follow knows whether to clamp to the lander's x.
  */
 function onResize() {
-  const ww = window.innerWidth;
-  const wh = window.innerHeight;
+  // Prefer visualViewport when available — on iOS Safari it correctly
+  // tracks the area between the top status bar and the (dynamic) bottom
+  // URL bar. window.innerHeight locks to boot-time on that browser and
+  // doesn't update when the URL bar dismisses.
+  const vv = window.visualViewport;
+  const ww = (vv ? vv.width  : window.innerWidth);
+  const wh = (vv ? vv.height : window.innerHeight);
   renderer.setSize(ww, wh);
   canvas.style.position = 'fixed';
   canvas.style.left = '0';
   canvas.style.top  = '0';
 
   const cam = currentMode?.getCamera?.();
-  const aspect = ww / wh;
+  const aspect = (wh > 0) ? (ww / wh) : 1;
   if (cam?.isOrthographicCamera) {
     fitOrthoToViewport(cam, aspect);
   } else if (cam?.isPerspectiveCamera) {

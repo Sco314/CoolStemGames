@@ -150,6 +150,67 @@ export const EXPLOSION_PS_SCALE_START   = 2.4;
 export const EXPLOSION_PS_SCALE_END     = 0.6;
 export const EXPLOSION_PS_PARTICLE_SIZE = 2.0;
 
+// ---------- Collision visuals (impact-feedback bundle) ----------
+// Differentiated visual feedback for the four collision flavors:
+//   1. Soft landing → small dust puff at each foot
+//   2. Crash       → velocity-scaled explosion + camera shake
+//   3. Glancing terrain scrape → spark burst + small HP loss + bounce
+//   4. Hard terrain hit → existing crash path
+//
+// All particle bursts reuse the EXPLOSION_PS pool via the emit(opts)
+// overload in Particles.js. The IMPACT_VELOCITY_* anchors map a measured
+// impact speed to a 0..1 scale used to lerp explosion size + shake amplitude.
+
+// Impact-speed anchors (sqrt(velX² + velY²)). Speeds at or below SOFT
+// produce minimal visual; at or above HARD the visuals saturate.
+export const IMPACT_VELOCITY_SOFT = 10;
+export const IMPACT_VELOCITY_HARD = 60;
+
+// Soft-landing dust puff: gray, mostly horizontal, short-lived. Emitted
+// twice (once per foot). Light-gray colors so it reads as moondust on
+// the dark sky and not as fire.
+export const DUST_PUFF_COUNT        = 18;
+export const DUST_PUFF_COLOR_START  = 0xc8c0b0;
+export const DUST_PUFF_COLOR_END    = 0x80766a;
+export const DUST_PUFF_SPEED_MIN    = 10;
+export const DUST_PUFF_SPEED_MAX    = 35;
+export const DUST_PUFF_LIFETIME_MIN = 0.3;
+export const DUST_PUFF_LIFETIME_MAX = 0.9;
+export const DUST_PUFF_GRAVITY      = 0.2;
+
+// Crash explosion scaling. count/speedMax/lifetimeMax all lerp from
+// _MIN at IMPACT_VELOCITY_SOFT to _MAX at IMPACT_VELOCITY_HARD.
+export const CRASH_EXPLOSION_COUNT_MIN = 100;
+export const CRASH_EXPLOSION_COUNT_MAX = 320;
+export const CRASH_EXPLOSION_SPEED_MAX_MIN = 80;
+export const CRASH_EXPLOSION_SPEED_MAX_MAX = 220;
+export const CRASH_EXPLOSION_LIFETIME_MAX_MIN = 2.5;
+export const CRASH_EXPLOSION_LIFETIME_MAX_MAX = 5.0;
+
+// Camera shake on crash. The amplitude is in world units (ortho camera
+// frustum is 800×450 game units, so 6 ≈ 1.3% of width — visible but not
+// disorienting). Linear decay over CRASH_SHAKE_DURATION seconds.
+export const CRASH_SHAKE_BASE     = 6;     // amplitude at IMPACT_VELOCITY_SOFT
+export const CRASH_SHAKE_PEAK_MUL = 2.5;   // amplitude at IMPACT_VELOCITY_HARD = base × this
+export const CRASH_SHAKE_DURATION = 0.5;   // seconds
+
+// Glancing terrain scrape — split out from outright crash so brushing a
+// ridge sideways no longer instantly ends the run. The classifier compares
+// the lander's velocity along the terrain segment normal: low-normal
+// component means a graze, high means a real impact.
+export const SCRAPE_VELOCITY_THRESHOLD = 25;  // m/s along segment normal
+export const SCRAPE_DAMAGE_HP          = 5;
+export const SCRAPE_BOUNCE             = 25;  // impulse along normal on graze
+export const SCRAPE_PARTICLE_COUNT     = 18;
+export const SCRAPE_COLOR_START        = 0xfff8a8;
+export const SCRAPE_COLOR_END          = 0xff8030;
+export const SCRAPE_SPEED_MIN          = 30;
+export const SCRAPE_SPEED_MAX          = 110;
+export const SCRAPE_LIFETIME_MIN       = 0.15;
+export const SCRAPE_LIFETIME_MAX       = 0.45;
+export const SCRAPE_GRAVITY            = 0.4;
+export const SCRAPE_COOLDOWN_S         = 0.4;  // ignore further scrapes within this window
+
 // ---------- Camera zoom near ground ----------
 // When altitude drops below this threshold, the ortho camera zooms in and
 // follows the lander for a tense final-approach view.
@@ -194,6 +255,10 @@ export const MISSION_MESSAGES = {
   achievementGeneric: {
     title: 'MISSION CONTROL',
     body:  'Achievement logged. The team back home is cheering for you.'
+  },
+  lowFuelReturn: {
+    title: 'CAPCOM',
+    body:  'Fuel below 30%. Recommend you return to the lander and stow whatever you have before another descent.'
   }
 };
 
@@ -415,6 +480,25 @@ export const LANDMARKS = [
     targetHeight: 14
   }
 ];
+
+// ---------- Return-to-lander signposting ----------
+// A tall yellow pillar planted at the parked-lander world position so the
+// player can spot home from anywhere in the play area. Constants are
+// inlined-pillar style (matches the destination-beacon in WalkMode.buildTrailMarkers).
+export const LANDER_BEACON_COLOR    = 0xffee88;
+export const LANDER_BEACON_HEIGHT   = 24;     // tall — visible past loot beacons
+export const LANDER_BEACON_RADIUS   = 0.35;
+export const LANDER_BEACON_OPACITY  = 0.7;
+
+// "Cargo waiting in pack" reminder cadence — shown when the astronaut has
+// items in `GameState.carrying` and is far from the lander. Spam-guarded
+// by both a minimum gap between blips AND a minimum distance.
+export const CARGO_REMINDER_INTERVAL_S = 30;
+export const CARGO_REMINDER_MIN_DIST   = 30;
+
+// Below this fuel-fraction the walk-mode CAPCOM panel fires once per walk
+// session (cleared on WalkMode.enter via flags.lowFuelReturnFired).
+export const LOW_FUEL_RETURN_FRAC = 0.3;
 
 // ---------- Mission objectives (Phase 4) ----------
 // Career objectives — apply to every run, every level. The predicate is
