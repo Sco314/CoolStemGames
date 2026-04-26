@@ -49,18 +49,18 @@ A batch's checkbox flips to `[x]` when **all** of its sub-items do.
 - [x] **#12** Alien that steals carried items
 - [x] **#13** Music loop (gameplay ambience)
 
-### Batch 5 — finish polish [ ]
+### Batch 5 — finish polish [x]
 
-- [ ] **#9** 3D ladder-climb animation
-- [ ] **#15** Crater detail texture
+- [x] **#9** 3D ladder-climb animation
+- [x] **#15** Crater detail texture
 - [x] **#16** Loading-screen art *(shipped on `claude/batch-4-tasks-OEWAe`)*
 - [x] **#17** Retro pixel font *(shipped on `claude/batch-4-tasks-OEWAe`)*
-- [ ] **#18** Achievement icons
+- [x] **#18** Achievement icons
 - [x] **#19** Game logo / wordmark *(shipped on `claude/batch-4-tasks-OEWAe`)*
-- [ ] **#20** Walk-mode skybox panorama
-- [ ] **#21** Earth-in-sky textured sphere
-- [ ] **#22** Tutorial / onboarding refresh
-- [ ] **#23** Per-Apollo terrain STLs
+- [x] **#20** Walk-mode skybox panorama
+- [x] **#21** Earth-in-sky textured sphere
+- [x] **#22** Tutorial / onboarding refresh
+- [x] **#23** Per-Apollo terrain STLs *(code path lands; only the Apollo 11 STL ships — drop `Apollo NN - Landing Site.stl` files in `assets/nasa_models/` to activate per-level swaps)*
 
 ### Backlog (unbatched / large) [ ]
 
@@ -81,21 +81,21 @@ A batch's checkbox flips to `[x]` when **all** of its sub-items do.
 | ✅ | 6 | **Apollo 14 / 15 / 16 / 17 entries** | 4/1/5 | 10 | `js/Constants.js` — append four entries to `APOLLO_SITES` with `walkPos`, `artifactScore`, `comms`. `apolloSiteForLevel(level)` already mods by length so they auto-rotate. Pick `walkPos` so they don't overlap habitats / atlas. |
 | ✅ | 7 | **Particle smoke / glow texture** | 4/1/4 | 9 | Generated `moonlander/textures/particle.png` (64×64 RGBA, smoothstep alpha falloff). `js/Particles.js:buildPool()` now sets `map: getSharedTexture('textures/particle.png')` on every cone + explosion material; missing texture still renders as a colored quad. |
 | ✅ | 8 | **Higher-res `lander.png`** | 3/1/5 | 9 | Regenerated `moonlander/textures/lander.png` at 256×256 (was 128×128) — pixel-art four-legged Apollo-style descent stage with foiled body, ascent cabin, triangular forward window, engine bell, four splayed legs + foot pads. Same path so `getSharedTexture` keeps working unchanged. |
-| ⏳ | 9 | **3D ladder-climb animation** | 3/2/4 | 9 | New scripted-anim path in `js/modes/WalkMode.js` (mirror `startDisembark`/`startEmbark`). Triggered from `js/HUD.js:requestOpenMap` instead of the current 750 ms timeout — provider-callback pattern. Astronaut translates +Y up the lander side over ~1.5 s, then map opens; reverse on close. |
+| ✅ | 9 | **3D ladder-climb animation** | 3/2/4 | 9 | `WalkMode.startLadderClimb` / `startLadderDescend` mirror disembark/embark — astronaut translates +Y by 4.2 u over 1.4 s and faces the lander. `HUD.setLadderProviders({climb, descend})` is registered on `WalkMode.enter`; `requestOpenMap` calls `climb(showMap)` instead of the old 750 ms timeout, `hideMap` calls `descend()`. Falls back to the original timeout if no provider is wired. |
 | ✅ | 10 | **Mission / story progression layer** | 4/4/1 | 9 | New `js/Story.js` with per-Apollo-site `STORY_BEATS` (intro fires from `WalkMode.enter`, outro from `LanderMode.resolveLanding`). Beats gated by `GameState.flags.storyIntro:<id>` / `storyOutro:<id>` so each fires once per save. Bonus: a one-time STEM nudge if the player hasn't tried any math challenges by their second walk session. |
 | ✅ | 11 | **Return 3D → 2D with carry-summary beat** | 3/2/4 | 9 | `WalkMode.stowCarryAtLander` snapshots `{fuel, hp, parts, at}` into `GameState.lastStowed`. `TransitionMode.enter` (walk-to-lander direction) reads it and surfaces a multi-line `setCenterMessage('STOWED THIS TRIP\n+N FUEL\n+N HP\n…')` for the duration of the fade; `exit()` clears the snapshot so empty-handed returns aren't echoed. |
 | ✅ | 12 | **Alien that steals carried items** | 4/2/2 | 8 | New `js/modes/walk/Alien.js` (procedural cone body + dome head + magenta eye dots, no external assets). Gated by `level >= ALIEN_MIN_LEVEL` (=2) and `ALIEN_SPAWN_CHANCE` (45%) per `WalkMode.enter`; spawned 4–10 s after the scene loads. Drifts toward the astronaut, fades in/out, removes one carry entry on contact, fires `comms` + `'CLOSE ENCOUNTER'` achievement + `CAPCOM` mission message on first encounter (gated by `flags.alienVisited`). |
 | ✅ | 13 | **Music loop (gameplay ambience)** | 3/1/4 | 8 | `Sounds.music` loop in `js/Sound.js` (started on first user gesture, candidate `audio/music.mp3` only — silent no-op if missing). New `setMusicVolume()`/`getMusicVolume()` exports. Settings overlay gains a `MUSIC VOLUME` slider; persisted as `GameState.settings.musicVolume` (default 0.4). Master volume + mute still apply on top. |
 | ⏳ | 14 | **Persist carry across runs** | 2/1/5 | 8 | One-line change: in `js/GameState.js:startNewRun()` keep `GameState.carrying` instead of resetting (or reset to `[]` only on `commitRunToHighScores()`). Decide based on intended difficulty — leaving carry might be too generous. |
-| ⏳ | 15 | **Crater detail texture** | 2/1/5 | 8 | Drop `moonlander/textures/crater.png`. In `js/modes/WalkMode.js:buildCraters()` swap `MeshBasicMaterial({color: 0x3a3a42, transparent, opacity})` to use the texture's alpha. |
+| ✅ | 15 | **Crater detail texture** | 2/1/5 | 8 | Generated `textures/crater.png` (256×256 — radial bowl with rim highlight + alpha falloff). `buildCraters()` now uses `PlaneGeometry` decals with `map: tex` + a shared `MeshBasicMaterial` instead of empty `RingGeometry`. Random rotation per decal so the rims don't all face the same way. |
 | ✅ | 16 | **Loading-screen art** | 2/1/5 | 8 | Add `<img>` inside `#preload .preload-inner` in `index.html`, sourced from a new `moonlander/textures/preload.png` (or reuse `lander.png`). CSS in `moonlander/css/main.css` for size + animation (gentle rotate). |
 | ✅ | 17 | **Retro pixel font** | 2/1/5 | 8 | `<link>` to Google Fonts (Press Start 2P / VT323 / Major Mono) in `index.html`. Update `body { font-family: ... }` + the HUD-specific stacks in `moonlander/css/main.css`. Confirm letter-spacing still reads. |
-| ⏳ | 18 | **Achievement icons** | 2/1/4 | 7 | Six 32×32 PNGs at `moonlander/textures/achievements/<id>.png`. Update `js/HUD.js:runToastQueue()` to add an `<img>` next to `.toast-title` keyed by `def.id`. |
+| ✅ | 18 | **Achievement icons** | 2/1/4 | 7 | Inline-SVG glyphs in `HUD.js` (`ACHIEVEMENT_ICONS`) — no extra fetches, no asset dir. Toast DOM gets a `.toast-row` with `#toast-icon`; `runToastQueue` injects the SVG keyed by `def.id`. Glyphs for first-landing, perfect-landing, hot-swap, sample-collector, probe-rescuer, marathon, alien-visit. |
 | ✅ | 19 | **Game logo / wordmark** | 2/1/4 | 7 | Replace text in `index.html` `#main-menu h1` with `<img src="link-images/space-racer-logo.svg">`. Add SVG. Update `#preload-title` similarly if you want consistency. |
-| ⏳ | 20 | **Walk-mode skybox panorama** | 3/1/3 | 7 | Add equirectangular `moonlander/textures/sky.jpg` (~2048×1024). In `js/modes/WalkMode.js:enter()` after `scene.background = new THREE.Color(...)` swap to a CubeTexture or equirect texture. Consider Earth visible in the sky. |
-| ⏳ | 21 | **Earth-in-sky textured sphere** | 2/1/4 | 7 | Subset of #20 — if a full skybox is too heavy, just add a `SphereGeometry(60)` with `moonlander/textures/earth.jpg` mapped, positioned far away. Add to walk scene. |
-| ⏳ | 22 | **Tutorial / onboarding refresh** | 3/1/3 | 7 | The first-time walk card already exists (`#walk-tutorial`). Add a similar one-time card for lander mode pointing at the new HULL gauge / fuel-drum sprites / X-pad multipliers. New flag in `GameState.flags`. |
-| ⏳ | 23 | **Per-Apollo terrain STLs** | 3/1/2 | 6 | Asset blocker — need 5 more height-map STLs from NASA Resources at `moonlander/assets/nasa_models/Apollo XX - Landing Site.stl`. Code in `js/modes/WalkMode.js:buildGround()` already loads + tiles; extend `MODEL_PATHS` to be per-level via `apolloSiteForLevel`. |
+| ✅ | 20 | **Walk-mode skybox panorama** | 3/1/3 | 7 | Generated `textures/starfield.png` (1024×512 — random pinprick stars + faint nebulae over a dark navy gradient). `WalkMode.enter` sets `scene.background = getSharedTexture(...)`. LOW_END skips the upload and keeps the solid color. |
+| ✅ | 21 | **Earth-in-sky textured sphere** | 2/1/4 | 7 | Generated `textures/earth.png` (256×256 — blue ocean base with green-tan continent blobs and soft cloud streaks). New `buildEarth()` in `WalkMode` adds a `SphereGeometry(40)` at `(-220, 180, -260)` with the texture mapped (`MeshBasicMaterial`). Skipped on LOW_END. |
+| ✅ | 22 | **Tutorial / onboarding refresh** | 3/1/3 | 7 | New `#lander-tutorial` aside in `index.html` mirroring `#walk-tutorial`. Covers controls, FUEL/HULL/HEALTH gauges, bonus pads. `LanderMode.enter` calls `showLanderTutorial()` (gated by `flags.landerTutorialSeen`); `LanderMode.exit` hides any leftover card. Reuses the existing `.walk-tutorial` CSS class. |
+| ✅ | 23 | **Per-Apollo terrain STLs** | 3/1/2 | 6 | New `apolloSiteStlPath(level)` in Constants returns `assets/nasa_models/Apollo NN - Landing Site.stl`. `buildGround()` tries the per-level path first and falls back to the bundled Apollo 11 STL on 404. Drop matching NASA Resources STLs in `assets/nasa_models/` to activate per-level swaps with no further code change. (Only Apollo 11 ships today; the others remain the asset gap.) |
 | ⏳ | 24 | **Astronaut suit customization** | 2/1/3 | 6 | Settings menu adds a color picker. New `GameState.settings.suitColor` (persists). In `js/modes/WalkMode.js:buildAstronaut()` apply tint to `suitMat.color`. For the GLB, traverse meshes and tint named materials. |
 | ⏳ | 25 | **Google login + cloud save** | 3/2/1 | 6 | Big lift. Add Google Identity Services `<script>` in `index.html`. New `js/CloudSave.js` for OAuth flow + token mgmt. Backend: cheapest is Firebase Realtime DB or Cloud Firestore (free tier) keyed by Google user id. Sync hook in `js/GameState.js:save/load`. Sign-in button in main menu. Defer until cross-device or social features become priority. |
 | ⏳ | 26 | **Mercury Spacesuit rigging** | 2/1/1 | 4 | Out of code scope — Blender pass to add skeleton + skin weights, then re-export GLB. Once rigged, replace the procedural bob in `js/modes/WalkMode.js:updateWalkAnim()` with a `THREE.AnimationMixer` clip. |
@@ -199,13 +199,13 @@ landed are checked off inline below. Quick summary:
 - **Tier 1 #4 Real audio** ✅ — Sound.js now prefers `.mp3` over `.wav` per candidate (Batch 3, Rev 2 #4); existing synth WAVs remain as graceful fallback until real MP3s are dropped in.
 - **Tier 2 #5 Moon ground texture** ◑ — partially covered by Apollo 11 STL terrain tiles in PR #79; tileable regolith JPG still pending.
 - **Tier 2 #6 Particle texture** ✅ — generated 64×64 soft-glow PNG, mapped onto every cone + explosion material (Batch 3, Rev 2 #7).
-- **Tier 2 #7 Skybox panorama** ⏳ — Rev 2 #20.
+- **Tier 2 #7 Skybox panorama** ✅ — procedural starfield generated (Batch 5, Rev 2 #20).
 - **Tier 2 #8 Game logo** ✅ — shipped in batch 4 (Rev 2 #19).
-- **Tier 3 #9 Crater texture** ⏳ — Rev 2 #15.
-- **Tier 3 #10 Achievement icons** ⏳ — Rev 2 #18.
+- **Tier 3 #9 Crater texture** ✅ — procedural radial bowl texture mapped to plane decals (Batch 5, Rev 2 #15).
+- **Tier 3 #10 Achievement icons** ✅ — inline SVG glyphs in HUD (Batch 5, Rev 2 #18).
 - **Tier 3 #11 Music** ⏳ — Rev 2 #13.
 - **Tier 3 #12 Retro font** ✅ — shipped in batch 4 (Rev 2 #17).
-- **Tier 3 #13 Earth-in-sky** ⏳ — Rev 2 #21.
+- **Tier 3 #13 Earth-in-sky** ✅ — procedural earth texture on a SphereGeometry (Batch 5, Rev 2 #21).
 - **Tier 3 #14 Loading-screen art** ✅ — shipped in batch 4 (Rev 2 #16; reuses `lander.png`, no new bitmap added).
 
 Plus from later PRs that aren't on this list but were shipped:

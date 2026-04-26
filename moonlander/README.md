@@ -35,6 +35,12 @@ name is Space Racer).
 | Carry-summary beat | ✅ | Walk→lander cinematic shows a `STOWED THIS TRIP` panel with the totals just stowed, snapshot from `GameState.lastStowed` and cleared on transition exit |
 | Alien encounter | ✅ | Procedural critter (`js/modes/walk/Alien.js`) spawns at level ≥ 2 with a 45% per-session chance, drifts toward the astronaut, swipes one carried item on contact, then fades out. First encounter unlocks the `CLOSE ENCOUNTER` achievement |
 | Music loop | ✅ | Optional `audio/music.mp3` looped via `Sounds.music`, started on first user gesture; settings overlay has a `MUSIC VOLUME` slider independent of master |
+| Skybox + Earth | ✅ | Procedural `textures/starfield.png` (1024×512) wired as `scene.background` for walk mode + `textures/earth.png` mapped to a `SphereGeometry` placed in the south-west sky. Both skipped on `LOW_END` |
+| Crater decals | ✅ | Procedural `textures/crater.png` (256×256, radial bowl + rim highlight + alpha falloff) mapped to plane decals in walk mode |
+| Achievement icons | ✅ | Inline SVG glyph per achievement (no extra fetches); toast renders icon + title + description side-by-side |
+| Ladder-climb animation | ✅ | Map button at the lander triggers `WalkMode.startLadderClimb` — astronaut translates +Y by 4.2 units over 1.4 s, then map opens; reverse on close |
+| Tutorials | ✅ | First-time `#walk-tutorial` and `#lander-tutorial` cards. Each shown once per save, gated by `flags.walkTutorialSeen` / `flags.landerTutorialSeen` |
+| Per-Apollo terrain | ◑ | Code path live: `buildGround` tries `assets/nasa_models/Apollo NN - Landing Site.stl` first, falls back to the bundled Apollo 11 STL. Drop additional NASA Resources STLs in to activate level-specific terrain |
 | NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit (×2), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks |
 | Particle texture | ✅ | Soft-glow `textures/particle.png` (64×64, smoothstep alpha) shared across cone + explosion materials; missing texture still renders as a colored quad |
 | Adaptive quality | ✅ | Particle pool scales by `Device.LOW_END`; FPS-driven fallback drops emit rate further if average FPS < 30 |
@@ -47,18 +53,15 @@ name is Space Racer).
 
 Tracked in detail in `docs/rev2plan.md`. Highlights still open:
 
-- **Per-Apollo terrain STLs (Batch 5).** All levels currently share the
-  Apollo 11 height-map tiles; 14/15/16/17 STLs would specialize them.
-- **Ladder-climb 3D animation (Batch 5).** The map gate is currently a
-  comms beat ("CLIMBING LADDER…") + 750 ms delay; a scripted up-the-ladder
-  animation would sell the moment.
-- **Remaining visual polish (Batch 5).** Crater detail texture,
-  achievement icons, walk-mode skybox panorama, Earth-in-sky sphere,
-  lander-mode tutorial card. (Retro font, wordmark, and loading-screen
-  art shipped with the parallel batch-4 stream.)
-- **Real audio MP3s (asset gap).** Code-side complete (Sound.js prefers
+- **Apollo 12/14/15/16/17 terrain STLs (asset gap).** Code path live —
+  `buildGround` tries `assets/nasa_models/Apollo NN - Landing Site.stl`
+  first and falls back to the bundled Apollo 11 STL. Drop the matching
+  NASA Resources files in to activate per-level terrain.
+- **Real audio MP3s (asset gap).** Code-side complete (`Sound.js` prefers
   `.mp3`, falls back to bundled synth `.wav`); waiting on freesound /
   CC0 audio drops at `audio/<name>.mp3`.
+- **Music track (asset gap).** Music loop wired (`Sounds.music`,
+  separate volume slider) — drop any `audio/music.mp3` to start it.
 - **Mercury Spacesuit rigging (backlog).** GLB ships unrigged so we drive
   a procedural bob+sway in `updateWalkAnim`. Real walking-limb animation
   needs a Blender pass to add a skeleton + skin weights.

@@ -335,6 +335,24 @@ export const MODEL_PATHS = Object.freeze({
   apollo11Site: 'assets/nasa_models/Apollo 11 - Landing Site.stl'
 });
 
+/**
+ * Batch 5 #23: Per-Apollo terrain STL path for a given level. Returns
+ * `assets/nasa_models/Apollo NN - Landing Site.stl` derived from the
+ * site id. Caller is expected to attempt the path with `loadSTL` and
+ * fall back to `MODEL_PATHS.apollo11Site` on a 404 — the only STL we
+ * actually ship is Apollo 11. When NASA-3D-Resources STLs for 12/14/15
+ * /16/17 are dropped into `assets/nasa_models/` matching this pattern,
+ * each level swaps automatically with no further code change.
+ */
+export function apolloSiteStlPath(level) {
+  const site = apolloSiteForLevel(level);
+  if (!site) return null;
+  // 'apollo-12' → '12'
+  const num = (site.id || '').replace(/^apollo-/, '');
+  if (!num) return null;
+  return `assets/nasa_models/Apollo ${num} - Landing Site.stl`;
+}
+
 // Visible terrain tiles laid out in a 2×2 grid centered on the play area.
 // Each tile is one mesh instance sharing the cached STL geometry; their xz
 // positions in WORLD coords. The base sin-displaced plane sits underneath
