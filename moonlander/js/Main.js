@@ -198,7 +198,7 @@ function openMainMenu() {
       startRun();
     },
     onSettings: () => {
-      showSettings({ onClose: hideSettings });
+      showSettings({ onClose: hideSettings, onLunarCheat: triggerLunarCheat });
     }
   });
 }
@@ -206,6 +206,40 @@ function openMainMenu() {
 function startRun() {
   startNewRun();
   goToMode(LanderMode, { onLanded: handleLanded, onCrashed: handleCrashed });
+}
+
+/**
+ * Hidden cheat triggered from the settings overlay (master=19, music=69,
+ * lunar=11). Skips the 2D descent and drops the player straight into
+ * walk-mode level 1 with 5% fuel and a fuel drum within reach. The
+ * dismount happens after a tick so the settings-input event finishes
+ * cleanly before mode swap.
+ */
+function triggerLunarCheat() {
+  console.log('🌙 LUNAR CHEAT — 19 69 11');
+  hideSettings();
+  hideMainMenu();
+  setTimeout(() => {
+    startNewRun();
+    // 5% fuel, as ordered.
+    GameState.fuel.current = GameState.fuel.capacity * 0.05;
+    // Pretend we just landed cleanly on a plain pad at the world origin,
+    // matching the parked-lander default position. WalkMode reads
+    // lastLanding.padKind to decide what extra loot to spawn — 'plain'
+    // skips the beginner-pad fuel drum freebie so the only nearby drum
+    // is the one in LEVEL1_FIXED_LOOT (the cheat-spawn target).
+    GameState.hasLanded = true;
+    GameState.lastLanding.padCenterX = 0;
+    GameState.lastLanding.padWidth = 30;
+    GameState.lastLanding.padKind = 'plain';
+    GameState.lastLanding.padMultiplier = 1;
+    goToMode(WalkMode, {
+      onReturnToLander: handleReturnToLander,
+      cheatSpawn: true
+    });
+    GameState.mode = MODE.WALK;
+    notify('mode');
+  }, 50);
 }
 
 function openGameOver(lastCrashReason) {
@@ -275,7 +309,7 @@ function onGlobalKey(e) {
     if (isSettingsOpen()) {
       hideSettings();
     } else if (!transitioning) {
-      showSettings({ onClose: hideSettings });
+      showSettings({ onClose: hideSettings, onLunarCheat: triggerLunarCheat });
     }
   } else if (e.key === 'm' || e.key === 'M') {
     // Mute toggle — the corner button is unreachable while pointer-locked

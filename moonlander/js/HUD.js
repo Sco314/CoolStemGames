@@ -57,6 +57,8 @@ const overlay = {
   setMusicVolume:   document.getElementById('set-music-volume'),
   setMusicVolLabel: document.getElementById('set-music-volume-label'),
   setInvertY:       document.getElementById('set-invert-y'),
+  setLunar:         document.getElementById('set-lunar'),
+  setLunarLabel:    document.getElementById('set-lunar-label'),
   btnFullscreen:    document.getElementById('btn-fullscreen'),
   btnCloseSettings: document.getElementById('btn-close-settings'),
   muteBtn:          document.getElementById('mute-btn'),
@@ -117,6 +119,11 @@ let settingsCb = () => {};
 let restartCb = () => {};
 let menuCb = () => {};
 let closeSettingsCb = () => {};
+// Cheat-code callback fired from the settings overlay when the player
+// dials in the magic triplet (see checkLunarCheat). Wired by Main.js
+// inside its showSettings(...) calls.
+let lunarCheatCb = null;
+let lunarCheatFired = false;   // one-shot per settings session
 
 // ---------- init ----------
 export function initHUD() {
@@ -143,6 +150,7 @@ function bindOverlayButtons() {
     setMasterVolume(v);
     GameState.settings.masterVolume = v;
     persistSettings();
+    checkLunarCheat();
   });
   overlay.setMusicVolume?.addEventListener('input', (e) => {
     const pct = Number(e.target.value);
@@ -151,10 +159,18 @@ function bindOverlayButtons() {
     setMusicVolume(v);
     GameState.settings.musicVolume = v;
     persistSettings();
+    checkLunarCheat();
   });
   overlay.setInvertY.addEventListener('change', (e) => {
     GameState.settings.invertY = !!e.target.checked;
     persistSettings();
+  });
+  overlay.setLunar?.addEventListener('input', (e) => {
+    const pct = Number(e.target.value);
+    if (overlay.setLunarLabel) overlay.setLunarLabel.textContent = String(pct);
+    GameState.settings.lunar = pct;
+    persistSettings();
+    checkLunarCheat();
   });
   overlay.btnFullscreen.addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen?.();
@@ -419,7 +435,31 @@ function applySettings(settings) {
     if (overlay.setMusicVolLabel) overlay.setMusicVolLabel.textContent = overlay.setMusicVolume.value;
   }
   overlay.setInvertY.checked = !!settings.invertY;
+  if (overlay.setLunar) {
+    const lunar = settings.lunar | 0;
+    overlay.setLunar.value = String(lunar);
+    if (overlay.setLunarLabel) overlay.setLunarLabel.textContent = String(lunar);
+  }
   refreshMuteIcon();
+}
+
+/**
+ * Hidden cheat: dialing master=19, music=69, lunar=11 in the settings
+ * overlay drops the player straight into walk-mode level 1 with 5% fuel
+ * and a fuel drum within reach. Fires only once per settings session so
+ * adjusting another slider afterward doesn't re-trigger it. Cleared on
+ * the next showSettings() call.
+ */
+function checkLunarCheat() {
+  if (lunarCheatFired || !lunarCheatCb) return;
+  const s = GameState.settings;
+  const masterPct = Math.round((s.masterVolume ?? 0) * 100);
+  const musicPct  = Math.round((s.musicVolume  ?? 0) * 100);
+  const lunarPct  = s.lunar | 0;
+  if (masterPct === 19 && musicPct === 69 && lunarPct === 11) {
+    lunarCheatFired = true;
+    lunarCheatCb();
+  }
 }
 
 /**
@@ -554,8 +594,10 @@ export function showGameOver({ score, level, landings, rank, onRestart, onMenu }
 }
 export function hideGameOver() { overlay.gameOver.hidden = true; }
 
-export function showSettings({ onClose } = {}) {
+export function showSettings({ onClose, onLunarCheat } = {}) {
   closeSettingsCb = onClose || (() => { hideSettings(); });
+  lunarCheatCb = onLunarCheat || null;
+  lunarCheatFired = false;
   applySettings(GameState.settings);
   overlay.settings.hidden = false;
   requestAnimationFrame(() => overlay.btnCloseSettings.focus());

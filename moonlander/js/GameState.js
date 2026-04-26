@@ -99,7 +99,13 @@ export const GameState = {
     masterVolume: 0.8,
     musicVolume:  0.4,    // music slider, independent of master (Batch 4 #13)
     muted:        true,
-    invertY:      false
+    invertY:      false,
+    // Decorative slider on the settings overlay. Stored 0–100 (integer).
+    // The triplet (master=19, music=69, lunar=11) is a hidden cheat code
+    // that drops the player straight into walk-mode level 1 with low fuel
+    // next to a drum — see HUD.js:checkLunarCheat for the trigger and
+    // Main.js:startCheatRun for the destination.
+    lunar:        0
   }
 };
 
