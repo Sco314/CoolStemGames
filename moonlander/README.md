@@ -43,7 +43,7 @@ name is Space Racer).
 | Ladder-climb animation | ✅ | Map button at the lander triggers `WalkMode.startLadderClimb` — astronaut translates +Y by 4.2 units over 1.4 s, then map opens; reverse on close |
 | Tutorials | ✅ | First-time `#walk-tutorial` and `#lander-tutorial` cards. Each shown once per save, gated by `flags.walkTutorialSeen` / `flags.landerTutorialSeen` |
 | Per-Apollo terrain | ◑ | Code path live: `buildGround` tries `assets/nasa_models/Apollo NN - Landing Site.stl` first, falls back to the bundled Apollo 11 STL. Drop additional NASA Resources STLs in to activate level-specific terrain |
-| NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit (×2), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks |
+| NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit part 1 (habitat-a) + part 2 (habitat-b), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks |
 | Particle texture | ✅ | Soft-glow `textures/particle.png` (64×64, smoothstep alpha) shared across cone + explosion materials; missing texture still renders as a colored quad |
 | Adaptive quality | ✅ | Particle pool scales by `Device.LOW_END`; FPS-driven fallback drops emit rate further if average FPS < 30 |
 | Audio | ◑ | `js/Sound.js` tries `.mp3` first, falls back to bundled synth `.wav`. Drop `audio/<name>.mp3` to upgrade quality with no code change |
