@@ -392,10 +392,17 @@ export function apolloSiteForLevel(level) {
 //   https://github.com/nasa/NASA-3D-Resources/tree/11ebb4ee043715aefbba6aeec8a61746fad67fa7/3D%20Models
 // Code paths for each load are wrapped in try/catch + low-end skip, so
 // missing files degrade gracefully to procedural primitives.
+//
+// Habitat note: NASA publishes the Demonstration Unit as TWO GLB files
+// ("part 1" and "part 2"). We expose them as separate `habitat1` /
+// `habitat2` keys and let the two `LANDMARKS` habitat instances each
+// render one part — both habitats become real GLB-backed landmarks
+// instead of identical procedural placeholders.
 export const MODEL_PATHS = Object.freeze({
   apolloLM:     'assets/nasa_models/Apollo Lunar Module.glb',
   spacesuit:    'assets/nasa_models/Mercury Spacesuit.glb',
-  habitat:      'assets/nasa_models/Habitat Demonstration Unit.glb',
+  habitat1:     'assets/nasa_models/Habitat Demonstration Unit (part 1).glb',
+  habitat2:     'assets/nasa_models/Habitat Demonstration Unit (part 2).glb',
   atlas6:       'assets/nasa_models/Atlas 6 (Friendship 7).glb',
   apollo11Site: 'assets/nasa_models/Apollo 11 - Landing Site.stl'
 });
@@ -452,7 +459,7 @@ export const LANDMARKS = [
   {
     id: 'habitat-a',
     kind: 'habitat',
-    model: 'habitat',
+    model: 'habitat1',
     walkPos: [-30, 60],
     score: 150,
     comms: 'HABITAT MODULE A — LIFE SUPPORT NOMINAL',
@@ -462,7 +469,7 @@ export const LANDMARKS = [
   {
     id: 'habitat-b',
     kind: 'habitat',
-    model: 'habitat',
+    model: 'habitat2',
     walkPos: [-12, 60],
     score: 150,
     comms: 'HABITAT MODULE B — STORES READY',
