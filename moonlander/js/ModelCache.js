@@ -18,8 +18,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { STLLoader }  from 'three/addons/loaders/STLLoader.js';
 import { LOW_END } from './Device.js';
 
-const _modelCache = new Map();   // url → Promise<THREE.Object3D> (prototype)
-const _stlCache   = new Map();   // url → Promise<THREE.BufferGeometry>
+const _modelCache   = new Map(); // url → Promise<THREE.Object3D> (prototype)
+const _stlCache     = new Map(); // url → Promise<THREE.BufferGeometry>
+const _terrainCache = new Map(); // url → Promise<THREE.BufferGeometry> (.glb terrain)
 
 let _gltfLoader = null;
 let _stlLoader = null;
@@ -90,6 +91,48 @@ export function loadSTL(url) {
       );
     });
     _stlCache.set(url, geomPromise);
+  }
+  return geomPromise;
+}
+
+/**
+ * Async-load a terrain mesh from `url` and return its BufferGeometry.
+ * Accepts either a Draco-compressed `.glb` (preferred — much smaller on
+ * the wire) or an uncompressed `.stl` (legacy fallback). For `.glb`,
+ * walks the scene and returns the first mesh's geometry; the GLB's
+ * auto-generated material is discarded since `WalkMode.buildGround`
+ * applies its own MeshLambertMaterial.
+ */
+export function loadTerrainGeometry(url) {
+  if (LOW_END) return Promise.reject(new Error('low-end'));
+  if (/\.stl$/i.test(url)) return loadSTL(url);
+
+  let geomPromise = _terrainCache.get(url);
+  if (!geomPromise) {
+    geomPromise = new Promise((resolve, reject) => {
+      gltf().load(
+        url,
+        (gltfResult) => {
+          const root = gltfResult.scene || gltfResult.scenes?.[0];
+          if (!root) { reject(new Error('GLTF has no scene')); return; }
+          let geom = null;
+          root.traverse(o => {
+            if (!geom && o.isMesh && o.geometry) geom = o.geometry;
+          });
+          if (!geom) { reject(new Error('GLTF has no mesh')); return; }
+          const sizeKb = (gltfResult.parser?.json?.buffers?.[0]?.byteLength | 0) / 1024;
+          const triCount = geom.attributes.position?.count / 3 | 0;
+          console.log(`[ModelCache] loaded ${url} (${sizeKb.toFixed(0)} KB, ${triCount} tris)`);
+          resolve(geom);
+        },
+        undefined,
+        (err) => {
+          console.warn(`[ModelCache] failed to load ${url}:`, err.message || err);
+          reject(err);
+        }
+      );
+    });
+    _terrainCache.set(url, geomPromise);
   }
   return geomPromise;
 }

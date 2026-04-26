@@ -20,6 +20,7 @@ import {
   WALK_PITCH_MIN, WALK_PITCH_MAX,
   WALK_GROUND_AMPLITUDE, WALK_CRATER_COUNT,
   INTERACTABLE_TYPES, APOLLO_SITES, apolloSiteForLevel, apolloSiteStlPath,
+  apolloSiteGlbPath,
   DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
   TRANSITION_WIND_VOL,
   HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
@@ -47,7 +48,7 @@ import { Sounds } from '../Sound.js';
 import { effectiveFuelGain } from '../Progression.js';
 import { getQuality, onQualityChange } from '../Quality.js';
 import { getSharedTexture } from '../AssetCache.js';
-import { loadModel, loadSTL, placeOnGround } from '../ModelCache.js';
+import { loadModel, loadTerrainGeometry, placeOnGround } from '../ModelCache.js';
 import * as Story from '../Story.js';
 import { Alien } from './walk/Alien.js';
 import { ALIEN_MIN_LEVEL, ALIEN_SPAWN_CHANCE } from '../Constants.js';
@@ -749,14 +750,25 @@ function buildGround() {
   // the top surface reads. The procedural plane underneath fills gaps.
   //
   // Batch 5 #23: try the per-Apollo path first (e.g. Apollo 12 / 14 /
-  // 15 / 16 / 17 - Landing Site.stl) and fall back to the bundled
-  // Apollo 11 STL if it's missing. Only Apollo 11 ships today; dropping
-  // additional NASA STLs into assets/nasa_models/ activates them
+  // 15 / 16 / 17 - Landing Site) and fall back to the bundled Apollo 11
+  // asset if it's missing. Only Apollo 11 ships today; dropping
+  // additional NASA terrains into assets/nasa_models/ activates them
   // automatically with no further code change.
+  //
+  // Format preference: the Draco-compressed `.glb` is ~5-10x smaller
+  // on the wire than the raw `.stl`, so we try it first per level. The
+  // `.stl` stays as a graceful fallback for assets that haven't been
+  // re-encoded yet — see moonlander/docs/asset-pipeline.md.
+  const perLevelGlb = apolloSiteGlbPath(GameState.level);
   const perLevelStl = apolloSiteStlPath(GameState.level);
-  const stlPromise = (perLevelStl && perLevelStl !== MODEL_PATHS.apollo11Site)
-    ? loadSTL(perLevelStl).catch(() => loadSTL(MODEL_PATHS.apollo11Site))
-    : loadSTL(MODEL_PATHS.apollo11Site);
+  const apollo11Stl = MODEL_PATHS.apollo11Site;
+  const apollo11Glb = apollo11Stl.replace(/\.stl$/i, '.glb');
+  const candidates = [perLevelGlb, perLevelStl, apollo11Glb, apollo11Stl]
+    .filter((u, i, arr) => u && arr.indexOf(u) === i);
+  const stlPromise = candidates.reduce(
+    (p, url) => p.catch(() => loadTerrainGeometry(url)),
+    Promise.reject(new Error('init'))
+  );
   stlPromise
     .then(stlGeom => {
       if (!scene) return;
