@@ -7,13 +7,18 @@
 // actual Audio elements and THREE.TextureLoader instances will hit the
 // browser cache when the game asks for them.
 
+// Each preload entry is fetched via fetch() — failures are non-fatal and the
+// progress bar still advances. .mp3 candidates are listed alongside .wav so
+// the CDN cache is warm for whichever exists; Sound.js picks .mp3 first at
+// runtime and falls back to .wav.
 const ASSETS = [
   'textures/lander.png',
-  'audio/rocket.wav',
-  'audio/crash.wav',
-  'audio/alarm.wav',
-  'audio/morse.wav',
-  'audio/wind.wav'
+  'textures/particle.png',
+  'audio/rocket.mp3', 'audio/rocket.wav',
+  'audio/crash.mp3',  'audio/crash.wav',
+  'audio/alarm.mp3',  'audio/alarm.wav',
+  'audio/morse.mp3',  'audio/morse.wav',
+  'audio/wind.mp3',   'audio/wind.wav'
 ];
 
 export function preloadAssets() {
@@ -32,7 +37,11 @@ export function preloadAssets() {
         // Non-fatal — missing audio degrades to silence, missing texture
         // degrades to the texture loader's magenta placeholder. We still
         // want the progress bar to advance so boot isn't blocked.
-        console.warn(`[preload] ${url} failed:`, err.message);
+        // .mp3 candidates are optional (companion to .wav) so we suppress
+        // their warnings to keep the console quiet when only WAVs are present.
+        if (!url.endsWith('.mp3')) {
+          console.warn(`[preload] ${url} failed:`, err.message);
+        }
       })
       .finally(() => {
         done += 1;

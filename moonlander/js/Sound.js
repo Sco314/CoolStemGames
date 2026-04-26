@@ -1,11 +1,13 @@
-// Sound.js — v0.2.0
+// Sound.js — v0.3.0
 // Audio wrapper. Same idea as tblazevic's sound.js but promoted to an ES
 // module. If a file is missing, we log and swap in a no-op so the game still
 // runs.
 //
-// Files live in /audio. The defaults are .wav placeholders so the game has
-// audible feedback out of the box; drop in your own .mp3 versions and update
-// the paths in initSound() to upgrade quality.
+// Files live in /audio. Each Sound is constructed with a candidate list —
+// MP3 first, WAV fallback — so dropping a higher-quality .mp3 into the
+// directory upgrades quality automatically. If the .mp3 is absent the
+// element's `error` event triggers the next candidate; if all candidates
+// fail we silently swap play/stop/setVolume for no-ops.
 
 import { GameState } from './GameState.js';
 import {
@@ -15,18 +17,32 @@ import {
 } from './Constants.js';
 
 class Sound {
-  constructor(src) {
+  /**
+   * @param {string|string[]} srcOrList One URL, or a candidate list tried in
+   *   order. The first source that loads wins; if every source 404s we
+   *   silently fall back to no-op so the game still runs.
+   */
+  constructor(srcOrList) {
+    const sources = Array.isArray(srcOrList) ? srcOrList.slice() : [srcOrList];
+    this._sources = sources;
     this.el = document.createElement('audio');
-    this.el.src = src;
     this.el.preload = 'auto';
     this.el.style.display = 'none';
     this._baseVolume = 1;
     _instances.add(this);
-    this.el.addEventListener('error', () => {
-      console.warn(`⚠️ Sound file not found: ${src} — falling back to no-op`);
-      this.play = this.stop = () => {};
-      this.setVolume = () => {};
-    });
+
+    let idx = 0;
+    const tryNext = () => {
+      if (idx < sources.length) {
+        this.el.src = sources[idx++];
+      } else {
+        console.warn(`⚠️ Sound: no candidate loaded from [${sources.join(', ')}] — silencing`);
+        this.play = this.stop = () => {};
+        this.setVolume = () => {};
+      }
+    };
+    this.el.addEventListener('error', tryNext);
+    tryNext();
     document.body.appendChild(this.el);
   }
   play() {
@@ -84,22 +100,35 @@ export const Sounds = {
   rocket:   null,
   lowFuel:  null,
   comms:    null,
-  wind:     null
+  wind:     null,
+  music:    null
 };
 
 let _timersStarted = false;
+// Music gets its own multiplier so the player can mute the soundtrack
+// without losing SFX (or vice versa). Persisted in GameState.settings.
+let _musicVolume = 0.4;
 
 export function initSound() {
-  Sounds.crash   = new Sound('audio/crash.wav');
-  Sounds.rocket  = new Sound('audio/rocket.wav');
-  Sounds.lowFuel = new Sound('audio/alarm.wav');
-  Sounds.comms   = new Sound('audio/morse.wav');
-  Sounds.wind    = new Sound('audio/wind.wav');
+  // MP3 first, WAV fallback. Drop .mp3 versions into /audio to upgrade.
+  Sounds.crash   = new Sound(['audio/crash.mp3',  'audio/crash.wav']);
+  Sounds.rocket  = new Sound(['audio/rocket.mp3', 'audio/rocket.wav']);
+  Sounds.lowFuel = new Sound(['audio/alarm.mp3',  'audio/alarm.wav']);
+  Sounds.comms   = new Sound(['audio/morse.mp3',  'audio/morse.wav']);
+  Sounds.wind    = new Sound(['audio/wind.mp3',   'audio/wind.wav']);
+  // Music is optional — only .mp3 is listed (no synthesized WAV in repo). If
+  // the file is absent, the candidate list silently falls through to no-op
+  // and the rest of the audio path keeps working.
+  Sounds.music   = new Sound(['audio/music.mp3']);
   Sounds.rocket.loop();
   Sounds.wind.loop();
+  Sounds.music.loop();
   // Wind is continuous ambience; it stays "playing" at volume 0 until the
   // TransitionMode / WalkMode crossfade it up.
   Sounds.wind.setVolume(0);
+  // Music sits at its own slider volume (master still applies on top). It
+  // doesn't actually start until the first user gesture (autoplay policy).
+  Sounds.music.setVolume(_musicVolume);
 
   // Most browsers won't actually play audio until the user has interacted with
   // the page. Defer the alert/comms chains until first input so they don't
@@ -109,12 +138,25 @@ export function initSound() {
     _timersStarted = true;
     fuelAlert();
     playComms();
+    // Kick the music loop now that we have a user gesture to satisfy
+    // autoplay policy. The Sound class falls back to no-op silently if
+    // the .mp3 isn't present.
+    Sounds.music?.play();
   };
   window.addEventListener('keydown', start, { once: true });
   window.addEventListener('pointerdown', start, { once: true });
 
   console.log('✅ Sound initialized');
 }
+
+/** Music slider, independent of master volume. 0..1. */
+export function setMusicVolume(v) {
+  if (v < 0) v = 0; else if (v > 1) v = 1;
+  _musicVolume = v;
+  Sounds.music?.setVolume(v);
+}
+
+export function getMusicVolume() { return _musicVolume; }
 
 // ----- Timer-chained players (ported from tblazevic) -----
 

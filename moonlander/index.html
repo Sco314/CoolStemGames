@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content">
   <title>Space Racer</title>
+
+  <!-- Retro pixel-font pair (Rev 2 #17). VT323 is a terminal-cell monospace
+       that reads as well as Courier at body sizes; Press Start 2P is the
+       classic chunky pixel face, used only for headings + the wordmark
+       fallback because it's wide and doesn't fit body copy. font-display:swap
+       (Google's default) keeps Courier visible until the webfont arrives. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="css/main.css">
 
   <!--
@@ -26,6 +36,11 @@
        file has been prefetched. Main.js hides it once preloadAssets() resolves. -->
   <div id="preload" role="status" aria-live="polite">
     <div class="preload-inner">
+      <!-- Loading-screen art (Rev 2 #16). Reuses the existing lander.png so
+           the preload screen has a focal subject before any preloadAssets()
+           batch reports progress. Animated by .preload-art-hover in main.css. -->
+      <img id="preload-art" class="preload-art"
+           src="textures/lander.png" alt="" aria-hidden="true">
       <div class="preload-title">SPACE RACER</div>
       <div class="preload-bar-wrap"><div id="preload-bar"></div></div>
       <div class="preload-meta">
@@ -128,7 +143,11 @@
   <!-- Phase-6 menus and toasts. All hidden by default; Main.js + HUD.js
        decide visibility based on mode and events. -->
   <div id="main-menu" class="overlay" hidden>
-    <h1>SPACE RACER</h1>
+    <h1>
+      <img src="../link-images/space-racer-logo.svg"
+           alt="SPACE RACER"
+           class="wordmark-img">
+    </h1>
     <p class="subtitle">Land soft · walk the moon · fly again</p>
 
     <div class="menu-grid">
@@ -208,6 +227,32 @@
     <p class="walk-tutorial-foot">This card only shows once.</p>
   </aside>
 
+  <!-- Batch 5 #22: first-time lander-mode tutorial. Mirrors the walk
+       tutorial — shown once per profile (GameState.flags.landerTutorialSeen)
+       when the player first arrives in lander mode. -->
+  <aside id="lander-tutorial" class="walk-tutorial" hidden>
+    <button class="walk-tutorial-close" id="lander-tutorial-close" aria-label="Close tutorial">×</button>
+    <h3>WELCOME TO THE LANDER</h3>
+    <h4>2D LANDING</h4>
+    <ul class="controls">
+      <li><kbd>↑</kbd> <span>thrust</span></li>
+      <li><kbd>←</kbd> <kbd>→</kbd> <span>rotate</span></li>
+      <li>Touch a flat pad with both feet at low speed and near-vertical angle.</li>
+    </ul>
+    <h4>WATCH THE GAUGES</h4>
+    <ul class="bullet">
+      <li><span class="pill fuel">FUEL</span> — runs out, run ends. Stow drums on the moon to refill.</li>
+      <li><span class="pill kit">HULL</span> — crashes shave HP. Stow repair parts to restore.</li>
+      <li><span class="pill sample">HEALTH</span> — the astronaut's suit. Heal at habitats.</li>
+    </ul>
+    <h4>BONUS PADS</h4>
+    <ul class="bullet">
+      <li><kbd>X2</kbd> <kbd>X3</kbd> <kbd>X5</kbd> multiply the landing score.</li>
+      <li>Beginner pads (no multiplier) drop a fuel drum on the moon.</li>
+    </ul>
+    <p class="walk-tutorial-foot">This card only shows once.</p>
+  </aside>
+
   <div id="game-over" class="overlay" hidden>
     <h1>MISSION OVER</h1>
     <div class="go-row">FINAL SCORE <span id="go-score">0</span></div>
@@ -226,6 +271,11 @@
       <span id="set-volume-label">80</span>
     </label>
     <label class="row">
+      <span>MUSIC VOLUME</span>
+      <input type="range" min="0" max="100" step="1" id="set-music-volume">
+      <span id="set-music-volume-label">40</span>
+    </label>
+    <label class="row">
       <input type="checkbox" id="set-invert-y">
       <span>INVERT MOUSE Y</span>
     </label>
@@ -235,8 +285,13 @@
 
   <div id="achievement-toast" class="toast" hidden>
     <div class="toast-label">ACHIEVEMENT UNLOCKED</div>
-    <div class="toast-title"></div>
-    <div class="toast-desc"></div>
+    <div class="toast-row">
+      <div class="toast-icon" id="toast-icon" aria-hidden="true"></div>
+      <div class="toast-text">
+        <div class="toast-title"></div>
+        <div class="toast-desc"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Mission Control text messages (Batch 2 #5). A longer-form panel

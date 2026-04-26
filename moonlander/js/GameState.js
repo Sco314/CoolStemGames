@@ -29,6 +29,9 @@ export const GameState = {
   supplies: { repairKits: 0, scienceSamples: 0 },
   lander:   { hp: LANDER_MAX_HP, maxHp: LANDER_MAX_HP, wrecked: false },
   astronaut:{ hp: ASTRO_MAX_HP,  maxHp: ASTRO_MAX_HP },
+  // Snapshot of the most recent stow action (Batch 4 #11). Cleared once the
+  // carry-summary panel has displayed for the walk→lander transition.
+  lastStowed: null,
   // Items the astronaut is carrying in walk mode but hasn't deposited at
   // the lander yet. Each entry: { type, amount }. Cleared on stow.
   carrying: [],
@@ -91,6 +94,7 @@ export const GameState = {
   // `masterVolume`; when muted, every sound is effectively zero.
   settings: {
     masterVolume: 0.8,
+    musicVolume:  0.4,    // music slider, independent of master (Batch 4 #13)
     muted:        true,
     invertY:      false
   }

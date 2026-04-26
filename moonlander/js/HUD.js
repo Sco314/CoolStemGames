@@ -12,7 +12,7 @@
 
 import { GameState, subscribe, update as updateState, refreshObjectives, save as saveGameState } from './GameState.js';
 import { MODE, MISSION_MESSAGES } from './Constants.js';
-import { setMasterVolume, setMuted, isMuted } from './Sound.js';
+import { setMasterVolume, setMuted, isMuted, setMusicVolume } from './Sound.js';
 import { generateChallenge, validate as validateMath } from './MathChallenge.js';
 
 // ---------- cached DOM refs ----------
@@ -54,15 +54,20 @@ const overlay = {
   btnMenu:          document.getElementById('btn-menu'),
   setVolume:        document.getElementById('set-volume'),
   setVolLabel:      document.getElementById('set-volume-label'),
+  setMusicVolume:   document.getElementById('set-music-volume'),
+  setMusicVolLabel: document.getElementById('set-music-volume-label'),
   setInvertY:       document.getElementById('set-invert-y'),
   btnFullscreen:    document.getElementById('btn-fullscreen'),
   btnCloseSettings: document.getElementById('btn-close-settings'),
   muteBtn:          document.getElementById('mute-btn'),
   muteIcon:         document.querySelector('#mute-btn .mute-icon'),
   toastTitle:       document.querySelector('#achievement-toast .toast-title'),
+  toastIcon:        document.getElementById('toast-icon'),
   toastDesc:        document.querySelector('#achievement-toast .toast-desc'),
   walkTutorial:     document.getElementById('walk-tutorial'),
   walkTutorialClose:document.getElementById('walk-tutorial-close'),
+  landerTutorial:     document.getElementById('lander-tutorial'),
+  landerTutorialClose:document.getElementById('lander-tutorial-close'),
   mapBtn:           document.getElementById('map-btn'),
   mapOverlay:       document.getElementById('map-overlay'),
   mapFrame:         document.getElementById('map-frame'),
@@ -89,6 +94,10 @@ let activeChallenge = null;
 
 let mapDataProvider = null;
 let mapAnimRaf = null;
+// Batch 5 #9 — optional callback set by WalkMode to drive the scripted
+// up-the-ladder animation. signature: (onTop:Function) => void.
+let mapClimbProvider = null;
+let mapDescendProvider = null;
 
 // Per-frame pull state — lander mode writes these before renderFrame().
 // State strings drive the green/yellow/red gauge color classes.
@@ -135,6 +144,14 @@ function bindOverlayButtons() {
     GameState.settings.masterVolume = v;
     persistSettings();
   });
+  overlay.setMusicVolume?.addEventListener('input', (e) => {
+    const pct = Number(e.target.value);
+    const v = pct / 100;
+    if (overlay.setMusicVolLabel) overlay.setMusicVolLabel.textContent = String(pct);
+    setMusicVolume(v);
+    GameState.settings.musicVolume = v;
+    persistSettings();
+  });
   overlay.setInvertY.addEventListener('change', (e) => {
     GameState.settings.invertY = !!e.target.checked;
     persistSettings();
@@ -152,6 +169,8 @@ function bindOverlayButtons() {
   // Walk-mode first-time tutorial close button. Dismiss sets the
   // profile-level flag so the card doesn't reappear next run.
   overlay.walkTutorialClose?.addEventListener('click', dismissWalkTutorial);
+  // Batch 5 #22: lander-mode first-time tutorial.
+  overlay.landerTutorialClose?.addEventListener('click', dismissLanderTutorial);
 
   // Satellite map open/close. Gated behind lander proximity per the
   // ladder-climb lore — the player has to walk to the lander before the
@@ -228,6 +247,18 @@ export function setMapDataProvider(fn) {
 }
 
 /**
+ * Batch 5 #9 — register the scripted ladder-climb / descend animation
+ * functions from WalkMode. When provided, requestOpenMap() / hideMap()
+ * route through them so the player sees an actual climb instead of a
+ * blind 750ms timeout. Cleared on WalkMode.exit() so we don't poll a
+ * dead session.
+ */
+export function setLadderProviders({ climb, descend } = {}) {
+  mapClimbProvider   = typeof climb   === 'function' ? climb   : null;
+  mapDescendProvider = typeof descend === 'function' ? descend : null;
+}
+
+/**
  * Click handler for the corner MAP button. If the astronaut is at the
  * lander, plays a brief "climbing ladder" comms beat before showing the
  * overlay. Otherwise rejects with a comms blip telling the player where
@@ -242,7 +273,14 @@ function requestOpenMap() {
     return;
   }
   showComms('CLIMBING LADDER… ACCESSING SATELLITE UPLINK');
-  setTimeout(() => showMap(), 750);
+  // Batch 5 #9: hand control to the scripted climb if WalkMode registered
+  // one. Falls back to the original 750 ms timeout when no provider is
+  // wired (defensive — keeps tests / direct callers working).
+  if (mapClimbProvider) {
+    mapClimbProvider(() => showMap());
+  } else {
+    setTimeout(() => showMap(), 750);
+  }
 }
 
 export function showMap() {
@@ -261,6 +299,10 @@ export function hideMap() {
   if (overlay.mapOverlay) overlay.mapOverlay.hidden = true;
   if (mapAnimRaf) cancelAnimationFrame(mapAnimRaf);
   mapAnimRaf = null;
+  // Batch 5 #9: send the astronaut back down the ladder if WalkMode
+  // registered a descend provider. No-op if the player closed the map
+  // from outside walk mode (tests, etc.).
+  if (mapDescendProvider) mapDescendProvider();
 }
 
 export function isMapOpen() {
@@ -345,11 +387,37 @@ function dismissWalkTutorial() {
   persistSettings();
 }
 
+/**
+ * Batch 5 #22: lander-mode first-time tutorial. Same once-per-profile
+ * pattern as the walk-mode card.
+ */
+export function showLanderTutorial() {
+  if (GameState.flags?.landerTutorialSeen) return;
+  if (!overlay.landerTutorial) return;
+  overlay.landerTutorial.hidden = false;
+}
+
+export function hideLanderTutorial() {
+  if (overlay.landerTutorial) overlay.landerTutorial.hidden = true;
+}
+
+function dismissLanderTutorial() {
+  hideLanderTutorial();
+  GameState.flags = GameState.flags || {};
+  GameState.flags.landerTutorialSeen = true;
+  persistSettings();
+}
+
 function applySettings(settings) {
   setMasterVolume(settings.masterVolume ?? 0.8);
+  setMusicVolume(settings.musicVolume ?? 0.4);
   setMuted(settings.muted !== false); // default to muted on first boot
   overlay.setVolume.value = String(Math.round((settings.masterVolume ?? 0.8) * 100));
   overlay.setVolLabel.textContent = overlay.setVolume.value;
+  if (overlay.setMusicVolume) {
+    overlay.setMusicVolume.value = String(Math.round((settings.musicVolume ?? 0.4) * 100));
+    if (overlay.setMusicVolLabel) overlay.setMusicVolLabel.textContent = overlay.setMusicVolume.value;
+  }
   overlay.setInvertY.checked = !!settings.invertY;
   refreshMuteIcon();
 }
@@ -521,6 +589,62 @@ function renderHighScores() {
 }
 
 // ---------- achievement toast ----------
+
+// Batch 5 #18: inline SVG glyphs per achievement, no extra asset fetches.
+// Each entry is a complete <svg> string sized 32×32; the toast injects it
+// into #toast-icon. Unknown ids fall back to a star.
+const ACHIEVEMENT_ICONS = {
+  'first-landing':
+    `<svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+      <rect x="6" y="22" width="20" height="2" fill="#9aa"/>
+      <path d="M16 6 L11 14 L21 14 Z" fill="#cfd"/>
+      <rect x="14" y="14" width="4" height="6" fill="#9af"/>
+      <circle cx="16" cy="11" r="1.4" fill="#fc6"/>
+    </svg>`,
+  'perfect-landing':
+    `<svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+      <polygon points="16,4 19.6,12.4 28.8,13 21.6,18.8 24,27.6 16,22.6 8,27.6 10.4,18.8 3.2,13 12.4,12.4"
+               fill="#fc6" stroke="#a80" stroke-width="1"/>
+    </svg>`,
+  'hot-swap-refuel':
+    `<svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+      <path d="M6 12 L12 7 L12 11 L22 11 L22 13 L12 13 L12 17 Z" fill="#fc4"/>
+      <path d="M26 20 L20 25 L20 21 L10 21 L10 19 L20 19 L20 15 Z" fill="#f86"/>
+    </svg>`,
+  'sample-collector':
+    `<svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+      <rect x="11" y="6" width="10" height="3" rx="1" fill="#bbe"/>
+      <path d="M13 9 L13 24 Q13 27 16 27 Q19 27 19 24 L19 9 Z"
+            fill="#7cf" stroke="#36a" stroke-width="1"/>
+      <circle cx="16" cy="20" r="1" fill="#fff"/>
+      <circle cx="14.5" cy="22" r="0.7" fill="#fff"/>
+    </svg>`,
+  'probe-rescuer':
+    `<svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+      <rect x="9" y="11" width="14" height="10" rx="1" fill="#bcd"/>
+      <rect x="11" y="13" width="10" height="6" fill="#346"/>
+      <rect x="3"  y="15" width="6"  height="2" fill="#bcd"/>
+      <rect x="23" y="15" width="6"  height="2" fill="#bcd"/>
+      <path d="M14 6 L18 6 L17 11 L15 11 Z" fill="#f66"/>
+    </svg>`,
+  'marathon':
+    `<svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+      <circle cx="16" cy="16" r="11" fill="none" stroke="#fc6" stroke-width="2"/>
+      <text x="16" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#fc6">10</text>
+    </svg>`,
+  'alien-visit':
+    `<svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+      <ellipse cx="16" cy="14" rx="7" ry="9" fill="#4dc"/>
+      <ellipse cx="13" cy="13" rx="1.4" ry="2.2" fill="#222"/>
+      <ellipse cx="19" cy="13" rx="1.4" ry="2.2" fill="#222"/>
+      <path d="M12 19 Q16 22 20 19" stroke="#066" stroke-width="1.4" fill="none"/>
+    </svg>`
+};
+
+function iconSvgFor(id) {
+  return ACHIEVEMENT_ICONS[id] || ACHIEVEMENT_ICONS['perfect-landing'];
+}
+
 export function showAchievementToast(def) {
   if (!def) return;
   toastQueue.push(def);
@@ -532,6 +656,7 @@ function runToastQueue() {
   const def = toastQueue.shift();
   overlay.toastTitle.textContent = def.title;
   overlay.toastDesc.textContent  = def.description;
+  if (overlay.toastIcon) overlay.toastIcon.innerHTML = iconSvgFor(def.id);
   overlay.toast.hidden = false;
   // Force reflow so the transition kicks in.
   void overlay.toast.offsetWidth;

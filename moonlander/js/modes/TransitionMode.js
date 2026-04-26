@@ -93,7 +93,22 @@ export const TransitionMode = {
     GameState.previousMode = GameState.mode;
     GameState.mode = MODE.TRANSITION;
     notify('mode');
-    setCenterMessage('');
+
+    // Walk → lander: surface a "STOWED THIS TRIP" summary while the
+    // cinematic plays. The snapshot is captured by stowCarryAtLander; if
+    // the player boarded with empty hands, lastStowed is null and we just
+    // clear the center message as before. Always cleared on exit.
+    if (direction === 'walk-to-lander' && GameState.lastStowed &&
+        (GameState.lastStowed.fuel | 0) + (GameState.lastStowed.hp | 0) > 0) {
+      const lines = ['STOWED THIS TRIP'];
+      const ls = GameState.lastStowed;
+      if (ls.fuel > 0)  lines.push(`+${ls.fuel} FUEL`);
+      if (ls.hp > 0)    lines.push(`+${ls.hp} HP`);
+      if (ls.parts > 0) lines.push(`(${ls.parts} PART${ls.parts > 1 ? 'S' : ''})`);
+      setCenterMessage(lines.join('\n'));
+    } else {
+      setCenterMessage('');
+    }
   },
 
   exit() {
@@ -108,6 +123,11 @@ export const TransitionMode = {
     // its end-of-crossfade value — 0 after walk→lander, TRANSITION_WIND_VOL
     // after lander→walk (WalkMode.startDisembark refreshes it anyway).
     Sounds.rocket?.setVolume(1);
+
+    // Carry-summary beat (Batch 4 #11) was a one-shot. Clear so subsequent
+    // walk→lander cycles without a stow don't re-show the previous totals.
+    GameState.lastStowed = null;
+    setCenterMessage('');
 
     fromCamera = toCamera = fromScene = null;
     onComplete = null;

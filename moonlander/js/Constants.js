@@ -400,6 +400,24 @@ export const MODEL_PATHS = Object.freeze({
   apollo11Site: 'assets/nasa_models/Apollo 11 - Landing Site.stl'
 });
 
+/**
+ * Batch 5 #23: Per-Apollo terrain STL path for a given level. Returns
+ * `assets/nasa_models/Apollo NN - Landing Site.stl` derived from the
+ * site id. Caller is expected to attempt the path with `loadSTL` and
+ * fall back to `MODEL_PATHS.apollo11Site` on a 404 — the only STL we
+ * actually ship is Apollo 11. When NASA-3D-Resources STLs for 12/14/15
+ * /16/17 are dropped into `assets/nasa_models/` matching this pattern,
+ * each level swaps automatically with no further code change.
+ */
+export function apolloSiteStlPath(level) {
+  const site = apolloSiteForLevel(level);
+  if (!site) return null;
+  // 'apollo-12' → '12'
+  const num = (site.id || '').replace(/^apollo-/, '');
+  if (!num) return null;
+  return `assets/nasa_models/Apollo ${num} - Landing Site.stl`;
+}
+
 // Visible terrain tiles laid out in a 2×2 grid centered on the play area.
 // Each tile is one mesh instance sharing the cached STL geometry; their xz
 // positions in WORLD coords. The base sin-displaced plane sits underneath
@@ -572,8 +590,22 @@ export const ACHIEVEMENTS = [
   { id: 'hot-swap-refuel',  title: 'HOT SWAP',         description: 'Refueled from a dangerously low tank.' },
   { id: 'sample-collector', title: 'SAMPLE COLLECTOR', description: 'Banked 10 science samples.' },
   { id: 'probe-rescuer',    title: 'PROBE RESCUER',    description: 'Fixed 3 damaged probes.' },
-  { id: 'marathon',         title: 'MARATHON',         description: '10 successful landings in one run.' }
+  { id: 'marathon',         title: 'MARATHON',         description: '10 successful landings in one run.' },
+  { id: 'alien-visit',      title: 'CLOSE ENCOUNTER',  description: 'Met something on the surface that wasn’t in the briefing.' }
 ];
+
+// ---------- Alien encounter (Batch 4 #12) ----------
+// Walk-mode roaming hostile that occasionally fades in, drifts toward the
+// astronaut, and swipes a single carried item before fading out. Tuned to
+// feel surprising (not constant), so spawn is gated by level + dice roll
+// each WalkMode.enter().
+export const ALIEN_MIN_LEVEL          = 2;     // earliest level to spawn (0-indexed)
+export const ALIEN_SPAWN_CHANCE       = 0.45;  // per qualifying walk session
+export const ALIEN_WALK_SPEED         = 6.0;   // units/sec (astronaut speed = 18ish)
+export const ALIEN_STEAL_RADIUS       = 3.5;   // distance at which a steal triggers
+export const ALIEN_DETECTION_RADIUS   = 60;    // only chase when astronaut is in range
+export const ALIEN_FADE_DURATION_S    = 1.4;   // fade in + fade out length
+export const ALIEN_LIFETIME_S         = 60;    // safety despawn even without steal
 
 // High-score board — how many entries we keep, the top-N leaderboard.
 export const HIGH_SCORE_SLOTS = 10;
