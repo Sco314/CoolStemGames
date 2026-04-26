@@ -42,8 +42,8 @@ name is Space Racer).
 | Achievement icons | ✅ | Inline SVG glyph per achievement (no extra fetches); toast renders icon + title + description side-by-side |
 | Ladder-climb animation | ✅ | Map button at the lander triggers `WalkMode.startLadderClimb` — astronaut translates +Y by 4.2 units over 1.4 s, then map opens; reverse on close |
 | Tutorials | ✅ | First-time `#walk-tutorial` and `#lander-tutorial` cards. Each shown once per save, gated by `flags.walkTutorialSeen` / `flags.landerTutorialSeen` |
-| Per-Apollo terrain | ◑ | Code path live: `buildGround` tries `assets/nasa_models/Apollo NN - Landing Site.stl` first, falls back to the bundled Apollo 11 STL. Drop additional NASA Resources STLs in to activate level-specific terrain |
-| NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit part 1 (habitat-a) + part 2 (habitat-b), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks |
+| Per-Apollo terrain | ◑ | Code path live: `buildGround` tries the per-level Draco GLB first (`Apollo NN - Landing Site.glb`), falls back to the legacy STL, then the bundled Apollo 11 asset. Drop new NASA Resources STLs in (re-encoded per `docs/asset-pipeline.md`) to activate level-specific terrain |
+| NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit part 1 (habitat-a) + part 2 (habitat-b), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks. Landing-site terrain ships as a Draco-compressed GLB (~1 MB) by preference, with the original STL as a fallback |
 | Particle texture | ✅ | Soft-glow `textures/particle.png` (64×64, smoothstep alpha) shared across cone + explosion materials; missing texture still renders as a colored quad |
 | Adaptive quality | ✅ | Particle pool scales by `Device.LOW_END`; FPS-driven fallback drops emit rate further if average FPS < 30 |
 | Audio | ◑ | `js/Sound.js` tries `.mp3` first, falls back to bundled synth `.wav`. Drop `audio/<name>.mp3` to upgrade quality with no code change |
@@ -55,10 +55,12 @@ name is Space Racer).
 
 Tracked in detail in `docs/rev2plan.md`. Highlights still open:
 
-- **Apollo 12/14/15/16/17 terrain STLs (asset gap).** Code path live —
-  `buildGround` tries `assets/nasa_models/Apollo NN - Landing Site.stl`
-  first and falls back to the bundled Apollo 11 STL. Drop the matching
-  NASA Resources files in to activate per-level terrain.
+- **Apollo 12/14/15/16/17 terrain (asset gap).** Code path live —
+  `buildGround` tries `Apollo NN - Landing Site.glb` (Draco-compressed,
+  preferred) → `.stl` (legacy fallback) → bundled Apollo 11 → procedural.
+  Drop matching NASA Resources files in to activate per-level terrain.
+  Re-encode STLs to GLB once per `docs/asset-pipeline.md` for ~5-10×
+  smaller downloads.
 - **Real audio MP3s (asset gap).** Code-side complete (`Sound.js` prefers
   `.mp3`, falls back to bundled synth `.wav`); waiting on freesound /
   CC0 audio drops at `audio/<name>.mp3`.
@@ -173,6 +175,10 @@ memory budget. Key design choices that keep it light:
 - **Asset / model caches share textures and geometries.** The lander
   PNG is uploaded once (used by 2D + 3D); each Apollo 11 terrain tile
   shares one decoded geometry; cloned scene graphs share materials.
+- **Draco-compressed terrain.** Landing-site GLBs are 5-10× smaller on
+  the wire than the source STLs (~1 MB vs ~7 MB). The loader prefers
+  the GLB and falls back to the STL when missing — see
+  `docs/asset-pipeline.md`.
 - **Footprint pool capped at 200** prints, ring-buffered by oldest.
   ~few hundred KB total.
 

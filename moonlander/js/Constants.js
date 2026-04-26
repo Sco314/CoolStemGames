@@ -422,11 +422,12 @@ export const MODEL_PATHS = Object.freeze({
 /**
  * Batch 5 #23: Per-Apollo terrain STL path for a given level. Returns
  * `assets/nasa_models/Apollo NN - Landing Site.stl` derived from the
- * site id. Caller is expected to attempt the path with `loadSTL` and
- * fall back to `MODEL_PATHS.apollo11Site` on a 404 — the only STL we
- * actually ship is Apollo 11. When NASA-3D-Resources STLs for 12/14/15
- * /16/17 are dropped into `assets/nasa_models/` matching this pattern,
- * each level swaps automatically with no further code change.
+ * site id. The loader chain in WalkMode.buildGround prefers the GLB
+ * sibling (see `apolloSiteGlbPath`) and falls back to this `.stl` path
+ * if the GLB is missing, then to `MODEL_PATHS.apollo11Site`. When
+ * NASA-3D-Resources files for 12/14/15/16/17 are dropped into
+ * `assets/nasa_models/` matching this pattern, each level swaps
+ * automatically with no further code change.
  */
 export function apolloSiteStlPath(level) {
   const site = apolloSiteForLevel(level);
@@ -435,6 +436,19 @@ export function apolloSiteStlPath(level) {
   const num = (site.id || '').replace(/^apollo-/, '');
   if (!num) return null;
   return `assets/nasa_models/Apollo ${num} - Landing Site.stl`;
+}
+
+/**
+ * Per-Apollo terrain GLB path for a given level — the Draco-compressed
+ * sibling of `apolloSiteStlPath`. Same naming pattern, `.glb` extension.
+ * Loaders try this first (much smaller download, ~5-10x shrink over the
+ * raw STL), and fall back to the `.stl` if the `.glb` hasn't been
+ * dropped in yet. See moonlander/docs/asset-pipeline.md for the
+ * Blender re-encode process.
+ */
+export function apolloSiteGlbPath(level) {
+  const stlPath = apolloSiteStlPath(level);
+  return stlPath ? stlPath.replace(/\.stl$/i, '.glb') : null;
 }
 
 // Visible terrain tiles laid out in a 2×2 grid centered on the play area.
