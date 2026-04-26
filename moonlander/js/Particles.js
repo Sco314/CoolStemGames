@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { getQualityFactor } from './Quality.js';
 import { scalePool, LOW_END } from './Device.js';
+import { getSharedTexture } from './AssetCache.js';
 import {
   GRAVITY,
   CONE_PS_MAX_PARTICLES, CONE_PS_PER_SEC_MIN, CONE_PS_PER_SEC_MAX,
@@ -47,12 +48,18 @@ function rand(min, max) { return min + Math.random() * (max - min); }
 // ------------------------------------------------------------------
 // Internal pool helper — both systems share the same mesh-pool shape.
 
+// Soft-glow PNG shared by every particle material. Optional — if the file
+// is missing the loader's onError silently leaves `map` null, which renders
+// as a solid colored quad (the original look).
+const _particleTex = getSharedTexture('textures/particle.png');
+
 function buildPool(scene, size, particleSize) {
   const geom = new THREE.PlaneGeometry(particleSize, particleSize);
   const pool = new Array(size);
   for (let i = 0; i < size; i++) {
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
+      map: _particleTex,
       transparent: true,
       opacity: 0,
       depthWrite: false,

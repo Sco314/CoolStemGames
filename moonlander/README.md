@@ -14,7 +14,7 @@ name is Space Racer).
 | Area | Done? | Notes |
 |---|---|---|
 | 2D Lander mode | ✅ | 3-circle collision, foot/edge tolerances, X2/X3/X5 bonus pads, beginner pads with fuel-drum sprites |
-| Lander texture | ✅ | Pixel-art `textures/lander.png` (drop-in replacement supported) |
+| Lander texture | ✅ | 256×256 pixel-art `textures/lander.png` (foiled descent stage, ascent cabin with triangular window, four splayed legs, foot pads) |
 | 3D Walk mode | ✅ | Procedural astronaut OR NASA Mercury Spacesuit GLB, displaced moon ground OR tiled Apollo 11 STL, footprint trail (permanent), color-coded breadcrumb rings + beacon pillars to objectives |
 | Mode transitions | ✅ | Letterbox + fade-through-black + audio crossfade, scripted disembark/embark |
 | HUD | ✅ | Live telemetry with green/yellow/red color coding for V-SPEED / H-SPEED / ANGLE / FUEL |
@@ -32,16 +32,17 @@ name is Space Racer).
 | STEM math challenges | ✅ | Corner `STEM` button opens a modal with O₂/fuel/fall-speed/walk-time questions (`js/MathChallenge.js`); 3 attempts per session; `GameState.stats.mathSolved` persists |
 | Mission Control messages | ✅ | `MISSION_MESSAGES` catalog in Constants; `HUD.showMissionMessage(key)` panel fades in on first landing, first Apollo, habitat reach, fuel/part stow, hull critical |
 | NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit (×2), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks |
+| Particle texture | ✅ | Soft-glow `textures/particle.png` (64×64, smoothstep alpha) shared across cone + explosion materials; missing texture still renders as a colored quad |
 | Adaptive quality | ✅ | Particle pool scales by `Device.LOW_END`; FPS-driven fallback drops emit rate further if average FPS < 30 |
-| Audio | ⚠️ | Synthesized .wav placeholders; drop in real .mp3s and update paths in `js/Sound.js` |
+| Audio | ◑ | `js/Sound.js` tries `.mp3` first, falls back to bundled synth `.wav`. Drop `audio/<name>.mp3` to upgrade quality with no code change |
+| Retro pixel font | ✅ | VT323 (HUD) + Press Start 2P (headings + wordmark) loaded from Google Fonts; Courier monospace fallback |
+| Game logo | ✅ | `link-images/space-racer-logo.svg` wordmark replaces the menu h1 text |
+| Loading-screen art | ✅ | Animated lander sprite (3.2 s hover/rotate, respects `prefers-reduced-motion`) above the preload progress bar |
 
 ## Roadmap — what's pending
 
 Tracked in detail in `docs/rev2plan.md`. Highlights still open:
 
-- **Real audio (Batch 3).** All five WAVs are synthesized placeholders.
-- **Particle / lander texture polish (Batch 3).** Soft glow PNG for
-  thrusters; higher-res `lander.png` for the 2D side-view sprite.
 - **Story progression layer (Batch 4).** A `Story.js` module that
   threads objectives, mission messages, and math challenges into a
   per-level arc.
@@ -55,9 +56,13 @@ Tracked in detail in `docs/rev2plan.md`. Highlights still open:
 - **Ladder-climb 3D animation (Batch 5).** The map gate is currently a
   comms beat ("CLIMBING LADDER…") + 750 ms delay; a scripted up-the-ladder
   animation would sell the moment.
-- **Visual / brand polish (Batch 5).** Crater detail texture, loading-
-  screen art, retro pixel font, achievement icons, game logo, walk-mode
-  skybox panorama, Earth-in-sky sphere, lander-mode tutorial card.
+- **Remaining visual polish (Batch 5).** Crater detail texture,
+  achievement icons, walk-mode skybox panorama, Earth-in-sky sphere,
+  lander-mode tutorial card. (Retro font, wordmark, and loading-screen
+  art shipped with the parallel batch-4 stream.)
+- **Real audio MP3s (asset gap).** Code-side complete (Sound.js prefers
+  `.mp3`, falls back to bundled synth `.wav`); waiting on freesound /
+  CC0 audio drops at `audio/<name>.mp3`.
 - **Mercury Spacesuit rigging (backlog).** GLB ships unrigged so we drive
   a procedural bob+sway in `updateWalkAnim`. Real walking-limb animation
   needs a Blender pass to add a skeleton + skin weights.
