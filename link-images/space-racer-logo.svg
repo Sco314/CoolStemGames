@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 96" preserveAspectRatio="xMidYMid meet" role="img" aria-label="SPACE RACER">
+  <defs>
+    <style><![CDATA[
+      /* Imports the same Google Font used by the page so the wordmark
+         matches the menu typography. When the SVG is loaded as <img>
+         and the import is blocked, fall through to plain monospace
+         (still readable, just chunkier). */
+      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+      .wordmark {
+        font-family: 'Press Start 2P', 'Courier New', monospace;
+        font-size: 28px;
+        fill: #ffee88;
+        letter-spacing: 2px;
+      }
+      .tagline {
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        letter-spacing: 6px;
+        fill: #66ff88;
+      }
+    ]]></style>
+    <linearGradient id="thrust" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffee88"/>
+      <stop offset="1" stop-color="#ff8c2a" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Lander icon, scaled down from link-images/moonlander.svg. Centered
+       vertically with the wordmark and offset to the left so the pair reads
+       as "icon + title". -->
+  <g transform="translate(36, 48) scale(1.05)">
+    <!-- Ascent stage -->
+    <rect x="-9"  y="-14" width="18" height="12" fill="#eaeaee"/>
+    <rect x="-9"  y="-14" width="18" height="2"  fill="#8a8a92"/>
+    <rect x="-4"  y="-10" width="8"  height="5"  fill="#ffcb44"/>
+    <!-- Antenna -->
+    <line x1="0" y1="-14" x2="0" y2="-20" stroke="#3d3d45" stroke-width="1.2"/>
+    <!-- Descent stage -->
+    <rect x="-13" y="-2"  width="26" height="10" fill="#eaeaee"/>
+    <rect x="-13" y="-2"  width="26" height="2"  fill="#3d3d45"/>
+    <rect x="-10" y="2"   width="6"  height="4"  fill="#9a9aa0"/>
+    <rect x="4"   y="2"   width="6"  height="4"  fill="#9a9aa0"/>
+    <!-- Nozzle -->
+    <rect x="-2"  y="8"   width="4"  height="3"  fill="#626268"/>
+    <!-- Legs -->
+    <line x1="-13" y1="5" x2="-22" y2="18" stroke="#3d3d45" stroke-width="1.8"/>
+    <line x1="13"  y1="5" x2="22"  y2="18" stroke="#3d3d45" stroke-width="1.8"/>
+    <line x1="-7"  y1="8" x2="-12" y2="20" stroke="#3d3d45" stroke-width="1.8"/>
+    <line x1="7"   y1="8" x2="12"  y2="20" stroke="#3d3d45" stroke-width="1.8"/>
+    <!-- Foot pads -->
+    <rect x="-24" y="17" width="5" height="2" fill="#8a8a92"/>
+    <rect x="19"  y="17" width="5" height="2" fill="#8a8a92"/>
+    <rect x="-14" y="19" width="5" height="2" fill="#8a8a92"/>
+    <rect x="9"   y="19" width="5" height="2" fill="#8a8a92"/>
+    <!-- Thrust -->
+    <polygon points="-3,11 3,11 0,26" fill="url(#thrust)"/>
+  </g>
+
+  <!-- Wordmark. Two-line layout so the title doesn't get tiny. -->
+  <text x="76" y="48" class="wordmark">SPACE RACER</text>
+  <text x="78" y="76" class="tagline">MOON LANDER  STEM</text>
+
+  <!-- Decorative star specks to sell the space theme -->
+  <g fill="#ffffff">
+    <circle cx="14"  cy="10" r="0.9"/>
+    <circle cx="64"  cy="14" r="0.7"/>
+    <circle cx="190" cy="14" r="0.6"/>
+    <circle cx="320" cy="10" r="0.8"/>
+    <circle cx="412" cy="18" r="0.7"/>
+    <circle cx="460" cy="8"  r="0.6"/>
+    <circle cx="442" cy="86" r="0.7"/>
+  </g>
+</svg>

@@ -7,7 +7,7 @@ html, body {
   overflow: hidden;
   background: #000;
   color: #fff;
-  font-family: "Courier New", Courier, monospace;
+  font-family: "VT323", "Courier New", Courier, monospace;
 }
 
 canvas { display: block; }
@@ -144,16 +144,23 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
   justify-content: center;
   gap: 18px;
   pointer-events: auto;
-  font-family: "Courier New", Courier, monospace;
+  font-family: "VT323", "Courier New", Courier, monospace;
   letter-spacing: 2px;
 }
 .overlay h1 {
   margin: 0;
-  font-size: 48px;
-  letter-spacing: 8px;
+  font-size: 36px;
+  letter-spacing: 6px;
   color: #ffee88;
+  font-family: "Press Start 2P", "VT323", "Courier New", Courier, monospace;
 }
-.overlay h2 { margin: 0; font-size: 28px; color: #ffee88; }
+.overlay h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #ffee88;
+  font-family: "Press Start 2P", "VT323", "Courier New", Courier, monospace;
+  letter-spacing: 4px;
+}
 .overlay h3 { margin: 0 0 8px 0; font-size: 18px; color: #ffee88; }
 .overlay .subtitle { opacity: 0.7; letter-spacing: 4px; margin: -12px 0 8px; }
 .overlay button {
@@ -197,7 +204,14 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
   overflow-y: auto;
   gap: 10px;
 }
-#main-menu h1 { font-size: 34px; letter-spacing: 6px; margin: 0; }
+#main-menu h1 { font-size: 26px; letter-spacing: 4px; margin: 0; }
+#main-menu h1 .wordmark-img,
+#main-menu h1 img.wordmark-img {
+  display: block;
+  width: clamp(220px, 56vw, 420px);
+  height: auto;
+  image-rendering: pixelated;
+}
 #main-menu .subtitle { margin: -6px 0 4px; font-size: 13px; opacity: 0.7; }
 .menu-grid {
   display: grid;
@@ -209,7 +223,7 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 }
 @media (max-width: 720px) {
   .menu-grid { grid-template-columns: 1fr; gap: 10px; }
-  #main-menu h1 { font-size: 26px; letter-spacing: 4px; }
+  #main-menu h1 { font-size: 20px; letter-spacing: 3px; }
 }
 .menu-grid .howto {
   background: rgba(255, 238, 136, 0.05);
@@ -313,7 +327,7 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
   background: rgba(10, 15, 25, 0.92);
   border: 1px solid rgba(255, 238, 136, 0.6);
   color: #eaeaf0;
-  font-family: "Courier New", Courier, monospace;
+  font-family: "VT323", "Courier New", Courier, monospace;
   font-size: 11px;
   line-height: 1.45;
   letter-spacing: 0.5px;
@@ -486,7 +500,7 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
   background: rgba(10, 15, 25, 0.92);
   border: 1px solid #66ff88;
   color: #d6ffd6;
-  font-family: "Courier New", Courier, monospace;
+  font-family: "VT323", "Courier New", Courier, monospace;
   letter-spacing: 1px;
   opacity: 0;
   transform: translateX(20px);
@@ -522,11 +536,33 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: "Courier New", Courier, monospace;
+  font-family: "VT323", "Courier New", Courier, monospace;
   letter-spacing: 4px;
 }
 .preload-inner { text-align: center; min-width: 280px; }
-.preload-title { font-size: 36px; letter-spacing: 8px; margin-bottom: 24px; }
+.preload-art {
+  display: block;
+  margin: 0 auto 18px;
+  width: 96px;
+  height: 96px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 12px rgba(255, 238, 136, 0.35));
+  animation: preload-hover 3.2s ease-in-out infinite;
+}
+@keyframes preload-hover {
+  0%   { transform: translateY(0)    rotate(-2deg); }
+  50%  { transform: translateY(-6px) rotate(2deg);  }
+  100% { transform: translateY(0)    rotate(-2deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preload-art { animation: none; }
+}
+.preload-title {
+  font-size: 22px;
+  letter-spacing: 4px;
+  margin-bottom: 24px;
+  font-family: "Press Start 2P", "VT323", "Courier New", Courier, monospace;
+}
 .preload-bar-wrap {
   height: 8px;
   background: rgba(255, 238, 136, 0.18);
