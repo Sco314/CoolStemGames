@@ -56,6 +56,27 @@
     <span aria-hidden="true">🛰</span>
     <span class="map-btn-label">MAP</span>
   </button>
+
+  <!-- Walk-mode STEM challenge button. Pops a math question modal; correct
+       answers award score. Capped per walk session so it can't be farmed. -->
+  <button id="stem-btn" class="map-btn stem-btn walk-only" aria-label="STEM challenge">
+    <span aria-hidden="true">🧮</span>
+    <span class="map-btn-label">STEM</span>
+  </button>
+  <div id="math-overlay" class="overlay" hidden>
+    <h2 id="math-title">STEM CHALLENGE</h2>
+    <p id="math-body" class="math-body"></p>
+    <div class="math-input-row">
+      <input type="number" id="math-input" inputmode="decimal" step="any"
+             aria-label="Your answer">
+      <span id="math-unit" class="math-unit"></span>
+    </div>
+    <div id="math-result" class="math-result" hidden></div>
+    <div class="math-actions">
+      <button id="btn-math-submit" class="big">SUBMIT</button>
+      <button id="btn-math-skip" class="small">SKIP</button>
+    </div>
+  </div>
   <div id="map-overlay" class="overlay map-overlay" hidden>
     <h2>SATELLITE VIEW</h2>
     <p class="map-sub">Tranquility-Base uplink — live positions of objectives, landmarks, and the parked lander.</p>
@@ -84,6 +105,7 @@
       <div class="row"><span class="label">TIME</span><span id="hud-time">0:00</span></div>
       <div class="row"><span class="label">FUEL</span><span id="hud-fuel">1000</span></div>
       <div class="row"><span class="label">HULL</span><span id="hud-hull">100</span></div>
+      <div class="row walk-only"><span class="label">HEALTH</span><span id="hud-health">100</span></div>
       <div class="row walk-only"><span class="label">KITS</span><span id="hud-kits">0</span></div>
       <div class="row walk-only"><span class="label">SAMPLES</span><span id="hud-samples">0</span></div>
       <div class="row walk-only" id="hud-carry-row" hidden><span class="label">CARRY</span><span id="hud-carry">—</span></div>
@@ -215,6 +237,14 @@
     <div class="toast-label">ACHIEVEMENT UNLOCKED</div>
     <div class="toast-title"></div>
     <div class="toast-desc"></div>
+  </div>
+
+  <!-- Mission Control text messages (Batch 2 #5). A longer-form panel
+       than #hud-comms; fires on key events (first landing, first Apollo
+       site, hull critical, etc.) and fades out after a few seconds. -->
+  <div id="mission-msg" class="mission-msg" hidden>
+    <div class="mission-msg-label">INCOMING — <span id="mission-msg-title"></span></div>
+    <div id="mission-msg-body" class="mission-msg-body"></div>
   </div>
 
   <!-- Mobile touch controls (Phase 7). Hidden by default; the Touch module

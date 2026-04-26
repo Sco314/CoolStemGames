@@ -28,7 +28,7 @@ import {
 } from '../Constants.js';
 import { GameState, update as updateState, notify, unlockAchievement } from '../GameState.js';
 import { Input } from '../Input.js';
-import { setLanderTelemetry, setCenterMessage, showAchievementToast } from '../HUD.js';
+import { setLanderTelemetry, setCenterMessage, showAchievementToast, showMissionMessage } from '../HUD.js';
 import { points as terrainPoints } from '../TerrainData.js';
 import { Sounds } from '../Sound.js';
 import { ParticleSystemCone, ParticleSystemExplosion } from '../Particles.js';
@@ -560,6 +560,12 @@ function resolveLanding(segment, segmentIndex) {
   if (perfect)                              showAchievementToast(unlockAchievement('perfect-landing'));
   if (GameState.landingsCompleted >= 10)    showAchievementToast(unlockAchievement('marathon'));
 
+  // Mission Control narrative beat — fires on the very first landing of
+  // a run. landingsCompleted has already been incremented to 1 above.
+  if (GameState.landingsCompleted === 1) {
+    showMissionMessage('firstLanding');
+  }
+
   const suffix = multiplier > 1 ? `  X${multiplier} +${earned}` : '';
   setCenterMessage('SUCCESSFULLY LANDED' + suffix);
   onLandedCallback({ segment, segmentIndex, multiplier, earned });
@@ -588,6 +594,10 @@ function resolveCrash(reason) {
     ? '\nLANDER DESTROYED'
     : `\nLANDER HP: ${GameState.lander.hp}/${GameState.lander.maxHp}`;
   setCenterMessage(reason + hpSuffix);
+  // Mission Control nudge when the hull is below 25%.
+  if (!wrecked && GameState.lander.hp / GameState.lander.maxHp <= 0.25) {
+    showMissionMessage('hullCritical');
+  }
   onCrashedCallback({ reason, wrecked });
 }
 

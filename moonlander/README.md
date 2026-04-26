@@ -23,36 +23,46 @@ name is Space Racer).
 | Mobile | ✅ | Letterbox or full-viewport, touch joystick + thrust buttons, screen-swipe camera, **tap-on-canvas to interact** (no E button needed), top-right mute toggle, top-left satellite-map button |
 | Satellite map | ✅ | Top-left button opens a top-down view; **gated behind lander proximity** with a "CLIMBING LADDER" comms beat. Off-lander taps surface "RETURN TO LANDER" |
 | Lander HP | ✅ | New HULL gauge (color-coded). Crashes shave LANDER_CRASH_DAMAGE per impact; HP=0 wrecks the craft and ends the run alongside fuel-empty |
+| Astronaut HP | ✅ | New HEALTH gauge (color-coded). Health-pack pickups at Apollo sites and habitat heals top up `GameState.astronaut.hp` |
 | Carry-and-deposit | ✅ | Fuel drums and repair parts are carried (HUD shows CARRY), then stowed at the lander with `E`/tap. Stow message reports `+FUEL · +HP` |
-| Repair parts | ✅ | New `'part'` interactable spawned at the current Apollo site; +25 HP per part on stow |
-| Apollo levels | ✅ | Walk scene shows Apollo 11 at level 0, Apollo 12 at level 1+. Registry is `APOLLO_SITES`; add 14/15/16/17 entries to extend |
+| Repair parts | ✅ | `'part'` interactable spawned at the current Apollo site; +25 HP per part on stow |
+| Health packs | ✅ | `'healthpack'` interactable; +25 astronaut HP on touch |
+| Apollo levels | ✅ | Apollo 11/12/14/15/16/17 all in `APOLLO_SITES`; level mods through the registry, so each run rotates the active destination |
+| Per-level objectives | ✅ | `LEVEL_OBJECTIVES` (keyed by Apollo site id) merges with the career list — every destination has its own mini brief (visit, collect, stow, heal) |
+| STEM math challenges | ✅ | Corner `STEM` button opens a modal with O₂/fuel/fall-speed/walk-time questions (`js/MathChallenge.js`); 3 attempts per session; `GameState.stats.mathSolved` persists |
+| Mission Control messages | ✅ | `MISSION_MESSAGES` catalog in Constants; `HUD.showMissionMessage(key)` panel fades in on first landing, first Apollo, habitat reach, fuel/part stow, hull critical |
 | NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit (×2), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks |
 | Adaptive quality | ✅ | Particle pool scales by `Device.LOW_END`; FPS-driven fallback drops emit rate further if average FPS < 30 |
 | Audio | ⚠️ | Synthesized .wav placeholders; drop in real .mp3s and update paths in `js/Sound.js` |
 
 ## Roadmap — what's pending
 
-Things explicitly deferred to a follow-up PR:
+Tracked in detail in `docs/rev2plan.md`. Highlights still open:
 
-- **Astronaut HP + health packs.** Separate pool from lander HP. Walk
-  mode currently has no damage source for the astronaut, so the pool
-  isn't introduced until a damage source (falls / suit punctures /
-  habitat heals) lands.
-- **Apollo 14 / 15 / 16 / 17 sites.** The registry is in place; new
-  entries in `APOLLO_SITES` immediately rotate by level. Apollo 11 is
-  level 0, Apollo 12 is level 1+; 14–17 just need their `walkPos` +
-  artifact data filled in (and ideally height-map STLs added to
-  `assets/nasa_models/`).
-- **Per-Apollo terrain.** All levels currently share the Apollo 11
-  height-map STL tiles. Each Apollo destination should swap to its
-  own STL once the asset files arrive.
-- **Ladder-climb 3D animation.** The map gate is currently a comms
-  beat ("CLIMBING LADDER…") + 750 ms delay. A scripted up-the-ladder
-  motion of the astronaut model would sell the moment.
-- **Mercury Spacesuit rigging.** GLB ships unrigged so we drive a
-  procedural bob+sway in `updateWalkAnim`. Real walking-limb animation
+- **Real audio (Batch 3).** All five WAVs are synthesized placeholders.
+- **Particle / lander texture polish (Batch 3).** Soft glow PNG for
+  thrusters; higher-res `lander.png` for the 2D side-view sprite.
+- **Story progression layer (Batch 4).** A `Story.js` module that
+  threads objectives, mission messages, and math challenges into a
+  per-level arc.
+- **Carry-summary beat on 3D→2D return (Batch 4).** Brief stowed
+  manifest panel during the cinematic swap.
+- **Alien encounter (Batch 4).** Roaming hostile that can swipe a
+  carried item; new procedural model + audio.
+- **Music loop (Batch 4).** Looped ambient track with its own slider.
+- **Per-Apollo terrain STLs (Batch 5).** All levels currently share the
+  Apollo 11 height-map tiles; 14/15/16/17 STLs would specialize them.
+- **Ladder-climb 3D animation (Batch 5).** The map gate is currently a
+  comms beat ("CLIMBING LADDER…") + 750 ms delay; a scripted up-the-ladder
+  animation would sell the moment.
+- **Visual / brand polish (Batch 5).** Crater detail texture, loading-
+  screen art, retro pixel font, achievement icons, game logo, walk-mode
+  skybox panorama, Earth-in-sky sphere, lander-mode tutorial card.
+- **Mercury Spacesuit rigging (backlog).** GLB ships unrigged so we drive
+  a procedural bob+sway in `updateWalkAnim`. Real walking-limb animation
   needs a Blender pass to add a skeleton + skin weights.
-- **Real audio.** All five WAVs are synthesized placeholders.
+- **Suit customization, Google login + cloud save, persistent carry
+  (backlog).** See `docs/rev2plan.md` for scoping notes.
 
 ## How to play
 
@@ -77,6 +87,8 @@ Things explicitly deferred to a follow-up PR:
 - `Esc` toggles the settings overlay (master volume, invert-Y, fullscreen)
 - Tab/Enter navigates menu buttons
 - Touch devices get on-screen controls automatically
+- Top-left **STEM** button opens a math challenge (O₂, fuel, fall-speed,
+  walk-time); 3 attempts per session
 
 ## Running locally
 
@@ -99,7 +111,8 @@ python3 -m http.server 8000
 | `js/Input.js` | Keyboard + synthetic-key injection for touch |
 | `js/Touch.js` | Mobile buttons + joystick feeding the same Input queue |
 | `js/Sound.js` | Audio wrapper with per-Sound `setVolume` and a global `setMasterVolume` |
-| `js/HUD.js` | DOM HUD, comms blips, achievement toasts, and every overlay |
+| `js/HUD.js` | DOM HUD, comms blips, mission-control panel, achievement toasts, math overlay, and every overlay |
+| `js/MathChallenge.js` | STEM question generators (O₂, fuel, fall-speed, walk-time) + answer validator |
 | `js/Particles.js` | Pooled thruster cone + crash explosion (quality-scaled) |
 | `js/Progression.js` | Pure helpers that turn a `level` into effective values |
 | `js/Quality.js` | Rolling-FPS adaptive quality (scales particles, toggles fog) |
