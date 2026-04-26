@@ -34,6 +34,9 @@ export const GameState = {
   lastStowed: null,
   // Items the astronaut is carrying in walk mode but hasn't deposited at
   // the lander yet. Each entry: { type, amount }. Cleared on stow.
+  // **Persists across runs** (Rev 2 #14): startNewRun deliberately leaves
+  // this alone, and save() already serializes it, so the next commander
+  // inherits whatever the previous one was holding when they died / quit.
   carrying: [],
 
   // ----- Scoring (run-local) -----
@@ -193,7 +196,14 @@ export function startNewRun() {
   GameState.supplies.scienceSamples = 0;
   GameState.lander = { hp: LANDER_MAX_HP, maxHp: LANDER_MAX_HP, wrecked: false };
   GameState.astronaut = { hp: ASTRO_MAX_HP, maxHp: ASTRO_MAX_HP };
-  GameState.carrying = [];
+  // GameState.carrying intentionally NOT reset — Rev 2 #14 persists the
+  // astronaut's pack across runs. Save() already serializes it; whatever
+  // the player was holding when their last run ended (or quit) carries
+  // forward into the next commander's pack and stows on first arrival.
+  // The carry-summary cinematic still clears `lastStowed` between
+  // transitions, but reset it defensively so a stale snapshot can't
+  // resurface in the new run's first stow beat.
+  GameState.lastStowed = null;
   GameState.score = 0;
   GameState.timeElapsed = 0;
   GameState.landingsCompleted = 0;

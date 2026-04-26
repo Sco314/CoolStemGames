@@ -64,7 +64,7 @@ A batch's checkbox flips to `[x]` when **all** of its sub-items do.
 
 ### Backlog (unbatched / large) [ ]
 
-- [ ] **#14** Persist carry across runs
+- [x] **#14** Persist carry across runs
 - [ ] **#24** Astronaut suit customization
 - [ ] **#25** Google login + cloud save
 - [ ] **#26** Mercury Spacesuit rigging (out of code scope)
@@ -86,7 +86,7 @@ A batch's checkbox flips to `[x]` when **all** of its sub-items do.
 | ✅ | 11 | **Return 3D → 2D with carry-summary beat** | 3/2/4 | 9 | `WalkMode.stowCarryAtLander` snapshots `{fuel, hp, parts, at}` into `GameState.lastStowed`. `TransitionMode.enter` (walk-to-lander direction) reads it and surfaces a multi-line `setCenterMessage('STOWED THIS TRIP\n+N FUEL\n+N HP\n…')` for the duration of the fade; `exit()` clears the snapshot so empty-handed returns aren't echoed. |
 | ✅ | 12 | **Alien that steals carried items** | 4/2/2 | 8 | New `js/modes/walk/Alien.js` (procedural cone body + dome head + magenta eye dots, no external assets). Gated by `level >= ALIEN_MIN_LEVEL` (=2) and `ALIEN_SPAWN_CHANCE` (45%) per `WalkMode.enter`; spawned 4–10 s after the scene loads. Drifts toward the astronaut, fades in/out, removes one carry entry on contact, fires `comms` + `'CLOSE ENCOUNTER'` achievement + `CAPCOM` mission message on first encounter (gated by `flags.alienVisited`). |
 | ✅ | 13 | **Music loop (gameplay ambience)** | 3/1/4 | 8 | `Sounds.music` loop in `js/Sound.js` (started on first user gesture, candidate `audio/music.mp3` only — silent no-op if missing). New `setMusicVolume()`/`getMusicVolume()` exports. Settings overlay gains a `MUSIC VOLUME` slider; persisted as `GameState.settings.musicVolume` (default 0.4). Master volume + mute still apply on top. |
-| ⏳ | 14 | **Persist carry across runs** | 2/1/5 | 8 | One-line change: in `js/GameState.js:startNewRun()` keep `GameState.carrying` instead of resetting (or reset to `[]` only on `commitRunToHighScores()`). Decide based on intended difficulty — leaving carry might be too generous. |
+| ✅ | 14 | **Persist carry across runs** | 2/1/5 | 8 | `js/GameState.js:startNewRun()` no longer resets `GameState.carrying` — `save()`/`load()` already serialize it via shallow JSON merge, so removing the per-run wipe is the whole feature. `lastStowed` is reset defensively in the same call. The next commander inherits whatever the previous one was holding when their run ended. |
 | ✅ | 15 | **Crater detail texture** | 2/1/5 | 8 | Generated `textures/crater.png` (256×256 — radial bowl with rim highlight + alpha falloff). `buildCraters()` now uses `PlaneGeometry` decals with `map: tex` + a shared `MeshBasicMaterial` instead of empty `RingGeometry`. Random rotation per decal so the rims don't all face the same way. |
 | ✅ | 16 | **Loading-screen art** | 2/1/5 | 8 | Add `<img>` inside `#preload .preload-inner` in `index.html`, sourced from a new `moonlander/textures/preload.png` (or reuse `lander.png`). CSS in `moonlander/css/main.css` for size + animation (gentle rotate). |
 | ✅ | 17 | **Retro pixel font** | 2/1/5 | 8 | `<link>` to Google Fonts (Press Start 2P / VT323 / Major Mono) in `index.html`. Update `body { font-family: ... }` + the HUD-specific stacks in `moonlander/css/main.css`. Confirm letter-spacing still reads. |

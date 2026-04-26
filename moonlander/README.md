@@ -25,7 +25,7 @@ name is Space Racer).
 | Satellite map | ✅ | Top-left button opens a top-down view; **gated behind lander proximity** with a "CLIMBING LADDER" comms beat. Off-lander taps surface "RETURN TO LANDER" |
 | Lander HP | ✅ | New HULL gauge (color-coded). Crashes shave LANDER_CRASH_DAMAGE per impact; HP=0 wrecks the craft and ends the run alongside fuel-empty |
 | Astronaut HP | ✅ | New HEALTH gauge (color-coded). Health-pack pickups at Apollo sites and habitat heals top up `GameState.astronaut.hp` |
-| Carry-and-deposit | ✅ | Fuel drums and repair parts are carried (HUD shows CARRY), then stowed at the lander with `E`/tap. Stow message reports `+FUEL · +HP` |
+| Carry-and-deposit | ✅ | Fuel drums and repair parts are carried (HUD shows CARRY), then stowed at the lander with `E`/tap. Stow message reports `+FUEL · +HP`. **Pack persists across runs** — whatever you were holding when your last run ended carries forward into the next commander |
 | Repair parts | ✅ | `'part'` interactable spawned at the current Apollo site; +25 HP per part on stow |
 | Health packs | ✅ | `'healthpack'` interactable; +25 astronaut HP on touch |
 | Apollo levels | ✅ | Apollo 11/12/14/15/16/17 all in `APOLLO_SITES`; level mods through the registry, so each run rotates the active destination |
