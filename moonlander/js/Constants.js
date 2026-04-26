@@ -161,6 +161,42 @@ export const FUEL_ALERT_INTERVAL_MS = 4000;        // beep cadence while low-fue
 export const COMMS_INTERVAL_MIN_MS  = 20000;       // morse chatter cadence
 export const COMMS_INTERVAL_MAX_MS  = 40000;
 
+// ---------- Mission Control text messages (Batch 2 #5) ----------
+// Longer-form narrative beats keyed by event id. HUD.showMissionMessage()
+// reads from this table; gameplay code fires by id at key moments. Each
+// entry: { title, body }. The displayed time defaults to ~7 s but can be
+// overridden per-call.
+export const MISSION_MESSAGES = {
+  firstLanding: {
+    title: 'CAPCOM',
+    body:  'Eagle, you are go. Welcome to the surface, commander. Stand by for surface ops.'
+  },
+  firstApollo: {
+    title: 'MISSION CONTROL',
+    body:  'Confirm Apollo artifact retrieval. Outstanding. Bring everything home.'
+  },
+  habitatReached: {
+    title: 'CAPCOM',
+    body:  'Habitat module is on emergency power but the medical bay is up. Top off your suit before heading out.'
+  },
+  fuelStowed: {
+    title: 'MISSION CONTROL',
+    body:  'Fuel transfer logged. Tanks read nominal. Cleared for the next ascent.'
+  },
+  partStowed: {
+    title: 'MISSION CONTROL',
+    body:  'Hull-repair part installed. Structural integrity restored. Nice work, commander.'
+  },
+  hullCritical: {
+    title: 'CAPCOM',
+    body:  'Warning — hull integrity below 25%. Recommend a repair part before any further descent attempts.'
+  },
+  achievementGeneric: {
+    title: 'MISSION CONTROL',
+    body:  'Achievement logged. The team back home is cheering for you.'
+  }
+};
+
 // ---------- Walk-mode interactables (Phase 4) ----------
 // Each interactable type has a tuning record consumed by WalkMode to build
 // the mesh and decide how to apply the interaction. The numeric payloads
@@ -363,8 +399,9 @@ export const LANDMARKS = [
 ];
 
 // ---------- Mission objectives (Phase 4) ----------
-// The predicate is evaluated against GameState after every notify(); the HUD
-// pulls the current done/not-done state from GameState.objectives.
+// Career objectives — apply to every run, every level. The predicate is
+// evaluated against GameState after every notify(); the HUD pulls the
+// current done/not-done state from GameState.objectives.
 export const OBJECTIVES = [
   {
     id: 'collect-samples',
@@ -382,6 +419,50 @@ export const OBJECTIVES = [
     predicate: s => s.flags.probeRepaired === true
   }
 ];
+
+// Per-level mission objectives, keyed by APOLLO_SITES.id. WalkMode merges
+// these with the career list so each Apollo destination has its own mini
+// brief. Predicates use existing GameState fields + the new flags
+// (apolloVisited, habitatVisited) and the partsStowed counter.
+export const LEVEL_OBJECTIVES = {
+  'apollo-11': [
+    { id: 'visit-apollo-11', label: 'Visit Tranquility Base',
+      predicate: s => s.flags.apolloVisited?.['apollo-11'] === true },
+    { id: 'collect-2-samples', label: 'Collect 2 science samples',
+      predicate: s => s.supplies.scienceSamples >= 2 }
+  ],
+  'apollo-12': [
+    { id: 'visit-apollo-12', label: 'Visit Ocean of Storms',
+      predicate: s => s.flags.apolloVisited?.['apollo-12'] === true },
+    { id: 'stow-1-part', label: 'Stow a repair part at the lander',
+      predicate: s => (s.stats.partsStowed | 0) >= 1 }
+  ],
+  'apollo-14': [
+    { id: 'visit-apollo-14', label: 'Visit Fra Mauro Highlands',
+      predicate: s => s.flags.apolloVisited?.['apollo-14'] === true },
+    { id: 'heal-at-habitat', label: 'Heal at a habitat',
+      predicate: s => s.flags.habitatVisited === true }
+  ],
+  'apollo-15': [
+    { id: 'visit-apollo-15', label: 'Visit Hadley-Apennine',
+      predicate: s => s.flags.apolloVisited?.['apollo-15'] === true },
+    { id: 'stats-5-samples', label: 'Bank 5 science samples (career)',
+      predicate: s => (s.stats.totalSamples | 0) >= 5 }
+  ],
+  'apollo-16': [
+    { id: 'visit-apollo-16', label: 'Visit Descartes Highlands',
+      predicate: s => s.flags.apolloVisited?.['apollo-16'] === true },
+    { id: 'stow-3-parts', label: 'Stow 3 repair parts (career)',
+      predicate: s => (s.stats.partsStowed | 0) >= 3 }
+  ],
+  'apollo-17': [
+    { id: 'visit-apollo-17', label: 'Visit Taurus-Littrow Valley',
+      predicate: s => s.flags.apolloVisited?.['apollo-17'] === true },
+    { id: 'full-systems', label: 'Be at full hull AND full health',
+      predicate: s => s.lander.hp === s.lander.maxHp &&
+                      s.astronaut.hp === s.astronaut.maxHp }
+  ]
+};
 
 // ---------- Progression (Phase 6) ----------
 // Each successful landing bumps GameState.level. Progression.js reads these

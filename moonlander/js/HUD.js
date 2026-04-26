@@ -10,9 +10,10 @@
 //   - Settings overlay (master volume, invert-Y, fullscreen)
 //   - Achievement toast that queues and auto-dismisses
 
-import { GameState, subscribe, save as saveGameState } from './GameState.js';
-import { MODE } from './Constants.js';
+import { GameState, subscribe, update as updateState, refreshObjectives, save as saveGameState } from './GameState.js';
+import { MODE, MISSION_MESSAGES } from './Constants.js';
 import { setMasterVolume, setMuted, isMuted } from './Sound.js';
+import { generateChallenge, validate as validateMath } from './MathChallenge.js';
 
 // ---------- cached DOM refs ----------
 const el = {
@@ -65,8 +66,26 @@ const overlay = {
   mapBtn:           document.getElementById('map-btn'),
   mapOverlay:       document.getElementById('map-overlay'),
   mapFrame:         document.getElementById('map-frame'),
-  btnCloseMap:      document.getElementById('btn-close-map')
+  btnCloseMap:      document.getElementById('btn-close-map'),
+  stemBtn:          document.getElementById('stem-btn'),
+  mathOverlay:      document.getElementById('math-overlay'),
+  mathTitle:        document.getElementById('math-title'),
+  mathBody:         document.getElementById('math-body'),
+  mathInput:        document.getElementById('math-input'),
+  mathUnit:         document.getElementById('math-unit'),
+  mathResult:       document.getElementById('math-result'),
+  btnMathSubmit:    document.getElementById('btn-math-submit'),
+  btnMathSkip:      document.getElementById('btn-math-skip'),
+  missionMsg:       document.getElementById('mission-msg'),
+  missionMsgTitle:  document.getElementById('mission-msg-title'),
+  missionMsgBody:   document.getElementById('mission-msg-body')
 };
+
+let missionMsgTimer = null;
+
+const MAX_STEM_PER_SESSION = 3;
+let stemUsedThisSession = 0;
+let activeChallenge = null;
 
 let mapDataProvider = null;
 let mapAnimRaf = null;
@@ -139,6 +158,63 @@ function bindOverlayButtons() {
   // satellite uplink is available.
   overlay.mapBtn?.addEventListener('click', () => requestOpenMap());
   overlay.btnCloseMap?.addEventListener('click', () => hideMap());
+
+  // STEM challenge — corner button pops a math modal. Capped per session.
+  overlay.stemBtn?.addEventListener('click', () => openStemChallenge());
+  overlay.btnMathSubmit?.addEventListener('click', () => submitMathAnswer());
+  overlay.btnMathSkip?.addEventListener('click', () => closeStemChallenge());
+  overlay.mathInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitMathAnswer();
+  });
+}
+
+export function resetStemSession() { stemUsedThisSession = 0; }
+
+function openStemChallenge() {
+  if (!overlay.mathOverlay) return;
+  if (stemUsedThisSession >= MAX_STEM_PER_SESSION) {
+    showComms(`STEM CHALLENGE LIMIT REACHED THIS TRIP (${MAX_STEM_PER_SESSION})`);
+    return;
+  }
+  activeChallenge = generateChallenge();
+  overlay.mathTitle.textContent = activeChallenge.title;
+  overlay.mathBody.textContent  = activeChallenge.body;
+  overlay.mathUnit.textContent  = activeChallenge.unit || '';
+  overlay.mathInput.value = '';
+  overlay.mathResult.hidden = true;
+  overlay.mathResult.textContent = '';
+  overlay.mathResult.classList.remove('correct', 'wrong');
+  overlay.mathOverlay.hidden = false;
+  requestAnimationFrame(() => overlay.mathInput.focus());
+}
+
+function submitMathAnswer() {
+  if (!activeChallenge) return;
+  const { correct, expected } = validateMath(activeChallenge, overlay.mathInput.value);
+  overlay.mathResult.hidden = false;
+  if (correct) {
+    overlay.mathResult.classList.remove('wrong');
+    overlay.mathResult.classList.add('correct');
+    overlay.mathResult.textContent = `CORRECT — +${activeChallenge.score} SCORE`;
+    updateState(s => {
+      s.score += activeChallenge.score | 0;
+      s.stats.mathSolved = (s.stats.mathSolved | 0) + 1;
+      refreshObjectives();
+    }, 'stem-correct');
+    stemUsedThisSession += 1;
+    setTimeout(closeStemChallenge, 1100);
+  } else {
+    overlay.mathResult.classList.remove('correct');
+    overlay.mathResult.classList.add('wrong');
+    overlay.mathResult.textContent = `NOT QUITE — answer was ${expected}${activeChallenge.unit ? ' ' + activeChallenge.unit : ''}`;
+    stemUsedThisSession += 1;     // wrong answer also counts vs the session cap
+    setTimeout(closeStemChallenge, 1600);
+  }
+}
+
+function closeStemChallenge() {
+  if (overlay.mathOverlay) overlay.mathOverlay.hidden = true;
+  activeChallenge = null;
 }
 
 /**
@@ -345,6 +421,34 @@ function setGaugeClass(node, state) {
 
 export function setCenterMessage(text) {
   el.center.textContent = text || '';
+}
+
+// ---------- mission control text messages ----------
+
+/**
+ * Show a longer-form Mission Control message at the top of the screen.
+ * `key` looks up an entry in MISSION_MESSAGES; pass `null` and supply
+ * `title` + `body` to render an ad-hoc message. Auto-fades after `ttl`.
+ */
+export function showMissionMessage(key, opts = {}) {
+  if (!overlay.missionMsg || !overlay.missionMsgTitle || !overlay.missionMsgBody) return;
+  const def = key ? MISSION_MESSAGES[key] : null;
+  const title = opts.title || def?.title || 'MISSION CONTROL';
+  const body  = opts.body  || def?.body  || '';
+  if (!body) return;
+  overlay.missionMsgTitle.textContent = title;
+  overlay.missionMsgBody.textContent  = body;
+  overlay.missionMsg.hidden = false;
+  // Force reflow so the transition kicks in.
+  void overlay.missionMsg.offsetWidth;
+  overlay.missionMsg.classList.add('show');
+  if (missionMsgTimer) clearTimeout(missionMsgTimer);
+  const ttl = opts.ttl ?? 7000;
+  missionMsgTimer = setTimeout(() => {
+    overlay.missionMsg.classList.remove('show');
+    setTimeout(() => { overlay.missionMsg.hidden = true; }, 450);
+    missionMsgTimer = null;
+  }, ttl);
 }
 
 // ---------- comms blip ----------

@@ -14,8 +14,9 @@
 //   - startNewRun() / commitRunToHighScores() / unlockAchievement()
 
 import {
-  STARTING_FUEL, MODE, OBJECTIVES, ACHIEVEMENTS, HIGH_SCORE_SLOTS,
-  LANDER_MAX_HP, ASTRO_MAX_HP
+  STARTING_FUEL, MODE, OBJECTIVES, LEVEL_OBJECTIVES, ACHIEVEMENTS, HIGH_SCORE_SLOTS,
+  LANDER_MAX_HP, ASTRO_MAX_HP,
+  apolloSiteForLevel
 } from './Constants.js';
 
 export const GameState = {
@@ -57,7 +58,9 @@ export const GameState = {
   debug: false,
   flags: {
     probeRepaired:    false,
-    walkTutorialSeen: false
+    walkTutorialSeen: false,
+    habitatVisited:   false,         // any habitat visited this run
+    apolloVisited:    {}             // map of apollo-id → true
   },
 
   // ----- Objective tracker (run-local) -----
@@ -74,7 +77,9 @@ export const GameState = {
   // ----- Profile stats (cumulative across runs, for achievements) -----
   stats: {
     totalSamples: 0,
-    totalProbesRepaired: 0
+    totalProbesRepaired: 0,
+    partsStowed: 0,           // repair parts deposited at the lander (career)
+    mathSolved: 0             // STEM-challenge correct answers (career)
   },
 
   // ----- User settings (profile-level) -----
@@ -107,20 +112,54 @@ export function update(fn, changeKey = '*') {
 }
 
 /**
+ * Build a lookup of every defined objective predicate (career + per-level).
+ * Used by refreshObjectives so it can find a matching def regardless of
+ * which list the objective came from.
+ */
+function _allObjectiveDefs() {
+  const out = [...OBJECTIVES];
+  for (const arr of Object.values(LEVEL_OBJECTIVES)) out.push(...arr);
+  return out;
+}
+
+/**
  * Re-evaluates every objective predicate against the current state. Returns
  * the ids that flipped to done on this call.
  */
 export function refreshObjectives() {
+  const allDefs = _allObjectiveDefs();
   const justCompleted = [];
-  for (const def of OBJECTIVES) {
-    const entry = GameState.objectives.find(o => o.id === def.id);
-    if (!entry || entry.done) continue;
-    if (def.predicate(GameState)) {
+  for (const entry of GameState.objectives) {
+    if (entry.done) continue;
+    const def = allDefs.find(d => d.id === entry.id);
+    if (def && def.predicate(GameState)) {
       entry.done = true;
-      justCompleted.push(def.id);
+      justCompleted.push(entry.id);
     }
   }
   return justCompleted;
+}
+
+/**
+ * Replace GameState.objectives with the career list + the current level's
+ * per-Apollo-site objectives. Preserves done-state for matching ids so
+ * career objectives and re-visited per-level ones stay checked.
+ */
+export function setObjectivesForLevel(level) {
+  const site = apolloSiteForLevel(level);
+  const lvlDefs = (site && LEVEL_OBJECTIVES[site.id]) || [];
+  const merged = [...OBJECTIVES, ...lvlDefs];
+  const doneById = {};
+  for (const o of (GameState.objectives || [])) doneById[o.id] = o.done;
+  GameState.objectives = merged.map(def => ({
+    id: def.id,
+    label: def.label,
+    done: !!doneById[def.id]
+  }));
+  // Re-evaluate immediately so already-true predicates aren't shown as
+  // unchecked just because we rebuilt the list.
+  refreshObjectives();
+  notify('objectives');
 }
 
 /**
@@ -144,7 +183,9 @@ export function startNewRun() {
   // walkTutorialSeen is profile-level, not run-level — preserve across restarts.
   GameState.flags = {
     probeRepaired:    false,
-    walkTutorialSeen: GameState.flags?.walkTutorialSeen === true
+    walkTutorialSeen: GameState.flags?.walkTutorialSeen === true,
+    habitatVisited:   false,
+    apolloVisited:    {}
   };
   GameState.objectives = OBJECTIVES.map(o => ({ id: o.id, label: o.label, done: false }));
   GameState.lastLanding = {

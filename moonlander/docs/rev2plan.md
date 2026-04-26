@@ -30,11 +30,11 @@ A batch's checkbox flips to `[x]` when **all** of its sub-items do.
 - [x] **#1** Astronaut HP + damage + health packs
 - [x] **#6** Apollo 14 / 15 / 16 / 17 entries
 
-### Batch 2 — STEM thread (next) [ ]
+### Batch 2 — STEM thread [x]
 
-- [ ] **#2** More mission objectives + per-level unique experiences `STEM⭐`
-- [ ] **#3** Math questions on screen `STEM⭐`
-- [ ] **#5** Mission Control text messages
+- [x] **#2** More mission objectives + per-level unique experiences `STEM⭐`
+- [x] **#3** Math questions on screen `STEM⭐`
+- [x] **#5** Mission Control text messages
 
 ### Batch 3 — polish (assets-mostly) [ ]
 
@@ -74,10 +74,10 @@ A batch's checkbox flips to `[x]` when **all** of its sub-items do.
 | ✓ | # | Item | I/D/E | Score | Files / functions to touch |
 |---|---|---|---|---|---|
 | ✅ | 1 | **Astronaut HP + damage sources + health packs** | 5/5/3 | 13 | `js/Constants.js` (ASTRO_MAX_HP, HEALTH_PACK_AMOUNT), `js/GameState.js` (`astronaut.hp/maxHp`, reset in `startNewRun()`), `js/HUD.js` (`onStateChange` + new `#hud-astro-hp` row, color-state CSS like the existing HULL gauge), `js/modes/WalkMode.js` (damage source — fall-from-height check in update(), or alien-encounter), new 'healthpack' type in `INTERACTABLE_TYPES`, deposit at habitats via `performInteraction` 'landmark' branch (heal on touch). |
-| ⏳ | 2 | **More mission objectives + per-level unique experiences** `STEM⭐` | 5/4/3 | 13 | `js/Constants.js` — extend `OBJECTIVES` and add a `LEVEL_OBJECTIVES` map keyed by level (or by `apolloSiteForLevel(level).id`). `js/GameState.js:refreshObjectives()` already evaluates predicates — extend with level filter. `js/modes/WalkMode.js:spawnInteractables()` could add per-level conditional spawns. `js/HUD.js:renderObjectives()` already renders the list; just feeds richer data. |
-| ⏳ | 3 | **Math questions on screen (STEM accuracy)** `STEM⭐` | 4/3/3 | 12 | New `js/MathChallenge.js` (question generators: O₂/time, fuel/burn-rate, terminal-velocity-on-moon, etc., plus answer validator). New modal in `index.html` (`#math-challenge`) + CSS. New `HUD.js` exports `showMathChallenge(spec, onResult)`. Hooks: `LanderMode` could gate ignition behind a quick math beat; walk mode could pop one before stowing or boarding. Persist `GameState.stats.mathSolved`. |
+| ✅ | 2 | **More mission objectives + per-level unique experiences** `STEM⭐` | 5/4/3 | 13 | `js/Constants.js` — extend `OBJECTIVES` and add a `LEVEL_OBJECTIVES` map keyed by level (or by `apolloSiteForLevel(level).id`). `js/GameState.js:refreshObjectives()` already evaluates predicates — extend with level filter. `js/modes/WalkMode.js:spawnInteractables()` could add per-level conditional spawns. `js/HUD.js:renderObjectives()` already renders the list; just feeds richer data. |
+| ✅ | 3 | **Math questions on screen (STEM accuracy)** `STEM⭐` | 4/3/3 | 12 | New `js/MathChallenge.js` (question generators: O₂/time, fuel/burn-rate, terminal-velocity-on-moon, etc., plus answer validator). New modal in `index.html` (`#math-challenge`) + CSS. New `HUD.js` exports `showMathChallenge(spec, onResult)`. Hooks: `LanderMode` could gate ignition behind a quick math beat; walk mode could pop one before stowing or boarding. Persist `GameState.stats.mathSolved`. |
 | ⏳ | 4 | **Real audio MP3s** | 5/1/5 | 11 | Drop files into `moonlander/audio/`. Update path strings in `js/Sound.js:initSound()` if extension changes (`.wav` → `.mp3`). The setVolume / setMuted / loop wiring stays. Worth keeping the existing fallback warn-on-error, so missing files still no-op. |
-| ⏳ | 5 | **Mission Control text messages** | 4/3/4 | 11 | Extend `js/HUD.js:showComms()` into a longer-form `showMessage(title, body, ttl)` OR add a separate `#mission-msg` overlay with a small history log icon on the HUD. Catalog in `js/Constants.js` keyed by trigger (e.g. `MISSION_MSGS.firstLanding`, `.apollo11Reached`). Fire from `LanderMode.resolveLanding`, `WalkMode.performInteraction`, `GameState.unlockAchievement`. Reuses existing comms CSS class. |
+| ✅ | 5 | **Mission Control text messages** | 4/3/4 | 11 | Extend `js/HUD.js:showComms()` into a longer-form `showMessage(title, body, ttl)` OR add a separate `#mission-msg` overlay with a small history log icon on the HUD. Catalog in `js/Constants.js` keyed by trigger (e.g. `MISSION_MSGS.firstLanding`, `.apollo11Reached`). Fire from `LanderMode.resolveLanding`, `WalkMode.performInteraction`, `GameState.unlockAchievement`. Reuses existing comms CSS class. |
 | ✅ | 6 | **Apollo 14 / 15 / 16 / 17 entries** | 4/1/5 | 10 | `js/Constants.js` — append four entries to `APOLLO_SITES` with `walkPos`, `artifactScore`, `comms`. `apolloSiteForLevel(level)` already mods by length so they auto-rotate. Pick `walkPos` so they don't overlap habitats / atlas. |
 | ⏳ | 7 | **Particle smoke / glow texture** | 4/1/4 | 9 | Add `moonlander/textures/particle.png` (64×64 soft white blob, alpha falloff). In `js/Particles.js:buildPool()` swap each `MeshBasicMaterial({color, transparent, opacity, blending: AdditiveBlending})` to also include `map: tex` (single shared `THREE.TextureLoader().load(...)`). |
 | ⏳ | 8 | **Higher-res `lander.png`** | 3/1/5 | 9 | Drop replacement at `moonlander/textures/lander.png`. `js/AssetCache.js:getSharedTexture` re-uses by URL; nothing else changes. Tip: keep `NearestFilter` setting in callers if you want the retro look or switch to `LinearFilter` for a smooth one. |
