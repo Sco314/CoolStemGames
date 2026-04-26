@@ -165,13 +165,23 @@ function bindOverlayButtons() {
     GameState.settings.invertY = !!e.target.checked;
     persistSettings();
   });
-  overlay.setLunar?.addEventListener('input', (e) => {
+  // Both `input` (continuous, fires on every drag tick) AND `change` (fires
+  // when the drag finishes / on tap-to-set). Some touch / accessibility
+  // paths only deliver `change`. Either path runs the same body.
+  const onLunarInput = (e) => {
     const pct = Number(e.target.value);
     if (overlay.setLunarLabel) overlay.setLunarLabel.textContent = String(pct);
     GameState.settings.lunar = pct;
     persistSettings();
     checkLunarCheat();
-  });
+  };
+  if (overlay.setLunar) {
+    overlay.setLunar.addEventListener('input',  onLunarInput);
+    overlay.setLunar.addEventListener('change', onLunarInput);
+    console.log('[HUD] LUNAR slider listener bound');
+  } else {
+    console.warn('[HUD] LUNAR slider element not found — id="set-lunar" missing');
+  }
   overlay.btnFullscreen.addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen?.();
     else document.documentElement.requestFullscreen?.();
@@ -455,7 +465,13 @@ function checkLunarCheat() {
   const s = GameState.settings;
   const masterPct = Math.round((s.masterVolume ?? 0) * 100);
   const musicPct  = Math.round((s.musicVolume  ?? 0) * 100);
-  const lunarPct  = s.lunar | 0;
+  // Read lunar straight off the DOM as a fallback — if for any reason
+  // the input listener didn't update GameState.settings.lunar (e.g.
+  // the slider element was rebuilt or another script swallowed the
+  // event), the slider's actual value still wins.
+  const lunarFromState = s.lunar | 0;
+  const lunarFromDom   = Number(overlay.setLunar?.value ?? NaN);
+  const lunarPct       = Number.isFinite(lunarFromDom) ? Math.round(lunarFromDom) : lunarFromState;
   if (masterPct === 19 && musicPct === 69 && lunarPct === 11) {
     lunarCheatFired = true;
     lunarCheatCb();
