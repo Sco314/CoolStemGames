@@ -44,6 +44,9 @@ import { effectiveFuelGain } from '../Progression.js';
 import { getQuality, onQualityChange } from '../Quality.js';
 import { getSharedTexture } from '../AssetCache.js';
 import { loadModel, loadSTL, placeOnGround } from '../ModelCache.js';
+import * as Story from '../Story.js';
+import { Alien } from './walk/Alien.js';
+import { ALIEN_MIN_LEVEL, ALIEN_SPAWN_CHANCE } from '../Constants.js';
 
 let scene = null;
 let camera = null;
@@ -76,6 +79,10 @@ let walkPhase = 0;             // drives the leg/arm cycle
 // input is ignored and astronaut position/yaw are driven by the timeline.
 let scripted = null;
 // { kind, t, duration, startPos, endPos, startYaw, endYaw, onDone }
+
+// Optional alien encounter (Batch 4 #12). Constructed in enter() under a
+// chance gate; updated each frame; disposed in exit().
+let alien = null;
 
 // Mouse-move handler bound in enter(), unbound in exit().
 let onMouseMove = null;
@@ -144,6 +151,21 @@ export const WalkMode = {
     // Per-walk-session caps: STEM challenges (Batch 2 #3) reset so the
     // player can answer a few each trip, not just once per page load.
     resetStemSession();
+    // Story progression layer (Batch 4 #10) — fires the per-level intro
+    // beat the first time the player walks each Apollo site.
+    Story.onWalkEnter();
+
+    // Alien encounter (Batch 4 #12) — gated by level + dice roll so it's
+    // a rare surprise, not a constant nuisance. Spawns 4–10 s after the
+    // scene loads so the player has time to settle.
+    alien = null;
+    if ((GameState.level | 0) >= ALIEN_MIN_LEVEL && Math.random() < ALIEN_SPAWN_CHANCE) {
+      const delay = 4000 + Math.random() * 6000;
+      setTimeout(() => {
+        if (!scene) return;  // bailed to lander before spawn timer fired
+        alien = new Alien(scene, groundHeight, WALK_PLAY_RADIUS);
+      }, delay);
+    }
   },
 
   exit() {
@@ -168,6 +190,8 @@ export const WalkMode = {
       if (d.texture) d.texture.dispose();
     }
     disposables = [];
+
+    if (alien) { alien.dispose(); alien = null; }
 
     scene = null;
     camera = null;
@@ -251,6 +275,12 @@ export const WalkMode = {
 
     // --- strict chase camera around the astronaut's chest ---
     updateChaseCamera();
+
+    // --- alien encounter (Batch 4 #12) ---
+    if (alien) {
+      alien.update(dt, astronaut.position);
+      if (alien.isGone()) { alien.dispose(); alien = null; }
+    }
 
     // --- loot idle animation (sample spin, etc.) ---
     for (const it of interactables) {
@@ -1521,6 +1551,14 @@ function stowCarryAtLander() {
     s.stats.partsStowed = (s.stats.partsStowed | 0) + partsStowedThisTrip;
     s.carrying = [];
     if (s.isAlerted && s.fuel.current >= s.fuel.capacity * 0.3) s.isAlerted = false;
+    // Snapshot for the carry-summary beat shown during the walk→lander
+    // cinematic (Batch 4 #11). TransitionMode reads + clears.
+    s.lastStowed = {
+      fuel: fuelGained | 0,
+      hp:   hpGained   | 0,
+      parts: partsStowedThisTrip | 0,
+      at:   Date.now()
+    };
   }, 'stow-cargo');
 
   // Hot-swap achievement still applies on stow if the player landed

@@ -29,6 +29,7 @@ import {
 import { GameState, update as updateState, notify, unlockAchievement } from '../GameState.js';
 import { Input } from '../Input.js';
 import { setLanderTelemetry, setCenterMessage, showAchievementToast, showMissionMessage } from '../HUD.js';
+import * as Story from '../Story.js';
 import { points as terrainPoints } from '../TerrainData.js';
 import { Sounds } from '../Sound.js';
 import { ParticleSystemCone, ParticleSystemExplosion } from '../Particles.js';
@@ -565,6 +566,9 @@ function resolveLanding(segment, segmentIndex) {
   if (GameState.landingsCompleted === 1) {
     showMissionMessage('firstLanding');
   }
+  // Story progression layer (Batch 4 #10) — fires the per-level outro beat
+  // for the level the player just completed.
+  Story.onLandingCompleted();
 
   const suffix = multiplier > 1 ? `  X${multiplier} +${earned}` : '';
   setCenterMessage('SUCCESSFULLY LANDED' + suffix);

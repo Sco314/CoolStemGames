@@ -31,6 +31,10 @@ name is Space Racer).
 | Per-level objectives | ✅ | `LEVEL_OBJECTIVES` (keyed by Apollo site id) merges with the career list — every destination has its own mini brief (visit, collect, stow, heal) |
 | STEM math challenges | ✅ | Corner `STEM` button opens a modal with O₂/fuel/fall-speed/walk-time questions (`js/MathChallenge.js`); 3 attempts per session; `GameState.stats.mathSolved` persists |
 | Mission Control messages | ✅ | `MISSION_MESSAGES` catalog in Constants; `HUD.showMissionMessage(key)` panel fades in on first landing, first Apollo, habitat reach, fuel/part stow, hull critical |
+| Story progression | ✅ | `js/Story.js` fires per-Apollo intro on `WalkMode.enter` and outro on the first successful landing of that level. One-time STEM nudge if the player hasn't tried any math challenges by their second walk. Beats gated by `GameState.flags` so each fires once per save |
+| Carry-summary beat | ✅ | Walk→lander cinematic shows a `STOWED THIS TRIP` panel with the totals just stowed, snapshot from `GameState.lastStowed` and cleared on transition exit |
+| Alien encounter | ✅ | Procedural critter (`js/modes/walk/Alien.js`) spawns at level ≥ 2 with a 45% per-session chance, drifts toward the astronaut, swipes one carried item on contact, then fades out. First encounter unlocks the `CLOSE ENCOUNTER` achievement |
+| Music loop | ✅ | Optional `audio/music.mp3` looped via `Sounds.music`, started on first user gesture; settings overlay has a `MUSIC VOLUME` slider independent of master |
 | NASA 3D models | ✅ | Apollo Lunar Module, Mercury Spacesuit, Apollo 11 height-map terrain, Habitat Demonstration Unit (×2), Atlas 6 / Friendship 7 — all wired with procedural fallbacks for missing files / Chromebooks |
 | Particle texture | ✅ | Soft-glow `textures/particle.png` (64×64, smoothstep alpha) shared across cone + explosion materials; missing texture still renders as a colored quad |
 | Adaptive quality | ✅ | Particle pool scales by `Device.LOW_END`; FPS-driven fallback drops emit rate further if average FPS < 30 |
@@ -43,14 +47,6 @@ name is Space Racer).
 
 Tracked in detail in `docs/rev2plan.md`. Highlights still open:
 
-- **Story progression layer (Batch 4).** A `Story.js` module that
-  threads objectives, mission messages, and math challenges into a
-  per-level arc.
-- **Carry-summary beat on 3D→2D return (Batch 4).** Brief stowed
-  manifest panel during the cinematic swap.
-- **Alien encounter (Batch 4).** Roaming hostile that can swipe a
-  carried item; new procedural model + audio.
-- **Music loop (Batch 4).** Looped ambient track with its own slider.
 - **Per-Apollo terrain STLs (Batch 5).** All levels currently share the
   Apollo 11 height-map tiles; 14/15/16/17 STLs would specialize them.
 - **Ladder-climb 3D animation (Batch 5).** The map gate is currently a
@@ -118,6 +114,8 @@ python3 -m http.server 8000
 | `js/Sound.js` | Audio wrapper with per-Sound `setVolume` and a global `setMasterVolume` |
 | `js/HUD.js` | DOM HUD, comms blips, mission-control panel, achievement toasts, math overlay, and every overlay |
 | `js/MathChallenge.js` | STEM question generators (O₂, fuel, fall-speed, walk-time) + answer validator |
+| `js/Story.js` | Per-Apollo-site narrative beats (intro on WalkMode entry, outro on next landing) + STEM nudge |
+| `js/modes/walk/Alien.js` | Optional roaming critter that swipes a carried item then fades out |
 | `js/Particles.js` | Pooled thruster cone + crash explosion (quality-scaled) |
 | `js/Progression.js` | Pure helpers that turn a `level` into effective values |
 | `js/Quality.js` | Rolling-FPS adaptive quality (scales particles, toggles fog) |
