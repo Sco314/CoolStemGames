@@ -1934,6 +1934,11 @@ const BOOST_UPGRADES = [
   { id: 'phi',          name: 'The Phi Multiplier', cost: 2000,  tickMult: PHI,  unlock: 21, desc: 'All clicks ×φ (≈1.618)' },
   { id: 'fermat',       name: "Fermat's Flourish",  cost: 5000,  tickMult: 1.5,  unlock: 34, desc: 'Permanent ×1.5 on all output' },
   { id: 'golden_ratio', name: 'Ratio Resonance',    cost: 13000, tickMult: PHI,  unlock: 55, desc: 'Another ×φ layer' },
+  // v2.0.2: synergy upgrade for very late game. tickMult is unused —
+  // the bonus is computed dynamically in clickMultiplier() as 1 + 0.05
+  // per OTHER owned multiplicative boost, so it scales with breadth of
+  // play rather than as a flat multiplier.
+  { id: 'fibonacci_chain', name: 'Fibonacci Chain',  cost: 21000, tickMult: 1,    unlock: 89, desc: 'Each other boost you own grants +5% (synergy)' },
 ];
 
 const ENGINE_COST = 1000;
@@ -1942,6 +1947,10 @@ const ENGINE_UPGRADES = [
   { id: 'servos',     name: 'Spiral Servos',     cost: 2000,  unlock: 14, desc: 'Engine upgrades cost 50% less' },
   { id: 'interest',   name: 'Compound Interest', cost: 8000,  unlock: 21, desc: 'Engine ticks earn 0.01 🪙 each' },
   { id: 'resonance',  name: 'Resonance Chamber', cost: 34000, unlock: 34, desc: 'Rate grows φ² per milestone' },
+  // v2.0.2: probabilistic late-game upgrade. 10% chance per whole tick
+  // to grant a second whole tick. Implemented inside the engine loop
+  // before applyTicks() is called.
+  { id: 'temporal_echo', name: 'Temporal Echo', cost: 89000, unlock: 144, desc: '10% chance per tick to fire a second tick' },
 ];
 const ENGINE_MILESTONES = [13, 14, 15, 16, 17, 18, 19, 20, 21, 34, 55, 89, 144, 233];
 const OFFLINE_CAP_SECONDS = 8 * 3600;
@@ -2184,6 +2193,16 @@ const SKINS = [
       red:   '#f43f5e', teal:       '#06b6d4',
       bg:    '#000000', bg2:        '#0a0a0a',
       canvasBg: '#000000', spiralColor: '#fef3c7',
+    }},
+  // v2.0.2: late-game minimalist theme. Black-on-black surfaces with
+  // cyan accents — designed to read well even on weak Chromebook
+  // panels where over-saturated themes wash out the spiral arcs.
+  { id: 'void',     name: 'Void',      unlock: 144, preview: '⚫',
+    palette: {
+      amber: '#22d3ee', amberLight: '#67e8f9', orange: '#0ea5e9',
+      red:   '#f43f5e', teal:       '#a5f3fc',
+      bg:    '#020617', bg2:        '#0b1120',
+      canvasBg: '#000000', spiralColor: '#e0f2fe',
     }},
 ];
 
@@ -2913,12 +2932,21 @@ function stepsForN(targetN) {
 // ── v2.0 Tier 1: click multiplier from owned boost upgrades ────────
 // Periodic bonuses (fingers/touch) are NOT applied here — they trigger
 // separately inside tickInput based on state.clickCounter.
+// v2.0.2: fibonacci_chain is also excluded from the multiplicative
+// product (its tickMult is a placeholder 1) and applied additively as
+// a synergy bonus over OTHER owned boosts.
 function clickMultiplier() {
   let mult = 1;
+  let ownedCount = 0;
   for (const up of BOOST_UPGRADES) {
     if (!state.boostUpgrades[up.id]) continue;
-    if (up.id === 'fingers' || up.id === 'touch') continue;
+    ownedCount++;
+    if (up.id === 'fingers' || up.id === 'touch' || up.id === 'fibonacci_chain') continue;
     mult *= up.tickMult;
+  }
+  if (state.boostUpgrades.fibonacci_chain) {
+    // +5% per OTHER owned boost (subtract 1 for fibonacci_chain itself).
+    mult *= 1 + 0.05 * Math.max(0, ownedCount - 1);
   }
   return mult;
 }
@@ -3431,9 +3459,17 @@ function startEngineLoop() {
     state.engine.lastTick = now;
     const rate = computeEngineRate();
     state.engine.accumulator += rate * dt;
-    const whole = Math.floor(state.engine.accumulator);
+    let whole = Math.floor(state.engine.accumulator);
     if (whole > 0) {
       state.engine.accumulator -= whole;
+      // v2.0.2 — Temporal Echo: 10% chance per whole tick to fire a second
+      // tick. Done as one binomial-ish sample over the batch so the engine
+      // stays a single rAF callback even under heavy backlog.
+      if (state.engine.upgrades.temporal_echo) {
+        let echoes = 0;
+        for (let i = 0; i < whole; i++) if (Math.random() < 0.1) echoes++;
+        whole += echoes;
+      }
       // v3.0 Tier 3 — Frenzy shares with the engine (combo does NOT)
       const frenzyActive = performance.now() < state.goldenMoment.frenzyUntil;
       const effective    = frenzyActive ? whole * 7 : whole;
