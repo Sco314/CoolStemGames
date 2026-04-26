@@ -100,10 +100,14 @@ export const Sounds = {
   rocket:   null,
   lowFuel:  null,
   comms:    null,
-  wind:     null
+  wind:     null,
+  music:    null
 };
 
 let _timersStarted = false;
+// Music gets its own multiplier so the player can mute the soundtrack
+// without losing SFX (or vice versa). Persisted in GameState.settings.
+let _musicVolume = 0.4;
 
 export function initSound() {
   // MP3 first, WAV fallback. Drop .mp3 versions into /audio to upgrade.
@@ -112,11 +116,19 @@ export function initSound() {
   Sounds.lowFuel = new Sound(['audio/alarm.mp3',  'audio/alarm.wav']);
   Sounds.comms   = new Sound(['audio/morse.mp3',  'audio/morse.wav']);
   Sounds.wind    = new Sound(['audio/wind.mp3',   'audio/wind.wav']);
+  // Music is optional — only .mp3 is listed (no synthesized WAV in repo). If
+  // the file is absent, the candidate list silently falls through to no-op
+  // and the rest of the audio path keeps working.
+  Sounds.music   = new Sound(['audio/music.mp3']);
   Sounds.rocket.loop();
   Sounds.wind.loop();
+  Sounds.music.loop();
   // Wind is continuous ambience; it stays "playing" at volume 0 until the
   // TransitionMode / WalkMode crossfade it up.
   Sounds.wind.setVolume(0);
+  // Music sits at its own slider volume (master still applies on top). It
+  // doesn't actually start until the first user gesture (autoplay policy).
+  Sounds.music.setVolume(_musicVolume);
 
   // Most browsers won't actually play audio until the user has interacted with
   // the page. Defer the alert/comms chains until first input so they don't
@@ -126,12 +138,25 @@ export function initSound() {
     _timersStarted = true;
     fuelAlert();
     playComms();
+    // Kick the music loop now that we have a user gesture to satisfy
+    // autoplay policy. The Sound class falls back to no-op silently if
+    // the .mp3 isn't present.
+    Sounds.music?.play();
   };
   window.addEventListener('keydown', start, { once: true });
   window.addEventListener('pointerdown', start, { once: true });
 
   console.log('✅ Sound initialized');
 }
+
+/** Music slider, independent of master volume. 0..1. */
+export function setMusicVolume(v) {
+  if (v < 0) v = 0; else if (v > 1) v = 1;
+  _musicVolume = v;
+  Sounds.music?.setVolume(v);
+}
+
+export function getMusicVolume() { return _musicVolume; }
 
 // ----- Timer-chained players (ported from tblazevic) -----
 

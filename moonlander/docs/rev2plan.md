@@ -42,12 +42,12 @@ A batch's checkbox flips to `[x]` when **all** of its sub-items do.
 - [x] **#7** Particle smoke / glow texture
 - [x] **#8** Higher-res `lander.png`
 
-### Batch 4 — atmosphere [ ]
+### Batch 4 — atmosphere [x]
 
-- [ ] **#10** Mission / story progression layer
-- [ ] **#11** Return 3D → 2D with carry-summary beat
-- [ ] **#12** Alien that steals carried items
-- [ ] **#13** Music loop (gameplay ambience)
+- [x] **#10** Mission / story progression layer
+- [x] **#11** Return 3D → 2D with carry-summary beat
+- [x] **#12** Alien that steals carried items
+- [x] **#13** Music loop (gameplay ambience)
 
 ### Batch 5 — finish polish [ ]
 
@@ -82,10 +82,10 @@ A batch's checkbox flips to `[x]` when **all** of its sub-items do.
 | ✅ | 7 | **Particle smoke / glow texture** | 4/1/4 | 9 | Generated `moonlander/textures/particle.png` (64×64 RGBA, smoothstep alpha falloff). `js/Particles.js:buildPool()` now sets `map: getSharedTexture('textures/particle.png')` on every cone + explosion material; missing texture still renders as a colored quad. |
 | ✅ | 8 | **Higher-res `lander.png`** | 3/1/5 | 9 | Regenerated `moonlander/textures/lander.png` at 256×256 (was 128×128) — pixel-art four-legged Apollo-style descent stage with foiled body, ascent cabin, triangular forward window, engine bell, four splayed legs + foot pads. Same path so `getSharedTexture` keeps working unchanged. |
 | ⏳ | 9 | **3D ladder-climb animation** | 3/2/4 | 9 | New scripted-anim path in `js/modes/WalkMode.js` (mirror `startDisembark`/`startEmbark`). Triggered from `js/HUD.js:requestOpenMap` instead of the current 750 ms timeout — provider-callback pattern. Astronaut translates +Y up the lander side over ~1.5 s, then map opens; reverse on close. |
-| ⏳ | 10 | **Mission / story progression layer** | 4/4/1 | 9 | Big design + new module `js/Story.js`. Ties together objectives, mission-control messages, math challenges. Probably best to scope after items 1–5 land so the substrate is real. |
-| ⏳ | 11 | **Return 3D → 2D with carry-summary beat** | 3/2/4 | 9 | `js/Main.js:cinematicSwap` onComplete already runs after walk→lander; insert a brief `setCenterMessage()` showing what was stowed (read from a snapshot taken right before `WalkMode.startEmbark`). Or add a small "STOWED THIS TRIP" panel in `js/modes/TransitionMode.js` rendered during the fade. |
-| ⏳ | 12 | **Alien that steals carried items** | 4/2/2 | 8 | New `js/modes/walk/Alien.js` module with build/update/dispose. Spawns under conditions (level >= N OR random chance per session). Wander toward astronaut; if within steal radius, removes one entry from `GameState.carrying`, plays comms blip, fades out. Needs a model (procedural cone+sphere fallback) and possibly a hiss audio. Also: tie into `GameState.flags.alienVisited` for an achievement. |
-| ⏳ | 13 | **Music loop (gameplay ambience)** | 3/1/4 | 8 | Add `moonlander/audio/music.mp3`. Extend `js/Sound.js`: `Sounds.music`, looped, started on first user gesture. Lower default volume (0.3). Toggle via existing settings menu (could add a separate music slider). |
+| ✅ | 10 | **Mission / story progression layer** | 4/4/1 | 9 | New `js/Story.js` with per-Apollo-site `STORY_BEATS` (intro fires from `WalkMode.enter`, outro from `LanderMode.resolveLanding`). Beats gated by `GameState.flags.storyIntro:<id>` / `storyOutro:<id>` so each fires once per save. Bonus: a one-time STEM nudge if the player hasn't tried any math challenges by their second walk session. |
+| ✅ | 11 | **Return 3D → 2D with carry-summary beat** | 3/2/4 | 9 | `WalkMode.stowCarryAtLander` snapshots `{fuel, hp, parts, at}` into `GameState.lastStowed`. `TransitionMode.enter` (walk-to-lander direction) reads it and surfaces a multi-line `setCenterMessage('STOWED THIS TRIP\n+N FUEL\n+N HP\n…')` for the duration of the fade; `exit()` clears the snapshot so empty-handed returns aren't echoed. |
+| ✅ | 12 | **Alien that steals carried items** | 4/2/2 | 8 | New `js/modes/walk/Alien.js` (procedural cone body + dome head + magenta eye dots, no external assets). Gated by `level >= ALIEN_MIN_LEVEL` (=2) and `ALIEN_SPAWN_CHANCE` (45%) per `WalkMode.enter`; spawned 4–10 s after the scene loads. Drifts toward the astronaut, fades in/out, removes one carry entry on contact, fires `comms` + `'CLOSE ENCOUNTER'` achievement + `CAPCOM` mission message on first encounter (gated by `flags.alienVisited`). |
+| ✅ | 13 | **Music loop (gameplay ambience)** | 3/1/4 | 8 | `Sounds.music` loop in `js/Sound.js` (started on first user gesture, candidate `audio/music.mp3` only — silent no-op if missing). New `setMusicVolume()`/`getMusicVolume()` exports. Settings overlay gains a `MUSIC VOLUME` slider; persisted as `GameState.settings.musicVolume` (default 0.4). Master volume + mute still apply on top. |
 | ⏳ | 14 | **Persist carry across runs** | 2/1/5 | 8 | One-line change: in `js/GameState.js:startNewRun()` keep `GameState.carrying` instead of resetting (or reset to `[]` only on `commitRunToHighScores()`). Decide based on intended difficulty — leaving carry might be too generous. |
 | ⏳ | 15 | **Crater detail texture** | 2/1/5 | 8 | Drop `moonlander/textures/crater.png`. In `js/modes/WalkMode.js:buildCraters()` swap `MeshBasicMaterial({color: 0x3a3a42, transparent, opacity})` to use the texture's alpha. |
 | ✅ | 16 | **Loading-screen art** | 2/1/5 | 8 | Add `<img>` inside `#preload .preload-inner` in `index.html`, sourced from a new `moonlander/textures/preload.png` (or reuse `lander.png`). CSS in `moonlander/css/main.css` for size + animation (gentle rotate). |

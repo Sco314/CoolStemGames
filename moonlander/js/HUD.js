@@ -12,7 +12,7 @@
 
 import { GameState, subscribe, update as updateState, refreshObjectives, save as saveGameState } from './GameState.js';
 import { MODE, MISSION_MESSAGES } from './Constants.js';
-import { setMasterVolume, setMuted, isMuted } from './Sound.js';
+import { setMasterVolume, setMuted, isMuted, setMusicVolume } from './Sound.js';
 import { generateChallenge, validate as validateMath } from './MathChallenge.js';
 
 // ---------- cached DOM refs ----------
@@ -54,6 +54,8 @@ const overlay = {
   btnMenu:          document.getElementById('btn-menu'),
   setVolume:        document.getElementById('set-volume'),
   setVolLabel:      document.getElementById('set-volume-label'),
+  setMusicVolume:   document.getElementById('set-music-volume'),
+  setMusicVolLabel: document.getElementById('set-music-volume-label'),
   setInvertY:       document.getElementById('set-invert-y'),
   btnFullscreen:    document.getElementById('btn-fullscreen'),
   btnCloseSettings: document.getElementById('btn-close-settings'),
@@ -133,6 +135,14 @@ function bindOverlayButtons() {
     overlay.setVolLabel.textContent = String(pct);
     setMasterVolume(v);
     GameState.settings.masterVolume = v;
+    persistSettings();
+  });
+  overlay.setMusicVolume?.addEventListener('input', (e) => {
+    const pct = Number(e.target.value);
+    const v = pct / 100;
+    if (overlay.setMusicVolLabel) overlay.setMusicVolLabel.textContent = String(pct);
+    setMusicVolume(v);
+    GameState.settings.musicVolume = v;
     persistSettings();
   });
   overlay.setInvertY.addEventListener('change', (e) => {
@@ -347,9 +357,14 @@ function dismissWalkTutorial() {
 
 function applySettings(settings) {
   setMasterVolume(settings.masterVolume ?? 0.8);
+  setMusicVolume(settings.musicVolume ?? 0.4);
   setMuted(settings.muted !== false); // default to muted on first boot
   overlay.setVolume.value = String(Math.round((settings.masterVolume ?? 0.8) * 100));
   overlay.setVolLabel.textContent = overlay.setVolume.value;
+  if (overlay.setMusicVolume) {
+    overlay.setMusicVolume.value = String(Math.round((settings.musicVolume ?? 0.4) * 100));
+    if (overlay.setMusicVolLabel) overlay.setMusicVolLabel.textContent = overlay.setMusicVolume.value;
+  }
   overlay.setInvertY.checked = !!settings.invertY;
   refreshMuteIcon();
 }
