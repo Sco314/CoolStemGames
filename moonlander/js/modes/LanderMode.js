@@ -40,7 +40,12 @@ import {
 } from '../Constants.js';
 import { GameState, update as updateState, notify, unlockAchievement } from '../GameState.js';
 import { Input } from '../Input.js';
-import { setLanderTelemetry, setCenterMessage, showAchievementToast, showMissionMessage, showLanderTutorial, hideLanderTutorial } from '../HUD.js';
+import {
+  setLanderTelemetry, setCenterMessage,
+  showAchievementToast, showMissionMessage,
+  showLanderTutorial, hideLanderTutorial,
+  setCarryStowHandler, effectiveThrustFrac, hideInventory, showComms
+} from '../HUD.js';
 import * as Story from '../Story.js';
 import { points as terrainPoints } from '../TerrainData.js';
 import { Sounds } from '../Sound.js';
@@ -148,12 +153,20 @@ export const LanderMode = {
     // + carry-stow loop). Mirrors the walk-mode card pattern; gated by
     // GameState.flags.landerTutorialSeen so it only shows once per save.
     showLanderTutorial();
+
+    // Wire the lander-mode inventory overlay (Rev 2 inventory bundle).
+    // Tapping a row in the overlay calls back here to apply the item's
+    // effect (fuel→tank, part→hull HP) and remove it from carry — which
+    // in turn shaves the lander's mass for the next frame's physics.
+    setCarryStowHandler((idx) => stowCarryItemInLander(idx));
   },
 
   exit() {
     console.log('◀ LanderMode.exit');
     Sounds.rocket?.stop();
     hideLanderTutorial();
+    hideInventory();
+    setCarryStowHandler(null);
 
     // Dispose every geometry, material, texture, and pooled subsystem.
     for (const d of disposables) {
@@ -234,9 +247,17 @@ export const LanderMode = {
     const fwdX = -Math.sin(angle);
     const fwdY =  Math.cos(angle);
 
+    // Weight scalar: heavier carry payload → less acceleration per unit
+    // throttle (effective thrust / mass). Burn rate doesn't change — same
+    // fuel produces less Δv when the lander is loaded down. Floored in
+    // HUD.effectiveThrustFrac at LANDER_MIN_ACCEL_FRAC so a fully-loaded
+    // craft still flies.
+    const massScalar = effectiveThrustFrac();
+    const effectiveAccel = currentAcceleration * massScalar;
+
     velY += -effectiveGravity(GameState.level) * dt;
-    velX += fwdX * currentAcceleration * dt;
-    velY += fwdY * currentAcceleration * dt;
+    velX += fwdX * effectiveAccel * dt;
+    velY += fwdY * effectiveAccel * dt;
     velX += -velX * HORIZONTAL_DRAG_COEF * dt;
 
     lander.position.x += velX * dt;
@@ -862,6 +883,41 @@ function applyCameraShake(dt) {
 
 function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
 function lerp(a, b, t) { return a + (b - a) * t; }
+
+/**
+ * Stow a single carry item into the lander from the lander-mode inventory
+ * overlay. Applies the item's effect immediately:
+ *   - 'fuel' → adds amount to fuel.current (capped at capacity)
+ *   - 'part' → adds amount to lander.hp (capped at maxHp)
+ * Removes the item from GameState.carrying, which deflates the lander's
+ * mass for the next physics step (effectiveThrustFrac re-reads it).
+ */
+function stowCarryItemInLander(idx) {
+  const item = GameState.carrying?.[idx];
+  if (!item) return;
+  let summary = '';
+  updateState(s => {
+    if (item.type === 'fuel') {
+      const room = s.fuel.capacity - s.fuel.current;
+      const got  = Math.min(item.amount, room);
+      s.fuel.current += got;
+      summary = `+${got | 0} FUEL STOWED`;
+      if (s.isAlerted && s.fuel.current >= s.fuel.capacity * 0.3) s.isAlerted = false;
+    } else if (item.type === 'part') {
+      const room = s.lander.maxHp - s.lander.hp;
+      const got  = Math.min(item.amount, room);
+      s.lander.hp += got;
+      summary = `+${got | 0} HULL HP STOWED`;
+      s.stats.partsStowed = (s.stats.partsStowed | 0) + 1;
+    } else {
+      // Unexpected payload — drop quietly so an unknown future item type
+      // doesn't pile up in the carry list with no way out.
+      summary = `${(item.type || 'ITEM').toUpperCase()} STOWED`;
+    }
+    s.carrying.splice(idx, 1);
+  }, 'stow-from-inventory');
+  if (summary) showComms(summary);
+}
 
 /**
  * Map a magnitude to a tri-state color flag used by HUD.js:

@@ -38,6 +38,14 @@ export const GameState = {
   // this alone, and save() already serializes it, so the next commander
   // inherits whatever the previous one was holding when they died / quit.
   carrying: [],
+  // Items dropped on the moon surface from the carry inventory. Each
+  // entry: { id, type, x, z }. Persisted across runs alongside carrying.
+  // WalkMode.spawnInteractables respawns them at the same world coords;
+  // picking one back up removes it from this list by `id`.
+  droppedItems: [],
+  // Monotonic id assigned to dropped-and-persisted items so picking one
+  // up can target the exact entry without index-shift races.
+  nextDropId: 1,
 
   // ----- Scoring (run-local) -----
   score: 0,
@@ -206,6 +214,9 @@ export function startNewRun() {
   // astronaut's pack across runs. Save() already serializes it; whatever
   // the player was holding when their last run ended (or quit) carries
   // forward into the next commander's pack and stows on first arrival.
+  // GameState.droppedItems is also intentionally preserved — drops sit
+  // on the moon waiting to be picked up across runs (matches the
+  // moon's physical permanence — there's no janitor).
   // The carry-summary cinematic still clears `lastStowed` between
   // transitions, but reset it defensively so a stale snapshot can't
   // resurface in the new run's first stow beat.

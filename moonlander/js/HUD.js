@@ -11,7 +11,10 @@
 //   - Achievement toast that queues and auto-dismisses
 
 import { GameState, subscribe, update as updateState, refreshObjectives, save as saveGameState } from './GameState.js';
-import { MODE, MISSION_MESSAGES } from './Constants.js';
+import {
+  MODE, MISSION_MESSAGES,
+  INTERACTABLE_TYPES, LANDER_BASE_MASS, LANDER_MIN_ACCEL_FRAC
+} from './Constants.js';
 import { setMasterVolume, setMuted, isMuted, setMusicVolume } from './Sound.js';
 import { generateChallenge, validate as validateMath } from './MathChallenge.js';
 
@@ -74,6 +77,10 @@ const overlay = {
   mapOverlay:       document.getElementById('map-overlay'),
   mapFrame:         document.getElementById('map-frame'),
   btnCloseMap:      document.getElementById('btn-close-map'),
+  inventoryOverlay: document.getElementById('inventory-overlay'),
+  inventoryList:    document.getElementById('inventory-list'),
+  invThrustPct:     document.getElementById('inv-thrust-pct'),
+  btnCloseInventory:document.getElementById('btn-close-inventory'),
   stemBtn:          document.getElementById('stem-btn'),
   mathOverlay:      document.getElementById('math-overlay'),
   mathTitle:        document.getElementById('math-title'),
@@ -201,8 +208,15 @@ function bindOverlayButtons() {
   // Satellite map open/close. Gated behind lander proximity per the
   // ladder-climb lore — the player has to walk to the lander before the
   // satellite uplink is available.
-  overlay.mapBtn?.addEventListener('click', () => requestOpenMap());
+  // The corner map button is multi-mode now. In walk mode it opens the
+  // satellite map; in lander mode it opens the inventory overlay so the
+  // player can stow individual carry items mid-flight (Rev 2 inventory).
+  overlay.mapBtn?.addEventListener('click', () => {
+    if (GameState.mode === MODE.LANDER) showInventory();
+    else                                requestOpenMap();
+  });
   overlay.btnCloseMap?.addEventListener('click', () => hideMap());
+  overlay.btnCloseInventory?.addEventListener('click', () => hideInventory());
 
   // STEM challenge — corner button pops a math modal. Capped per session.
   overlay.stemBtn?.addEventListener('click', () => openStemChallenge());
@@ -270,6 +284,99 @@ function closeStemChallenge() {
  */
 export function setMapDataProvider(fn) {
   mapDataProvider = typeof fn === 'function' ? fn : null;
+}
+
+// ----- Inventory / drop / stow callbacks (Rev 2 inventory bundle) -----
+// WalkMode registers `dropFromCarry` so tapping a CARRY HUD entry drops
+// the item at the astronaut's current xz. LanderMode registers
+// `stowFromCarry` so tapping a row in the lander-mode inventory overlay
+// applies the item's effect (fuel→tank, part→hull HP, etc.) and removes
+// it from the carry list (which deflates lander mass).
+let dropFromCarryCb = null;
+let stowFromCarryCb = null;
+
+export function setCarryDropHandler(fn) { dropFromCarryCb = typeof fn === 'function' ? fn : null; }
+export function setCarryStowHandler(fn) { stowFromCarryCb = typeof fn === 'function' ? fn : null; }
+
+/**
+ * Sum of mass for everything in `GameState.carrying`. Used by both the
+ * inventory overlay (effective-thrust readout) and LanderMode physics.
+ */
+export function carryMass() {
+  let m = 0;
+  for (const item of (GameState.carrying || [])) {
+    const spec = INTERACTABLE_TYPES[item.type];
+    m += (spec?.mass | 0) * (item.amount | 0 || 1);
+  }
+  return m;
+}
+
+/**
+ * Effective thrust fraction of THRUSTER_ACCEL_MAX given the current
+ * carry payload. Floored at LANDER_MIN_ACCEL_FRAC so a fully-loaded
+ * lander still flies. Used by LanderMode each frame.
+ */
+export function effectiveThrustFrac() {
+  const frac = LANDER_BASE_MASS / (LANDER_BASE_MASS + carryMass());
+  return Math.max(LANDER_MIN_ACCEL_FRAC, frac);
+}
+
+// ---------- inventory overlay (lander-mode only) ----------
+
+export function showInventory() {
+  if (!overlay.inventoryOverlay) return;
+  renderInventory();
+  overlay.inventoryOverlay.hidden = false;
+}
+
+export function hideInventory() {
+  if (overlay.inventoryOverlay) overlay.inventoryOverlay.hidden = true;
+}
+
+export function isInventoryOpen() {
+  return !!(overlay.inventoryOverlay && !overlay.inventoryOverlay.hidden);
+}
+
+function renderInventory() {
+  if (!overlay.inventoryList) return;
+  overlay.inventoryList.innerHTML = '';
+  const items = GameState.carrying || [];
+  if (items.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'NOTHING TO STOW — pack is empty';
+    overlay.inventoryList.appendChild(li);
+  } else {
+    items.forEach((item, idx) => {
+      const spec = INTERACTABLE_TYPES[item.type];
+      const li = document.createElement('li');
+      li.tabIndex = 0;
+      const label = (spec?.label || item.type).toUpperCase();
+      const mass  = (spec?.mass | 0) * (item.amount | 0 || 1);
+      let effect = '';
+      if (item.type === 'fuel')      effect = `+${item.amount} FUEL`;
+      else if (item.type === 'part') effect = `+${spec?.hp ?? 0} HULL HP`;
+      else if (item.type === 'sample') effect = `+${spec?.score ?? 0} SCORE`;
+      else if (item.type === 'repair') effect = `+1 REPAIR KIT`;
+      else if (item.type === 'healthpack') effect = `+${spec?.hp ?? 0} HEALTH`;
+      li.innerHTML =
+        `<span>${label}  <span style="opacity:0.5">·  ${mass} kg</span></span>` +
+        `<span class="inv-effect">${effect}  ▸ STOW</span>`;
+      const stowOne = () => {
+        if (!stowFromCarryCb) return;
+        stowFromCarryCb(idx);
+        renderInventory();   // re-render the list (may now be shorter)
+      };
+      li.addEventListener('click', stowOne);
+      li.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); stowOne(); }
+      });
+      overlay.inventoryList.appendChild(li);
+    });
+  }
+  if (overlay.invThrustPct) {
+    overlay.invThrustPct.textContent = `${Math.round(effectiveThrustFrac() * 100)}%`;
+  }
 }
 
 /**
@@ -754,12 +861,33 @@ function onStateChange(state /*, changeKey */) {
       el.carryRow.hidden = true;
     } else {
       el.carryRow.hidden = false;
-      // Group by type so we don't show "FUEL × 3 / FUEL × 3 / PART × 5"
-      const counts = {};
-      for (const c of carry) counts[c.type] = (counts[c.type] || 0) + 1;
-      el.carry.textContent = Object.entries(counts)
-        .map(([t, n]) => `${t.toUpperCase()}×${n}`)
-        .join(' · ');
+      // Each TYPE becomes one tappable tag. Tap drops ONE of that type at
+      // the astronaut's current xz (handled by WalkMode via the registered
+      // dropFromCarryCb). Grouping keeps the row compact when the player
+      // is carrying multiple of the same item.
+      const firstIdxByType = {};
+      const countByType = {};
+      carry.forEach((c, i) => {
+        if (!(c.type in firstIdxByType)) firstIdxByType[c.type] = i;
+        countByType[c.type] = (countByType[c.type] || 0) + 1;
+      });
+      el.carry.textContent = '';
+      Object.entries(countByType).forEach(([type, n], i) => {
+        if (i > 0) el.carry.appendChild(document.createTextNode(' · '));
+        const tag = document.createElement('span');
+        tag.className = 'carry-tag';
+        tag.textContent = `${type.toUpperCase()}×${n}`;
+        tag.title = `Tap to drop one ${type}`;
+        tag.tabIndex = 0;
+        const dropOne = () => {
+          if (dropFromCarryCb) dropFromCarryCb(firstIdxByType[type]);
+        };
+        tag.addEventListener('click', dropOne);
+        tag.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dropOne(); }
+        });
+        el.carry.appendChild(tag);
+      });
     }
   }
 

@@ -270,25 +270,28 @@ export const MISSION_MESSAGES = {
 export const INTERACTABLE_TYPES = Object.freeze({
   fuel: {
     label:  'FUEL DRUM',
-    prompt: 'PRESS E FOR FUEL',
+    prompt: 'PICK UP FUEL DRUM',
     color:  0xffb020,
-    amount: 200       // units of fuel added on pickup
+    amount: 200,      // units of fuel added on pickup
+    mass:   20        // mass units; counts against the lander while in carry
   },
   repair: {
     label:  'SUPPLY CRATE',
-    prompt: 'PRESS E FOR REPAIR KIT',
+    prompt: 'PICK UP REPAIR KIT',
     color:  0xd0d0d5,
-    amount: 1         // repair kits added
+    amount: 1,        // repair kits added
+    mass:   5
   },
   sample: {
     label:  'SCIENCE SAMPLE',
-    prompt: 'PRESS E TO COLLECT SAMPLE',
+    prompt: 'COLLECT SAMPLE',
     color:  0x5ec3ff,
-    score:  50
+    score:  50,
+    mass:   2
   },
   damaged: {
     label:        'DAMAGED EQUIPMENT',
-    promptReady:  'PRESS E TO REPAIR',
+    promptReady:  'REPAIR PROBE',
     promptBlocked:'NEED A REPAIR KIT',
     color:        0xaa3030,
     costKits:     1,
@@ -296,17 +299,26 @@ export const INTERACTABLE_TYPES = Object.freeze({
   },
   part: {
     label:  'REPAIR PART',
-    prompt: 'PRESS E TO PICK UP REPAIR PART',
+    prompt: 'PICK UP REPAIR PART',
     color:  0x66ff88,
-    hp:     25      // applied to GameState.lander.hp on stow at the lander
+    hp:     25,     // applied to GameState.lander.hp on stow at the lander
+    mass:   10
   },
   healthpack: {
     label:  'HEALTH PACK',
-    prompt: 'PRESS E TO PICK UP HEALTH PACK',
+    prompt: 'PICK UP HEALTH PACK',
     color:  0xff66aa,
-    hp:     25      // applied immediately to GameState.astronaut.hp on pickup
+    hp:     25,     // applied immediately to GameState.astronaut.hp on pickup
+    mass:   3
   }
 });
+
+// Lander mass / weight curve (Rev 2 inventory bundle). Effective thrust
+// acceleration is THRUSTER_ACCEL_MAX * (LANDER_BASE_MASS /
+// (LANDER_BASE_MASS + Σ carry-item masses)), then floored at
+// LANDER_MIN_ACCEL_FRAC of max so a fully-loaded lander still flies.
+export const LANDER_BASE_MASS      = 100;
+export const LANDER_MIN_ACCEL_FRAC = 0.5;
 
 // Beginner pads — wide flat terrain segments advertised in 2D lander mode
 // with a fuel-drum sprite floating above them. Identified by the pad's

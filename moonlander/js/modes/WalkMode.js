@@ -41,7 +41,7 @@ import {
   setCenterMessage, showComms, showAchievementToast,
   showWalkTutorial, hideWalkTutorial,
   setMapDataProvider, setLadderProviders, hideMap, resetStemSession,
-  showMissionMessage
+  showMissionMessage, setCarryDropHandler
 } from '../HUD.js';
 import { Sounds } from '../Sound.js';
 import { effectiveFuelGain } from '../Progression.js';
@@ -185,7 +185,7 @@ export const WalkMode = {
 
     GameState.mode = MODE.WALK;
     notify('mode');
-    setCenterMessage('CLICK TO LOOK AROUND\nWASD TO MOVE · E TO INTERACT');
+    setCenterMessage('TAP TO INTERACT  ·  WASD or joystick to move');
     // Wire up the satellite-map button by handing HUD a function that
     // returns the current snapshot. Cleared on exit.
     setMapDataProvider(() => this.getMapData());
@@ -199,6 +199,10 @@ export const WalkMode = {
     // Per-walk-session caps: STEM challenges (Batch 2 #3) reset so the
     // player can answer a few each trip, not just once per page load.
     resetStemSession();
+    // HUD CARRY row → tap to drop one of that type at the astronaut's
+    // current xz. Item persists in GameState.droppedItems and respawns
+    // here on next WalkMode.enter (across runs).
+    setCarryDropHandler((idx) => dropCarryItem(idx));
     // Story progression layer (Batch 4 #10) — fires the per-level intro
     // beat the first time the player walks each Apollo site.
     Story.onWalkEnter();
@@ -228,6 +232,7 @@ export const WalkMode = {
     // walk session, and hide the overlay if it was open.
     setMapDataProvider(null);
     setLadderProviders(null);
+    setCarryDropHandler(null);
     hideMap();
 
     for (const d of disposables) {
@@ -367,10 +372,10 @@ export const WalkMode = {
         // Carrying anything? First E stows everything (refuels +
         // restores HP). Empty hands? E boards the lander.
         if (GameState.carrying.length > 0) {
-          setCenterMessage('PRESS E TO STOW CARGO');
+          setCenterMessage('STOW CARGO');
           if (ePressed) stowCarryAtLander();
         } else {
-          setCenterMessage('PRESS E TO BOARD LANDER');
+          setCenterMessage('BOARD LANDER');
           if (ePressed) {
             // Tick the synthetic "return to the lander" objective the moment
             // the astronaut commits to climbing in. LanderMode.resolveLanding
@@ -1177,6 +1182,18 @@ function spawnInteractables() {
     if (it) interactables.push(it);
   }
 
+  // Persisted drops from prior walk sessions / runs. The astronaut left
+  // these on the moon — they sit at the same world coords until picked
+  // back up. Tagged with `droppedId` so performInteraction can remove
+  // the matching GameState.droppedItems entry on pickup.
+  for (const drop of (GameState.droppedItems || [])) {
+    const it = buildInteractable(drop.type, drop.x, drop.z);
+    if (it) {
+      it.droppedId = drop.id;
+      interactables.push(it);
+    }
+  }
+
   // Breadcrumb rings from the parked lander to each interactable so the
   // player has cues on where to walk. Built after everything exists.
   for (const it of interactables) {
@@ -1185,6 +1202,36 @@ function spawnInteractables() {
   console.log(
     `ℹ️ Spawned ${interactables.length} interactables for pad kind "${ll.padKind}"`
   );
+}
+
+/**
+ * Drop one item of `GameState.carrying[idx]` at the astronaut's current
+ * xz. The dropped item becomes a fresh interactable in the world and a
+ * persisted entry in `GameState.droppedItems` (so it respawns next walk
+ * session, even across runs). Fires from the HUD CARRY-row tap handler.
+ */
+function dropCarryItem(idx) {
+  if (!astronaut || !scene) return;
+  const item = GameState.carrying?.[idx];
+  if (!item) return;
+  const x = astronaut.position.x;
+  const z = astronaut.position.z;
+  let dropEntry;
+  updateState(s => {
+    s.carrying.splice(idx, 1);
+    if (!s.droppedItems) s.droppedItems = [];
+    if (!s.nextDropId)   s.nextDropId   = 1;
+    dropEntry = { id: s.nextDropId++, type: item.type, x, z };
+    s.droppedItems.push(dropEntry);
+  }, 'drop');
+
+  const it = buildInteractable(item.type, x, z);
+  if (it) {
+    it.droppedId = dropEntry.id;
+    it.trailMarkers = buildTrailMarkers(landerModel.position, it.object3d.position, it.type);
+    interactables.push(it);
+  }
+  showComms(`DROPPED ${item.type.toUpperCase()}`);
 }
 
 function buildInteractable(type, x, z) {
@@ -1574,10 +1621,10 @@ function pickClosestInteractable() {
 
 function promptFor(it) {
   if (it.type === 'apollo') {
-    return `PRESS E — ${it.apollo.name}`;
+    return it.apollo.name;
   }
   if (it.type === 'landmark') {
-    return it.used ? '' : `PRESS E — ${it.landmark.name}`;
+    return it.used ? '' : it.landmark.name;
   }
   const spec = INTERACTABLE_TYPES[it.type];
   if (it.type === 'damaged') {
@@ -1739,6 +1786,14 @@ function performInteraction(it) {
   // Cue trail leading to this interactable is no longer useful — hide the
   // breadcrumb rings so the player isn't drawn back to a finished objective.
   hideTrailMarkers(it);
+  // If this interactable was a player-dropped item, take it off the
+  // persisted droppedItems list so it doesn't respawn on the next
+  // walk session.
+  if (it.droppedId != null) {
+    updateState(s => {
+      s.droppedItems = (s.droppedItems || []).filter(d => d.id !== it.droppedId);
+    }, 'drop-pickup');
+  }
 
   if (justDone.length) {
     setTimeout(() => showComms(`OBJECTIVE COMPLETE: ${firstObjectiveLabel(justDone[0])}`), 1100);

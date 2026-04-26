@@ -766,6 +766,9 @@ body.touch.mode-walk   #touch-walk   { display: flex; left: 0; right: 0; justify
   -webkit-tap-highlight-color: transparent;
 }
 body.mode-walk .map-btn { display: flex; }
+/* In lander mode the same corner button opens an inventory panel
+   instead of the satellite map (Rev 2 inventory bundle). */
+body.mode-lander .map-btn-multimode { display: flex; }
 .map-btn:hover { background: rgba(255, 238, 136, 0.18); }
 .map-btn:focus-visible { outline: 2px solid #66ff88; outline-offset: 3px; }
 .map-btn-label { font-size: 12px; }
@@ -820,6 +823,58 @@ body.mode-walk .map-btn { display: flex; }
 
 .map-overlay h2 { margin: 6px 0 2px; }
 .map-overlay .map-sub { margin: 0 0 12px; opacity: 0.7; font-size: 12px; }
+
+/* Lander-mode inventory list. Each entry is tappable; tap stows the
+   item in the lander (applies its effect + drops the weight). */
+#inventory-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  width: min(72vmin, 480px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#inventory-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 238, 136, 0.06);
+  border: 1px solid rgba(255, 238, 136, 0.4);
+  color: #ffee88;
+  font-size: 14px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#inventory-list li:hover { background: rgba(255, 238, 136, 0.18); }
+#inventory-list li:focus-visible { outline: 2px solid #66ff88; outline-offset: 3px; }
+#inventory-list li.empty {
+  cursor: default; opacity: 0.6; justify-content: center;
+}
+#inventory-list .inv-effect { color: #66ff88; font-size: 12px; opacity: 0.85; }
+.inv-mass-row {
+  display: flex; gap: 16px; align-items: center; justify-content: space-between;
+  width: min(72vmin, 480px);
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #ffee88;
+}
+.inv-mass-row span:last-child { color: #ffd054; font-weight: bold; }
+
+/* Also make the walk-mode CARRY HUD entries tappable (drop on tap). */
+#hud-carry .carry-tag {
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+body.touch #hud-carry .carry-tag,
+#hud-carry .carry-tag:hover {
+  background: rgba(255, 238, 136, 0.18);
+}
 #map-stage {
   width: min(72vmin, 560px);
   height: min(72vmin, 560px);
