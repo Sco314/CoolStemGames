@@ -25,18 +25,19 @@ import {
   HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
   MODEL_PATHS, LANDMARKS, LEVEL1_FIXED_LOOT,
   TERRAIN_TILE_POSITIONS, TERRAIN_TILE_SIZE, TERRAIN_TILE_SINK,
-  LANDER_REPAIR_PER_PART,
+  LANDER_REPAIR_PER_PART, HABITAT_HEAL_AMOUNT, HEALTH_PACK_AMOUNT,
   MODE
 } from '../Constants.js';
 import {
   GameState, update as updateState, notify, refreshObjectives,
-  unlockAchievement
+  unlockAchievement, setObjectivesForLevel
 } from '../GameState.js';
 import { Input } from '../Input.js';
 import {
   setCenterMessage, showComms, showAchievementToast,
   showWalkTutorial, hideWalkTutorial,
-  setMapDataProvider, hideMap
+  setMapDataProvider, hideMap, resetStemSession,
+  showMissionMessage
 } from '../HUD.js';
 import { Sounds } from '../Sound.js';
 import { effectiveFuelGain } from '../Progression.js';
@@ -120,6 +121,9 @@ export const WalkMode = {
     buildCraters();
     buildAstronaut();
     buildParkedLander();
+    // Rebuild the objectives list from career + this level's Apollo briefs
+    // BEFORE spawning loot, so the HUD can show the full list immediately.
+    setObjectivesForLevel(GameState.level);
     spawnInteractables();
     buildFootprintPool();
 
@@ -137,6 +141,9 @@ export const WalkMode = {
     // Wire up the satellite-map button by handing HUD a function that
     // returns the current snapshot. Cleared on exit.
     setMapDataProvider(() => this.getMapData());
+    // Per-walk-session caps: STEM challenges (Batch 2 #3) reset so the
+    // player can answer a few each trip, not just once per page load.
+    resetStemSession();
   },
 
   exit() {
@@ -898,6 +905,10 @@ function spawnInteractables() {
     if (apollo) interactables.push(apollo);
     const part = buildInteractable('part', sx + 6, sz + 4);
     if (part) interactables.push(part);
+    // Each Apollo site also has a health pack — a "for me" reward to pair
+    // with the "for the lander" repair part.
+    const pack = buildInteractable('healthpack', sx - 6, sz + 4);
+    if (pack) interactables.push(pack);
   }
 
   // Static landmarks (habitats + Atlas 6) — each tries to load its NASA
@@ -932,6 +943,7 @@ function buildInteractable(type, x, z) {
     case 'sample':  buildSample(group, spec);      spin = 1.2; break;
     case 'damaged': buildDamagedProbe(group, spec); break;
     case 'part':    buildRepairPart(group, spec);  spin = 0.6; break;
+    case 'healthpack': buildHealthPack(group, spec); spin = 0.4; break;
   }
 
   scene.add(group);
@@ -1106,6 +1118,32 @@ function buildRepairPart(group, spec) {
   pad.position.y = 0.08;
   group.add(pad);
   disposables.push({ geometry: padGeom, material: padMat });
+}
+
+/**
+ * Health-pack interactable. A pink medical-cross box, picked up directly
+ * (no carry / stow step) — heals the astronaut on touch. Spawned next to
+ * the current Apollo site alongside the repair part so the player has
+ * both a "for the lander" and "for me" reward at each destination.
+ */
+function buildHealthPack(group, spec) {
+  const bodyGeom = new THREE.BoxGeometry(1.2, 1.0, 1.2);
+  const bodyMat  = new THREE.MeshLambertMaterial({ color: spec.color });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.position.y = 0.55;
+  group.add(body);
+  disposables.push({ geometry: bodyGeom, material: bodyMat });
+
+  // White medical cross on top
+  const crossMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  disposables.push({ material: crossMat });
+  const armH = new THREE.BoxGeometry(0.85, 0.06, 0.22);
+  const armV = new THREE.BoxGeometry(0.22, 0.06, 0.85);
+  disposables.push({ geometry: armH });
+  disposables.push({ geometry: armV });
+  const ch = new THREE.Mesh(armH, crossMat); ch.position.y = 1.08;
+  const cv = new THREE.Mesh(armV, crossMat); cv.position.y = 1.08;
+  group.add(ch, cv);
 }
 
 /**
@@ -1300,11 +1338,17 @@ function performInteraction(it) {
   // record itself (from APOLLO_SITES). Handle them first and bail.
   if (it.type === 'apollo') {
     const gain = it.apollo.artifactScore | 0;
+    const wasFirstApollo = !Object.values(GameState.flags.apolloVisited || {}).some(Boolean);
     updateState(s => {
       s.score += gain;
+      // Mark this Apollo site visited so the level's "Visit X" objective
+      // predicate flips true on the next refresh.
+      s.flags.apolloVisited = s.flags.apolloVisited || {};
+      s.flags.apolloVisited[it.apollo.id] = true;
       justDone = refreshObjectives();
     }, 'pickup-apollo');
     showComms(it.apollo.comms || `+${gain} SCORE — APOLLO ARTIFACT`);
+    if (wasFirstApollo) showMissionMessage('firstApollo');
     it.used = true;
     // Leave the landmark standing so the player sees it on repeat visits;
     // just hide its breadcrumb trail.
@@ -1319,11 +1363,24 @@ function performInteraction(it) {
   // comms, leave the model standing.
   if (it.type === 'landmark') {
     const gain = it.landmark.score | 0;
+    // Habitats double as a heal stop. One-time per habitat (existing
+    // 'used' marker takes care of that), tops up astronaut HP up to maxHp.
+    const isHabitat = it.landmark.kind === 'habitat';
+    const wasFirstHabitat = isHabitat && !GameState.flags.habitatVisited;
+    let healed = 0;
     updateState(s => {
       s.score += gain;
+      if (isHabitat) {
+        const room = s.astronaut.maxHp - s.astronaut.hp;
+        healed = Math.min(HABITAT_HEAL_AMOUNT, room);
+        s.astronaut.hp = Math.min(s.astronaut.maxHp, s.astronaut.hp + healed);
+        s.flags.habitatVisited = true;          // Apollo 14 objective hook
+      }
       justDone = refreshObjectives();
     }, 'pickup-landmark');
-    showComms(it.landmark.comms || `+${gain} SCORE — ${it.landmark.name}`);
+    const healSuffix = healed > 0 ? ` · +${healed} HEALTH` : '';
+    showComms((it.landmark.comms || `+${gain} SCORE — ${it.landmark.name}`) + healSuffix);
+    if (wasFirstHabitat) showMissionMessage('habitatReached');
     it.used = true;
     hideTrailMarkers(it);
     if (justDone.length) {
@@ -1353,6 +1410,24 @@ function performInteraction(it) {
         justDone = refreshObjectives();
       }, 'pickup-part');
       showComms(`PICKED UP REPAIR PART (+${hp} HP ON STOW)`);
+      break;
+    }
+    case 'healthpack': {
+      // Health pack — instant astronaut HP top-up (no carry step,
+      // since the suit's medical kit is, lore-wise, applied on the spot).
+      const cap   = GameState.astronaut.maxHp;
+      const room  = cap - GameState.astronaut.hp;
+      const hp    = spec.hp || HEALTH_PACK_AMOUNT;
+      const gained = Math.min(hp, room);
+      if (gained <= 0) {
+        showComms('HEALTH ALREADY FULL');
+        return;     // bail without consuming the pack
+      }
+      updateState(s => {
+        s.astronaut.hp = Math.min(cap, s.astronaut.hp + gained);
+        justDone = refreshObjectives();
+      }, 'pickup-healthpack');
+      showComms(`+${gained | 0} HEALTH`);
       break;
     }
     case 'repair': {
@@ -1427,6 +1502,7 @@ function stowCarryAtLander() {
   if (!GameState.carrying || GameState.carrying.length === 0) return;
   let fuelGained = 0;
   let hpGained = 0;
+  let partsStowedThisTrip = 0;
   updateState(s => {
     for (const item of s.carrying) {
       if (item.type === 'fuel') {
@@ -1439,8 +1515,10 @@ function stowCarryAtLander() {
         const got = Math.min(item.amount, room);
         s.lander.hp += got;
         hpGained += got;
+        partsStowedThisTrip += 1;
       }
     }
+    s.stats.partsStowed = (s.stats.partsStowed | 0) + partsStowedThisTrip;
     s.carrying = [];
     if (s.isAlerted && s.fuel.current >= s.fuel.capacity * 0.3) s.isAlerted = false;
   }, 'stow-cargo');
@@ -1457,4 +1535,9 @@ function stowCarryAtLander() {
   if (fuelGained > 0) parts.push(`+${fuelGained | 0} FUEL`);
   if (hpGained > 0)   parts.push(`+${hpGained | 0} HP`);
   showComms(parts.length ? `STOWED — ${parts.join(' · ')}` : 'NOTHING TO STOW');
+  // Mission Control narrative beat — "fuelStowed" if any fuel went in,
+  // else "partStowed" if HP went up. We don't double-fire when both
+  // happened in one stow.
+  if (fuelGained > 0)      showMissionMessage('fuelStowed');
+  else if (hpGained > 0)   showMissionMessage('partStowed');
 }

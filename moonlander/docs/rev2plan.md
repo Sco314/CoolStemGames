@@ -20,43 +20,127 @@ can scope without re-reading code.
 Combined = `I + D + E`. **Brand bump (+1)** applied to items that deliver
 the actual STEM-game pitch (`STEM⭐`).
 
+## Batches
+
+Items in the ranked TODO are grouped into shippable PR-sized batches.
+A batch's checkbox flips to `[x]` when **all** of its sub-items do.
+
+### Batch 1 — foundational lives + variety [x]
+
+- [x] **#1** Astronaut HP + damage + health packs
+- [x] **#6** Apollo 14 / 15 / 16 / 17 entries
+
+### Batch 2 — STEM thread [x]
+
+- [x] **#2** More mission objectives + per-level unique experiences `STEM⭐`
+- [x] **#3** Math questions on screen `STEM⭐`
+- [x] **#5** Mission Control text messages
+
+### Batch 3 — polish (assets-mostly) [ ]
+
+- [ ] **#4** Real audio MP3s
+- [ ] **#7** Particle smoke / glow texture
+- [ ] **#8** Higher-res `lander.png`
+
+### Batch 4 — atmosphere [ ]
+
+- [ ] **#10** Mission / story progression layer
+- [ ] **#11** Return 3D → 2D with carry-summary beat
+- [ ] **#12** Alien that steals carried items
+- [ ] **#13** Music loop (gameplay ambience)
+
+### Batch 5 — finish polish [ ]
+
+- [ ] **#9** 3D ladder-climb animation
+- [ ] **#15** Crater detail texture
+- [x] **#16** Loading-screen art *(shipped on `claude/batch-4-tasks-OEWAe`)*
+- [x] **#17** Retro pixel font *(shipped on `claude/batch-4-tasks-OEWAe`)*
+- [ ] **#18** Achievement icons
+- [x] **#19** Game logo / wordmark *(shipped on `claude/batch-4-tasks-OEWAe`)*
+- [ ] **#20** Walk-mode skybox panorama
+- [ ] **#21** Earth-in-sky textured sphere
+- [ ] **#22** Tutorial / onboarding refresh
+- [ ] **#23** Per-Apollo terrain STLs
+
+### Backlog (unbatched / large) [ ]
+
+- [ ] **#14** Persist carry across runs
+- [ ] **#24** Astronaut suit customization
+- [ ] **#25** Google login + cloud save
+- [ ] **#26** Mercury Spacesuit rigging (out of code scope)
+
 ## Ranked TODO
 
-| # | Item | I/D/E | Score | Files / functions to touch |
-|---|---|---|---|---|
-| 1 | **Astronaut HP + damage sources + health packs** | 5/5/3 | 13 | `js/Constants.js` (ASTRO_MAX_HP, HEALTH_PACK_AMOUNT), `js/GameState.js` (`astronaut.hp/maxHp`, reset in `startNewRun()`), `js/HUD.js` (`onStateChange` + new `#hud-astro-hp` row, color-state CSS like the existing HULL gauge), `js/modes/WalkMode.js` (damage source — fall-from-height check in update(), or alien-encounter), new 'healthpack' type in `INTERACTABLE_TYPES`, deposit at habitats via `performInteraction` 'landmark' branch (heal on touch). |
-| 2 | **More mission objectives + per-level unique experiences** `STEM⭐` | 5/4/3 | 13 | `js/Constants.js` — extend `OBJECTIVES` and add a `LEVEL_OBJECTIVES` map keyed by level (or by `apolloSiteForLevel(level).id`). `js/GameState.js:refreshObjectives()` already evaluates predicates — extend with level filter. `js/modes/WalkMode.js:spawnInteractables()` could add per-level conditional spawns. `js/HUD.js:renderObjectives()` already renders the list; just feeds richer data. |
-| 3 | **Math questions on screen (STEM accuracy)** `STEM⭐` | 4/3/3 | 12 | New `js/MathChallenge.js` (question generators: O₂/time, fuel/burn-rate, terminal-velocity-on-moon, etc., plus answer validator). New modal in `index.html` (`#math-challenge`) + CSS. New `HUD.js` exports `showMathChallenge(spec, onResult)`. Hooks: `LanderMode` could gate ignition behind a quick math beat; walk mode could pop one before stowing or boarding. Persist `GameState.stats.mathSolved`. |
-| 4 | **Real audio MP3s** | 5/1/5 | 11 | Drop files into `moonlander/audio/`. Update path strings in `js/Sound.js:initSound()` if extension changes (`.wav` → `.mp3`). The setVolume / setMuted / loop wiring stays. Worth keeping the existing fallback warn-on-error, so missing files still no-op. |
-| 5 | **Mission Control text messages** | 4/3/4 | 11 | Extend `js/HUD.js:showComms()` into a longer-form `showMessage(title, body, ttl)` OR add a separate `#mission-msg` overlay with a small history log icon on the HUD. Catalog in `js/Constants.js` keyed by trigger (e.g. `MISSION_MSGS.firstLanding`, `.apollo11Reached`). Fire from `LanderMode.resolveLanding`, `WalkMode.performInteraction`, `GameState.unlockAchievement`. Reuses existing comms CSS class. |
-| 6 | **Apollo 14 / 15 / 16 / 17 entries** | 4/1/5 | 10 | `js/Constants.js` — append four entries to `APOLLO_SITES` with `walkPos`, `artifactScore`, `comms`. `apolloSiteForLevel(level)` already mods by length so they auto-rotate. Pick `walkPos` so they don't overlap habitats / atlas. |
-| 7 | **Particle smoke / glow texture** | 4/1/4 | 9 | Add `moonlander/textures/particle.png` (64×64 soft white blob, alpha falloff). In `js/Particles.js:buildPool()` swap each `MeshBasicMaterial({color, transparent, opacity, blending: AdditiveBlending})` to also include `map: tex` (single shared `THREE.TextureLoader().load(...)`). |
-| 8 | **Higher-res `lander.png`** | 3/1/5 | 9 | Drop replacement at `moonlander/textures/lander.png`. `js/AssetCache.js:getSharedTexture` re-uses by URL; nothing else changes. Tip: keep `NearestFilter` setting in callers if you want the retro look or switch to `LinearFilter` for a smooth one. |
-| 9 | **3D ladder-climb animation** | 3/2/4 | 9 | New scripted-anim path in `js/modes/WalkMode.js` (mirror `startDisembark`/`startEmbark`). Triggered from `js/HUD.js:requestOpenMap` instead of the current 750 ms timeout — provider-callback pattern. Astronaut translates +Y up the lander side over ~1.5 s, then map opens; reverse on close. |
-| 10 | **Mission / story progression layer** | 4/4/1 | 9 | Big design + new module `js/Story.js`. Ties together objectives, mission-control messages, math challenges. Probably best to scope after items 1–5 land so the substrate is real. |
-| 11 | **Return 3D → 2D with carry-summary beat** | 3/2/4 | 9 | `js/Main.js:cinematicSwap` onComplete already runs after walk→lander; insert a brief `setCenterMessage()` showing what was stowed (read from a snapshot taken right before `WalkMode.startEmbark`). Or add a small "STOWED THIS TRIP" panel in `js/modes/TransitionMode.js` rendered during the fade. |
-| 12 | **Alien that steals carried items** | 4/2/2 | 8 | New `js/modes/walk/Alien.js` module with build/update/dispose. Spawns under conditions (level >= N OR random chance per session). Wander toward astronaut; if within steal radius, removes one entry from `GameState.carrying`, plays comms blip, fades out. Needs a model (procedural cone+sphere fallback) and possibly a hiss audio. Also: tie into `GameState.flags.alienVisited` for an achievement. |
-| 13 | **Music loop (gameplay ambience)** | 3/1/4 | 8 | Add `moonlander/audio/music.mp3`. Extend `js/Sound.js`: `Sounds.music`, looped, started on first user gesture. Lower default volume (0.3). Toggle via existing settings menu (could add a separate music slider). |
-| 14 | **Persist carry across runs** | 2/1/5 | 8 | One-line change: in `js/GameState.js:startNewRun()` keep `GameState.carrying` instead of resetting (or reset to `[]` only on `commitRunToHighScores()`). Decide based on intended difficulty — leaving carry might be too generous. |
-| 15 | **Crater detail texture** | 2/1/5 | 8 | Drop `moonlander/textures/crater.png`. In `js/modes/WalkMode.js:buildCraters()` swap `MeshBasicMaterial({color: 0x3a3a42, transparent, opacity})` to use the texture's alpha. |
-| 16 | ✅ **Loading-screen art** (batch 4) | 2/1/5 | 8 | Add `<img>` inside `#preload .preload-inner` in `index.html`, sourced from a new `moonlander/textures/preload.png` (or reuse `lander.png`). CSS in `moonlander/css/main.css` for size + animation (gentle rotate). |
-| 17 | ✅ **Retro pixel font** (batch 4) | 2/1/5 | 8 | `<link>` to Google Fonts (Press Start 2P / VT323 / Major Mono) in `index.html`. Update `body { font-family: ... }` + the HUD-specific stacks in `moonlander/css/main.css`. Confirm letter-spacing still reads. |
-| 18 | **Achievement icons** | 2/1/4 | 7 | Six 32×32 PNGs at `moonlander/textures/achievements/<id>.png`. Update `js/HUD.js:runToastQueue()` to add an `<img>` next to `.toast-title` keyed by `def.id`. |
-| 19 | ✅ **Game logo / wordmark** (batch 4) | 2/1/4 | 7 | Replace text in `index.html` `#main-menu h1` with `<img src="link-images/space-racer-logo.svg">`. Add SVG. Update `#preload-title` similarly if you want consistency. |
-| 20 | **Walk-mode skybox panorama** | 3/1/3 | 7 | Add equirectangular `moonlander/textures/sky.jpg` (~2048×1024). In `js/modes/WalkMode.js:enter()` after `scene.background = new THREE.Color(...)` swap to a CubeTexture or equirect texture. Consider Earth visible in the sky. |
-| 21 | **Earth-in-sky textured sphere** | 2/1/4 | 7 | Subset of #20 — if a full skybox is too heavy, just add a `SphereGeometry(60)` with `moonlander/textures/earth.jpg` mapped, positioned far away. Add to walk scene. |
-| 22 | **Tutorial / onboarding refresh** | 3/1/3 | 7 | The first-time walk card already exists (`#walk-tutorial`). Add a similar one-time card for lander mode pointing at the new HULL gauge / fuel-drum sprites / X-pad multipliers. New flag in `GameState.flags`. |
-| 23 | **Per-Apollo terrain STLs** | 3/1/2 | 6 | Asset blocker — need 5 more height-map STLs from NASA Resources at `moonlander/assets/nasa_models/Apollo XX - Landing Site.stl`. Code in `js/modes/WalkMode.js:buildGround()` already loads + tiles; extend `MODEL_PATHS` to be per-level via `apolloSiteForLevel`. |
-| 24 | **Astronaut suit customization** | 2/1/3 | 6 | Settings menu adds a color picker. New `GameState.settings.suitColor` (persists). In `js/modes/WalkMode.js:buildAstronaut()` apply tint to `suitMat.color`. For the GLB, traverse meshes and tint named materials. |
-| 25 | **Google login + cloud save** | 3/2/1 | 6 | Big lift. Add Google Identity Services `<script>` in `index.html`. New `js/CloudSave.js` for OAuth flow + token mgmt. Backend: cheapest is Firebase Realtime DB or Cloud Firestore (free tier) keyed by Google user id. Sync hook in `js/GameState.js:save/load`. Sign-in button in main menu. Defer until cross-device or social features become priority. |
-| 26 | **Mercury Spacesuit rigging** | 2/1/1 | 4 | Out of code scope — Blender pass to add skeleton + skin weights, then re-export GLB. Once rigged, replace the procedural bob in `js/modes/WalkMode.js:updateWalkAnim()` with a `THREE.AnimationMixer` clip. |
+| ✓ | # | Item | I/D/E | Score | Files / functions to touch |
+|---|---|---|---|---|---|
+| ✅ | 1 | **Astronaut HP + damage sources + health packs** | 5/5/3 | 13 | `js/Constants.js` (ASTRO_MAX_HP, HEALTH_PACK_AMOUNT), `js/GameState.js` (`astronaut.hp/maxHp`, reset in `startNewRun()`), `js/HUD.js` (`onStateChange` + new `#hud-astro-hp` row, color-state CSS like the existing HULL gauge), `js/modes/WalkMode.js` (damage source — fall-from-height check in update(), or alien-encounter), new 'healthpack' type in `INTERACTABLE_TYPES`, deposit at habitats via `performInteraction` 'landmark' branch (heal on touch). |
+| ✅ | 2 | **More mission objectives + per-level unique experiences** `STEM⭐` | 5/4/3 | 13 | `js/Constants.js` — extend `OBJECTIVES` and add a `LEVEL_OBJECTIVES` map keyed by level (or by `apolloSiteForLevel(level).id`). `js/GameState.js:refreshObjectives()` already evaluates predicates — extend with level filter. `js/modes/WalkMode.js:spawnInteractables()` could add per-level conditional spawns. `js/HUD.js:renderObjectives()` already renders the list; just feeds richer data. |
+| ✅ | 3 | **Math questions on screen (STEM accuracy)** `STEM⭐` | 4/3/3 | 12 | New `js/MathChallenge.js` (question generators: O₂/time, fuel/burn-rate, terminal-velocity-on-moon, etc., plus answer validator). New modal in `index.html` (`#math-challenge`) + CSS. New `HUD.js` exports `showMathChallenge(spec, onResult)`. Hooks: `LanderMode` could gate ignition behind a quick math beat; walk mode could pop one before stowing or boarding. Persist `GameState.stats.mathSolved`. |
+| ⏳ | 4 | **Real audio MP3s** | 5/1/5 | 11 | Drop files into `moonlander/audio/`. Update path strings in `js/Sound.js:initSound()` if extension changes (`.wav` → `.mp3`). The setVolume / setMuted / loop wiring stays. Worth keeping the existing fallback warn-on-error, so missing files still no-op. |
+| ✅ | 5 | **Mission Control text messages** | 4/3/4 | 11 | Extend `js/HUD.js:showComms()` into a longer-form `showMessage(title, body, ttl)` OR add a separate `#mission-msg` overlay with a small history log icon on the HUD. Catalog in `js/Constants.js` keyed by trigger (e.g. `MISSION_MSGS.firstLanding`, `.apollo11Reached`). Fire from `LanderMode.resolveLanding`, `WalkMode.performInteraction`, `GameState.unlockAchievement`. Reuses existing comms CSS class. |
+| ✅ | 6 | **Apollo 14 / 15 / 16 / 17 entries** | 4/1/5 | 10 | `js/Constants.js` — append four entries to `APOLLO_SITES` with `walkPos`, `artifactScore`, `comms`. `apolloSiteForLevel(level)` already mods by length so they auto-rotate. Pick `walkPos` so they don't overlap habitats / atlas. |
+| ⏳ | 7 | **Particle smoke / glow texture** | 4/1/4 | 9 | Add `moonlander/textures/particle.png` (64×64 soft white blob, alpha falloff). In `js/Particles.js:buildPool()` swap each `MeshBasicMaterial({color, transparent, opacity, blending: AdditiveBlending})` to also include `map: tex` (single shared `THREE.TextureLoader().load(...)`). |
+| ⏳ | 8 | **Higher-res `lander.png`** | 3/1/5 | 9 | Drop replacement at `moonlander/textures/lander.png`. `js/AssetCache.js:getSharedTexture` re-uses by URL; nothing else changes. Tip: keep `NearestFilter` setting in callers if you want the retro look or switch to `LinearFilter` for a smooth one. |
+| ⏳ | 9 | **3D ladder-climb animation** | 3/2/4 | 9 | New scripted-anim path in `js/modes/WalkMode.js` (mirror `startDisembark`/`startEmbark`). Triggered from `js/HUD.js:requestOpenMap` instead of the current 750 ms timeout — provider-callback pattern. Astronaut translates +Y up the lander side over ~1.5 s, then map opens; reverse on close. |
+| ⏳ | 10 | **Mission / story progression layer** | 4/4/1 | 9 | Big design + new module `js/Story.js`. Ties together objectives, mission-control messages, math challenges. Probably best to scope after items 1–5 land so the substrate is real. |
+| ⏳ | 11 | **Return 3D → 2D with carry-summary beat** | 3/2/4 | 9 | `js/Main.js:cinematicSwap` onComplete already runs after walk→lander; insert a brief `setCenterMessage()` showing what was stowed (read from a snapshot taken right before `WalkMode.startEmbark`). Or add a small "STOWED THIS TRIP" panel in `js/modes/TransitionMode.js` rendered during the fade. |
+| ⏳ | 12 | **Alien that steals carried items** | 4/2/2 | 8 | New `js/modes/walk/Alien.js` module with build/update/dispose. Spawns under conditions (level >= N OR random chance per session). Wander toward astronaut; if within steal radius, removes one entry from `GameState.carrying`, plays comms blip, fades out. Needs a model (procedural cone+sphere fallback) and possibly a hiss audio. Also: tie into `GameState.flags.alienVisited` for an achievement. |
+| ⏳ | 13 | **Music loop (gameplay ambience)** | 3/1/4 | 8 | Add `moonlander/audio/music.mp3`. Extend `js/Sound.js`: `Sounds.music`, looped, started on first user gesture. Lower default volume (0.3). Toggle via existing settings menu (could add a separate music slider). |
+| ⏳ | 14 | **Persist carry across runs** | 2/1/5 | 8 | One-line change: in `js/GameState.js:startNewRun()` keep `GameState.carrying` instead of resetting (or reset to `[]` only on `commitRunToHighScores()`). Decide based on intended difficulty — leaving carry might be too generous. |
+| ⏳ | 15 | **Crater detail texture** | 2/1/5 | 8 | Drop `moonlander/textures/crater.png`. In `js/modes/WalkMode.js:buildCraters()` swap `MeshBasicMaterial({color: 0x3a3a42, transparent, opacity})` to use the texture's alpha. |
+| ✅ | 16 | **Loading-screen art** | 2/1/5 | 8 | Add `<img>` inside `#preload .preload-inner` in `index.html`, sourced from a new `moonlander/textures/preload.png` (or reuse `lander.png`). CSS in `moonlander/css/main.css` for size + animation (gentle rotate). |
+| ✅ | 17 | **Retro pixel font** | 2/1/5 | 8 | `<link>` to Google Fonts (Press Start 2P / VT323 / Major Mono) in `index.html`. Update `body { font-family: ... }` + the HUD-specific stacks in `moonlander/css/main.css`. Confirm letter-spacing still reads. |
+| ⏳ | 18 | **Achievement icons** | 2/1/4 | 7 | Six 32×32 PNGs at `moonlander/textures/achievements/<id>.png`. Update `js/HUD.js:runToastQueue()` to add an `<img>` next to `.toast-title` keyed by `def.id`. |
+| ✅ | 19 | **Game logo / wordmark** | 2/1/4 | 7 | Replace text in `index.html` `#main-menu h1` with `<img src="link-images/space-racer-logo.svg">`. Add SVG. Update `#preload-title` similarly if you want consistency. |
+| ⏳ | 20 | **Walk-mode skybox panorama** | 3/1/3 | 7 | Add equirectangular `moonlander/textures/sky.jpg` (~2048×1024). In `js/modes/WalkMode.js:enter()` after `scene.background = new THREE.Color(...)` swap to a CubeTexture or equirect texture. Consider Earth visible in the sky. |
+| ⏳ | 21 | **Earth-in-sky textured sphere** | 2/1/4 | 7 | Subset of #20 — if a full skybox is too heavy, just add a `SphereGeometry(60)` with `moonlander/textures/earth.jpg` mapped, positioned far away. Add to walk scene. |
+| ⏳ | 22 | **Tutorial / onboarding refresh** | 3/1/3 | 7 | The first-time walk card already exists (`#walk-tutorial`). Add a similar one-time card for lander mode pointing at the new HULL gauge / fuel-drum sprites / X-pad multipliers. New flag in `GameState.flags`. |
+| ⏳ | 23 | **Per-Apollo terrain STLs** | 3/1/2 | 6 | Asset blocker — need 5 more height-map STLs from NASA Resources at `moonlander/assets/nasa_models/Apollo XX - Landing Site.stl`. Code in `js/modes/WalkMode.js:buildGround()` already loads + tiles; extend `MODEL_PATHS` to be per-level via `apolloSiteForLevel`. |
+| ⏳ | 24 | **Astronaut suit customization** | 2/1/3 | 6 | Settings menu adds a color picker. New `GameState.settings.suitColor` (persists). In `js/modes/WalkMode.js:buildAstronaut()` apply tint to `suitMat.color`. For the GLB, traverse meshes and tint named materials. |
+| ⏳ | 25 | **Google login + cloud save** | 3/2/1 | 6 | Big lift. Add Google Identity Services `<script>` in `index.html`. New `js/CloudSave.js` for OAuth flow + token mgmt. Backend: cheapest is Firebase Realtime DB or Cloud Firestore (free tier) keyed by Google user id. Sync hook in `js/GameState.js:save/load`. Sign-in button in main menu. Defer until cross-device or social features become priority. |
+| ⏳ | 26 | **Mercury Spacesuit rigging** | 2/1/1 | 4 | Out of code scope — Blender pass to add skeleton + skin weights, then re-export GLB. Once rigged, replace the procedural bob in `js/modes/WalkMode.js:updateWalkAnim()` with a `THREE.AnimationMixer` clip. |
+| ✓ | # | Item | I/D/E | Score | Files / functions to touch |
+|---|---|---|---|---|---|
+| ✅ | 1 | **Astronaut HP + damage sources + health packs** | 5/5/3 | 13 | `js/Constants.js` (ASTRO_MAX_HP, HEALTH_PACK_AMOUNT), `js/GameState.js` (`astronaut.hp/maxHp`, reset in `startNewRun()`), `js/HUD.js` (`onStateChange` + new `#hud-astro-hp` row, color-state CSS like the existing HULL gauge), `js/modes/WalkMode.js` (damage source — fall-from-height check in update(), or alien-encounter), new 'healthpack' type in `INTERACTABLE_TYPES`, deposit at habitats via `performInteraction` 'landmark' branch (heal on touch). |
+| ✅ | 2 | **More mission objectives + per-level unique experiences** `STEM⭐` | 5/4/3 | 13 | `js/Constants.js` — extend `OBJECTIVES` and add a `LEVEL_OBJECTIVES` map keyed by level (or by `apolloSiteForLevel(level).id`). `js/GameState.js:refreshObjectives()` already evaluates predicates — extend with level filter. `js/modes/WalkMode.js:spawnInteractables()` could add per-level conditional spawns. `js/HUD.js:renderObjectives()` already renders the list; just feeds richer data. |
+| ✅ | 3 | **Math questions on screen (STEM accuracy)** `STEM⭐` | 4/3/3 | 12 | New `js/MathChallenge.js` (question generators: O₂/time, fuel/burn-rate, terminal-velocity-on-moon, etc., plus answer validator). New modal in `index.html` (`#math-challenge`) + CSS. New `HUD.js` exports `showMathChallenge(spec, onResult)`. Hooks: `LanderMode` could gate ignition behind a quick math beat; walk mode could pop one before stowing or boarding. Persist `GameState.stats.mathSolved`. |
+| ⏳ | 4 | **Real audio MP3s** | 5/1/5 | 11 | Drop files into `moonlander/audio/`. Update path strings in `js/Sound.js:initSound()` if extension changes (`.wav` → `.mp3`). The setVolume / setMuted / loop wiring stays. Worth keeping the existing fallback warn-on-error, so missing files still no-op. |
+| ✅ | 5 | **Mission Control text messages** | 4/3/4 | 11 | Extend `js/HUD.js:showComms()` into a longer-form `showMessage(title, body, ttl)` OR add a separate `#mission-msg` overlay with a small history log icon on the HUD. Catalog in `js/Constants.js` keyed by trigger (e.g. `MISSION_MSGS.firstLanding`, `.apollo11Reached`). Fire from `LanderMode.resolveLanding`, `WalkMode.performInteraction`, `GameState.unlockAchievement`. Reuses existing comms CSS class. |
+| ✅ | 6 | **Apollo 14 / 15 / 16 / 17 entries** | 4/1/5 | 10 | `js/Constants.js` — append four entries to `APOLLO_SITES` with `walkPos`, `artifactScore`, `comms`. `apolloSiteForLevel(level)` already mods by length so they auto-rotate. Pick `walkPos` so they don't overlap habitats / atlas. |
+| ⏳ | 7 | **Particle smoke / glow texture** | 4/1/4 | 9 | Add `moonlander/textures/particle.png` (64×64 soft white blob, alpha falloff). In `js/Particles.js:buildPool()` swap each `MeshBasicMaterial({color, transparent, opacity, blending: AdditiveBlending})` to also include `map: tex` (single shared `THREE.TextureLoader().load(...)`). |
+| ⏳ | 8 | **Higher-res `lander.png`** | 3/1/5 | 9 | Drop replacement at `moonlander/textures/lander.png`. `js/AssetCache.js:getSharedTexture` re-uses by URL; nothing else changes. Tip: keep `NearestFilter` setting in callers if you want the retro look or switch to `LinearFilter` for a smooth one. |
+| ⏳ | 9 | **3D ladder-climb animation** | 3/2/4 | 9 | New scripted-anim path in `js/modes/WalkMode.js` (mirror `startDisembark`/`startEmbark`). Triggered from `js/HUD.js:requestOpenMap` instead of the current 750 ms timeout — provider-callback pattern. Astronaut translates +Y up the lander side over ~1.5 s, then map opens; reverse on close. |
+| ⏳ | 10 | **Mission / story progression layer** | 4/4/1 | 9 | Big design + new module `js/Story.js`. Ties together objectives, mission-control messages, math challenges. Probably best to scope after items 1–5 land so the substrate is real. |
+| ⏳ | 11 | **Return 3D → 2D with carry-summary beat** | 3/2/4 | 9 | `js/Main.js:cinematicSwap` onComplete already runs after walk→lander; insert a brief `setCenterMessage()` showing what was stowed (read from a snapshot taken right before `WalkMode.startEmbark`). Or add a small "STOWED THIS TRIP" panel in `js/modes/TransitionMode.js` rendered during the fade. |
+| ⏳ | 12 | **Alien that steals carried items** | 4/2/2 | 8 | New `js/modes/walk/Alien.js` module with build/update/dispose. Spawns under conditions (level >= N OR random chance per session). Wander toward astronaut; if within steal radius, removes one entry from `GameState.carrying`, plays comms blip, fades out. Needs a model (procedural cone+sphere fallback) and possibly a hiss audio. Also: tie into `GameState.flags.alienVisited` for an achievement. |
+| ⏳ | 13 | **Music loop (gameplay ambience)** | 3/1/4 | 8 | Add `moonlander/audio/music.mp3`. Extend `js/Sound.js`: `Sounds.music`, looped, started on first user gesture. Lower default volume (0.3). Toggle via existing settings menu (could add a separate music slider). |
+| ⏳ | 14 | **Persist carry across runs** | 2/1/5 | 8 | One-line change: in `js/GameState.js:startNewRun()` keep `GameState.carrying` instead of resetting (or reset to `[]` only on `commitRunToHighScores()`). Decide based on intended difficulty — leaving carry might be too generous. |
+| ⏳ | 15 | **Crater detail texture** | 2/1/5 | 8 | Drop `moonlander/textures/crater.png`. In `js/modes/WalkMode.js:buildCraters()` swap `MeshBasicMaterial({color: 0x3a3a42, transparent, opacity})` to use the texture's alpha. |
+| ⏳ | 16 | **Loading-screen art** | 2/1/5 | 8 | Add `<img>` inside `#preload .preload-inner` in `index.html`, sourced from a new `moonlander/textures/preload.png` (or reuse `lander.png`). CSS in `moonlander/css/main.css` for size + animation (gentle rotate). |
+| ⏳ | 17 | **Retro pixel font** | 2/1/5 | 8 | `<link>` to Google Fonts (Press Start 2P / VT323 / Major Mono) in `index.html`. Update `body { font-family: ... }` + the HUD-specific stacks in `moonlander/css/main.css`. Confirm letter-spacing still reads. |
+| ⏳ | 18 | **Achievement icons** | 2/1/4 | 7 | Six 32×32 PNGs at `moonlander/textures/achievements/<id>.png`. Update `js/HUD.js:runToastQueue()` to add an `<img>` next to `.toast-title` keyed by `def.id`. |
+| ⏳ | 19 | **Game logo / wordmark** | 2/1/4 | 7 | Replace text in `index.html` `#main-menu h1` with `<img src="link-images/space-racer-logo.svg">`. Add SVG. Update `#preload-title` similarly if you want consistency. |
+| ⏳ | 20 | **Walk-mode skybox panorama** | 3/1/3 | 7 | Add equirectangular `moonlander/textures/sky.jpg` (~2048×1024). In `js/modes/WalkMode.js:enter()` after `scene.background = new THREE.Color(...)` swap to a CubeTexture or equirect texture. Consider Earth visible in the sky. |
+| ⏳ | 21 | **Earth-in-sky textured sphere** | 2/1/4 | 7 | Subset of #20 — if a full skybox is too heavy, just add a `SphereGeometry(60)` with `moonlander/textures/earth.jpg` mapped, positioned far away. Add to walk scene. |
+| ⏳ | 22 | **Tutorial / onboarding refresh** | 3/1/3 | 7 | The first-time walk card already exists (`#walk-tutorial`). Add a similar one-time card for lander mode pointing at the new HULL gauge / fuel-drum sprites / X-pad multipliers. New flag in `GameState.flags`. |
+| ⏳ | 23 | **Per-Apollo terrain STLs** | 3/1/2 | 6 | Asset blocker — need 5 more height-map STLs from NASA Resources at `moonlander/assets/nasa_models/Apollo XX - Landing Site.stl`. Code in `js/modes/WalkMode.js:buildGround()` already loads + tiles; extend `MODEL_PATHS` to be per-level via `apolloSiteForLevel`. |
+| ⏳ | 24 | **Astronaut suit customization** | 2/1/3 | 6 | Settings menu adds a color picker. New `GameState.settings.suitColor` (persists). In `js/modes/WalkMode.js:buildAstronaut()` apply tint to `suitMat.color`. For the GLB, traverse meshes and tint named materials. |
+| ⏳ | 25 | **Google login + cloud save** | 3/2/1 | 6 | Big lift. Add Google Identity Services `<script>` in `index.html`. New `js/CloudSave.js` for OAuth flow + token mgmt. Backend: cheapest is Firebase Realtime DB or Cloud Firestore (free tier) keyed by Google user id. Sync hook in `js/GameState.js:save/load`. Sign-in button in main menu. Defer until cross-device or social features become priority. |
+| ⏳ | 26 | **Mercury Spacesuit rigging** | 2/1/1 | 4 | Out of code scope — Blender pass to add skeleton + skin weights, then re-export GLB. Once rigged, replace the procedural bob in `js/modes/WalkMode.js:updateWalkAnim()` with a `THREE.AnimationMixer` clip. |
 
-## Batch 4 notes (what landed on `claude/batch-4-tasks-OEWAe`)
+## Batch-4-branch notes (what landed on `claude/batch-4-tasks-OEWAe`)
 
-Batch 4 took the three lowest-contention polish items so the higher-score
-batches (running concurrently) could keep `Constants.js`, `GameState.js`,
-`HUD.js`, `WalkMode.js`, `LanderMode.js`, `Sound.js`, and `Particles.js`
-to themselves. Items shipped:
+Note: when this branch was started, the **Batches** section above did
+not yet exist on `main`, so "batch 4" here refers to the parallel
+session-level batch slot, not the **Batch 5 — finish polish** group
+the items now belong to. Items shipped on this branch (#16, #17, #19)
+are the lowest-contention polish work; their checkboxes in the
+Batch 5 list above are now ticked.
+
+This branch deliberately took items so the higher-score concurrent
+batches could keep `Constants.js`, `GameState.js`, `HUD.js`,
+`WalkMode.js`, `LanderMode.js`, `Sound.js`, and `Particles.js` to
+themselves. Items shipped:
 
 - **#17 Retro pixel font** —
   - Added Google Fonts `<link>` in `moonlander/index.html` for **VT323**
@@ -110,15 +194,16 @@ to themselves. Items shipped:
 | `moonlander/css/main.css` | `font-family` swaps (Courier → VT323) at every site, plus Press Start 2P additions on `.overlay h1`, `.overlay h2`, `.preload-title`; new `.preload-art` block + `preload-hover` keyframe; new `#main-menu h1 .wordmark-img` sizing rule; heading sizes retuned for Press Start 2P. |
 | `link-images/space-racer-logo.svg` | New file (repo root). |
 
-### Files NOT touched (deliberately left for batches 2 / 3)
+### Files NOT touched (deliberately left for concurrent branches)
 
 `js/Constants.js`, `js/GameState.js`, `js/HUD.js`, `js/Sound.js`,
 `js/Particles.js`, `js/Main.js`, `js/AssetCache.js`, `js/ModelCache.js`,
 `js/modes/WalkMode.js`, `js/modes/LanderMode.js`, `js/modes/TransitionMode.js` —
-none of the three batch-4 items needed these, by design. The
-higher-priority items 1–10 in the table above all touch one or more of
-these files, so concurrent batches can edit them without merge risk
-from batch 4.
+none of the three items shipped here needed these, by design. The
+higher-priority items 1–10 all touch one or more of these files, so
+concurrent branches (Batch 1 / Batch 2 above) edited them without
+merge risk from this work — the only conflict on merge was in this
+doc itself.
 
 ### Verification (manual)
 

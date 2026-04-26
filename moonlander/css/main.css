@@ -111,6 +111,41 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
   color: #66ff88;
 }
 
+/* Mission Control message — longer-form narrative panel near the top
+ * center. Different visual from #hud-comms so the player can tell story
+ * beats from gameplay blips. Fades in with a slight scale pop. */
+.mission-msg {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.96);
+  z-index: 90;
+  max-width: 560px;
+  width: calc(100% - 48px);
+  padding: 12px 18px;
+  background: rgba(8, 14, 28, 0.92);
+  border: 1px solid rgba(102, 200, 255, 0.65);
+  border-left: 4px solid #66c8ff;
+  color: #d6e8ff;
+  font-family: inherit;
+  letter-spacing: 1px;
+  opacity: 0;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  pointer-events: none;
+}
+.mission-msg[hidden] { display: none; }
+.mission-msg.show { opacity: 1; transform: translateX(-50%) scale(1); }
+.mission-msg-label {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #66c8ff;
+  margin-bottom: 4px;
+}
+.mission-msg-body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 /* Comms overlay — mission-control radio blip, fades in and out */
 #hud-comms {
   position: absolute;
@@ -434,14 +469,15 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
  *
  * Selectors intentionally combine the ID with the class so they beat any
  * ancestor-scoped color (specificity 1,1,0) without !important. */
-#hud-fuel, #hud-vspeed, #hud-hspeed, #hud-angle, #hud-hull {
+#hud-fuel, #hud-vspeed, #hud-hspeed, #hud-angle, #hud-hull, #hud-health {
   transition: color 0.2s ease, text-shadow 0.2s ease;
 }
 #hud-fuel.gauge-ok,
 #hud-vspeed.gauge-ok,
 #hud-hspeed.gauge-ok,
 #hud-angle.gauge-ok,
-#hud-hull.gauge-ok {
+#hud-hull.gauge-ok,
+#hud-health.gauge-ok {
   color: #5dff78;
   text-shadow: 0 0 6px rgba(93, 255, 120, 0.45);
 }
@@ -449,7 +485,8 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 #hud-vspeed.gauge-warn,
 #hud-hspeed.gauge-warn,
 #hud-angle.gauge-warn,
-#hud-hull.gauge-warn {
+#hud-hull.gauge-warn,
+#hud-health.gauge-warn {
   color: #ffcc33;
   font-weight: bold;
   text-shadow: 0 0 6px rgba(255, 204, 51, 0.55);
@@ -458,7 +495,8 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
 #hud-vspeed.gauge-danger,
 #hud-hspeed.gauge-danger,
 #hud-angle.gauge-danger,
-#hud-hull.gauge-danger {
+#hud-hull.gauge-danger,
+#hud-health.gauge-danger {
   color: #ff3c3c;
   font-weight: bold;
   text-shadow: 0 0 8px rgba(255, 60, 60, 0.7);
@@ -716,6 +754,54 @@ body.mode-walk .map-btn { display: flex; }
 .map-btn:hover { background: rgba(255, 238, 136, 0.18); }
 .map-btn:focus-visible { outline: 2px solid #66ff88; outline-offset: 3px; }
 .map-btn-label { font-size: 12px; }
+
+/* STEM challenge button — walk-mode-only, top-left below MAP. */
+.stem-btn {
+  top: 60px;
+  border-color: rgba(102, 200, 255, 0.7);
+  color: #66c8ff;
+}
+.stem-btn:hover { background: rgba(102, 200, 255, 0.18); }
+
+/* STEM challenge modal */
+.math-body {
+  max-width: 540px;
+  margin: 8px auto 14px;
+  font-size: 15px;
+  line-height: 1.55;
+  letter-spacing: 1px;
+}
+.math-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#math-input {
+  font-family: inherit;
+  font-size: 24px;
+  padding: 8px 14px;
+  width: 180px;
+  text-align: right;
+  background: rgba(255, 238, 136, 0.08);
+  border: 1px solid rgba(255, 238, 136, 0.6);
+  color: #ffee88;
+  letter-spacing: 1px;
+}
+#math-input:focus { outline: 2px solid #66ff88; outline-offset: 2px; }
+.math-unit {
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: #ffee88;
+  opacity: 0.85;
+}
+.math-actions { display: flex; gap: 14px; margin-top: 8px; }
+.math-result {
+  margin-top: 8px;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+.math-result.correct { color: #66ff88; }
+.math-result.wrong   { color: #ff6b4a; }
 
 .map-overlay h2 { margin: 6px 0 2px; }
 .map-overlay .map-sub { margin: 0 0 12px; opacity: 0.7; font-size: 12px; }
