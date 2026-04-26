@@ -163,10 +163,22 @@ export const WalkMode = {
     lastCargoReminderAt = -Infinity;
     if (GameState.flags) GameState.flags.lowFuelReturnFired = false;
 
-    // Spawn next to the parked lander, facing away from it.
-    astronaut.position.set(6, 0, 6);
-    astronaut.position.y = groundHeight(astronaut.position.x, astronaut.position.z);
-    yawRad = Math.PI * 0.25;
+    // Spawn next to the parked lander, facing away from it. The lunar
+    // cheat (Main.js:triggerLunarCheat) overrides this to drop the
+    // astronaut next to the LEVEL1_FIXED_LOOT fuel drum at (34, -28),
+    // facing it, so the player can grab the drum immediately.
+    if (callbacks.cheatSpawn) {
+      astronaut.position.set(30, 0, -25);
+      astronaut.position.y = groundHeight(astronaut.position.x, astronaut.position.z);
+      // Face the drum at (34, -28). Astronaut forward = (-sin(yaw), -cos(yaw)),
+      // matching the startEmbark math elsewhere in this file.
+      const dx = 34 - 30, dz = -28 - (-25);
+      yawRad = Math.atan2(-dx, -dz);
+    } else {
+      astronaut.position.set(6, 0, 6);
+      astronaut.position.y = groundHeight(astronaut.position.x, astronaut.position.z);
+      yawRad = Math.PI * 0.25;
+    }
     pitchRad = 0.55;
 
     bindMouse();
