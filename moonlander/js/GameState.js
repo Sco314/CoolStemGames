@@ -60,7 +60,9 @@ export const GameState = {
     probeRepaired:    false,
     walkTutorialSeen: false,
     habitatVisited:   false,         // any habitat visited this run
-    apolloVisited:    {}             // map of apollo-id → true
+    apolloVisited:    {},            // map of apollo-id → true
+    boardedThisLevel: false,         // flips true when the astronaut climbs back into the lander
+    lowFuelReturnFired: false        // gates the CAPCOM low-fuel-return blip per walk session
   },
 
   // ----- Objective tracker (run-local) -----
@@ -112,12 +114,24 @@ export function update(fn, changeKey = '*') {
 }
 
 /**
+ * Synthetic "return to the lander and board" objective appended to every
+ * level. Predicate is GameState.flags.boardedThisLevel — set in WalkMode
+ * when the astronaut presses E next to the lander, cleared in LanderMode
+ * after each successful landing so the next level re-arms the prompt.
+ */
+const RETURN_TO_LANDER_OBJECTIVE = {
+  id: 'return-to-lander',
+  label: 'Return to the lander and board',
+  predicate: s => s.flags.boardedThisLevel === true
+};
+
+/**
  * Build a lookup of every defined objective predicate (career + per-level).
  * Used by refreshObjectives so it can find a matching def regardless of
  * which list the objective came from.
  */
 function _allObjectiveDefs() {
-  const out = [...OBJECTIVES];
+  const out = [...OBJECTIVES, RETURN_TO_LANDER_OBJECTIVE];
   for (const arr of Object.values(LEVEL_OBJECTIVES)) out.push(...arr);
   return out;
 }
@@ -148,7 +162,10 @@ export function refreshObjectives() {
 export function setObjectivesForLevel(level) {
   const site = apolloSiteForLevel(level);
   const lvlDefs = (site && LEVEL_OBJECTIVES[site.id]) || [];
-  const merged = [...OBJECTIVES, ...lvlDefs];
+  // Career objectives, this level's per-Apollo briefs, then the synthetic
+  // "return to the lander" closer so the player always sees the trip home
+  // as the final unchecked item.
+  const merged = [...OBJECTIVES, ...lvlDefs, RETURN_TO_LANDER_OBJECTIVE];
   const doneById = {};
   for (const o of (GameState.objectives || [])) doneById[o.id] = o.done;
   GameState.objectives = merged.map(def => ({
@@ -182,10 +199,12 @@ export function startNewRun() {
   GameState.isAlerted = false;
   // walkTutorialSeen is profile-level, not run-level — preserve across restarts.
   GameState.flags = {
-    probeRepaired:    false,
-    walkTutorialSeen: GameState.flags?.walkTutorialSeen === true,
-    habitatVisited:   false,
-    apolloVisited:    {}
+    probeRepaired:      false,
+    walkTutorialSeen:   GameState.flags?.walkTutorialSeen === true,
+    habitatVisited:     false,
+    apolloVisited:      {},
+    boardedThisLevel:   false,
+    lowFuelReturnFired: false
   };
   GameState.objectives = OBJECTIVES.map(o => ({ id: o.id, label: o.label, done: false }));
   GameState.lastLanding = {

@@ -65,7 +65,12 @@ function buildPool(scene, size, particleSize) {
       mesh, mat,
       vx: 0, vy: 0,
       life: 0, lifeMax: 0,
-      active: false
+      active: false,
+      // Per-particle overrides (used by emit(opts)). null → fall back to
+      // the system's module-level constants in update().
+      colorStart: null,
+      colorEnd: null,
+      gravityScale: 1
     };
   }
   return { geom, pool };
@@ -210,45 +215,98 @@ export class ParticleSystemExplosion {
     this._pool = built.pool;
   }
 
-  /** Activate all particles at once with random radial velocities. */
-  emit() {
-    this.target.getWorldPosition(_scratchVec);
-    const ox = _scratchVec.x, oy = _scratchVec.y;
+  /**
+   * Activate particles with random radial velocities. The default (no opts)
+   * matches the original crash burst — every particle in the pool fires at
+   * once with the EXPLOSION_PS_* constants. Per-call overrides let callers
+   * tune the same pool for smaller, differently-colored bursts (dust puff
+   * on landing, sparks on terrain scrape) without a second particle system.
+   *
+   * @param {object} [opts]
+   * @param {number} [opts.count]        Cap on particles activated this call.
+   * @param {number} [opts.colorStart]   Hex color (0xRRGGBB) replacing module default.
+   * @param {number} [opts.colorEnd]     Hex color end of the per-particle lerp.
+   * @param {number} [opts.speedMin]
+   * @param {number} [opts.speedMax]
+   * @param {number} [opts.lifetimeMin]
+   * @param {number} [opts.lifetimeMax]
+   * @param {number} [opts.originX]      World x; defaults to target world pos.
+   * @param {number} [opts.originY]      World y; defaults to target world pos.
+   * @param {number} [opts.gravityScale] Multiplier on EXPLOSION_PS_GRAVITY_FACTOR.
+   */
+  emit(opts) {
+    const o = opts || {};
+    const speedMin    = (o.speedMin    != null) ? o.speedMin    : EXPLOSION_PS_SPEED_MIN;
+    const speedMax    = (o.speedMax    != null) ? o.speedMax    : EXPLOSION_PS_SPEED_MAX;
+    const lifetimeMin = (o.lifetimeMin != null) ? o.lifetimeMin : EXPLOSION_PS_LIFETIME_MIN;
+    const lifetimeMax = (o.lifetimeMax != null) ? o.lifetimeMax : EXPLOSION_PS_LIFETIME_MAX;
+    const gravityScale = (o.gravityScale != null) ? o.gravityScale : 1;
+    const colorStart = (o.colorStart != null) ? new THREE.Color(o.colorStart) : null;
+    const colorEnd   = (o.colorEnd   != null) ? new THREE.Color(o.colorEnd)   : null;
+    const startColor = colorStart || _colorStartExp;
+
+    let ox, oy;
+    if (o.originX != null && o.originY != null) {
+      ox = o.originX; oy = o.originY;
+    } else {
+      this.target.getWorldPosition(_scratchVec);
+      ox = (o.originX != null) ? o.originX : _scratchVec.x;
+      oy = (o.originY != null) ? o.originY : _scratchVec.y;
+    }
+
+    // Default behavior (no count): activate every particle, matching the
+    // legacy emit() that callers expect on a full crash. With count, prefer
+    // inactive slots so a follow-up burst doesn't yank a still-flying one.
+    const limited = (o.count != null);
+    const cap = limited ? Math.min(o.count, this._pool.length) : this._pool.length;
+    let activated = 0;
     for (const p of this._pool) {
+      if (activated >= cap) break;
+      if (limited && p.active) continue;
       const angle = Math.random() * Math.PI * 2;
-      const speed = rand(EXPLOSION_PS_SPEED_MIN, EXPLOSION_PS_SPEED_MAX);
+      const speed = rand(speedMin, speedMax);
       p.mesh.position.set(ox, oy, 0);
       p.vx = Math.cos(angle) * speed;
       p.vy = Math.sin(angle) * speed;
-      p.lifeMax = rand(EXPLOSION_PS_LIFETIME_MIN, EXPLOSION_PS_LIFETIME_MAX);
+      p.lifeMax = rand(lifetimeMin, lifetimeMax);
       p.life = p.lifeMax;
       p.active = true;
       p.mesh.visible = true;
-      p.mat.color.copy(_colorStartExp);
+      p.colorStart = colorStart;
+      p.colorEnd   = colorEnd;
+      p.gravityScale = gravityScale;
+      p.mat.color.copy(startColor);
       p.mat.opacity = EXPLOSION_PS_OPACITY_START;
       p.mesh.scale.set(EXPLOSION_PS_SCALE_START, EXPLOSION_PS_SCALE_START, 1);
+      activated++;
     }
   }
 
   update(dt) {
     const dragMul = Math.exp(-EXPLOSION_PS_DRAG * dt);
-    const gPerStep = -GRAVITY * EXPLOSION_PS_GRAVITY_FACTOR * dt;
+    const baseGStep = -GRAVITY * EXPLOSION_PS_GRAVITY_FACTOR * dt;
     for (const p of this._pool) {
       if (!p.active) continue;
       p.life -= dt;
       if (p.life <= 0) {
         p.active = false;
         p.mesh.visible = false;
+        // Drop per-call overrides so the slot is clean for the next burst.
+        p.colorStart = null;
+        p.colorEnd = null;
+        p.gravityScale = 1;
         continue;
       }
-      p.vy += gPerStep;
+      p.vy += baseGStep * (p.gravityScale != null ? p.gravityScale : 1);
       p.vx *= dragMul;
       p.vy *= dragMul;
       p.mesh.position.x += p.vx * dt;
       p.mesh.position.y += p.vy * dt;
 
       const t = 1 - (p.life / p.lifeMax);
-      _scratchColor.copy(_colorStartExp).lerp(_colorEndExp, t);
+      const cs = p.colorStart || _colorStartExp;
+      const ce = p.colorEnd   || _colorEndExp;
+      _scratchColor.copy(cs).lerp(ce, t);
       p.mat.color.copy(_scratchColor);
       p.mat.opacity = EXPLOSION_PS_OPACITY_START + (EXPLOSION_PS_OPACITY_END - EXPLOSION_PS_OPACITY_START) * t;
       const s = EXPLOSION_PS_SCALE_START + (EXPLOSION_PS_SCALE_END - EXPLOSION_PS_SCALE_START) * t;
