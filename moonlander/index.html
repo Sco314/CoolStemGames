@@ -67,7 +67,7 @@
        top-down view of the playable area with every interactable +
        landmark + the parked lander + a live astronaut indicator.
        Hidden via CSS unless body.mode-walk is active. -->
-  <button id="map-btn" class="map-btn walk-only" aria-label="Open satellite map">
+  <button id="map-btn" class="map-btn map-btn-multimode" aria-label="Open satellite map / inventory">
     <span aria-hidden="true">🛰</span>
     <span class="map-btn-label">MAP</span>
   </button>
@@ -109,6 +109,23 @@
       <span><span class="dot dot-apollo"></span>Apollo</span>
     </div>
     <button id="btn-close-map" class="big">CLOSE</button>
+  </div>
+
+  <!-- Lander-mode inventory overlay. Opened by the same MAP corner button
+       when in lander mode (the satellite map only makes sense on the moon
+       surface). Tap a carry entry to stow it into the lander — fuel goes
+       to the tank, repair parts heal hull, etc. Mass leaves the lander as
+       items are stowed (the weight system in Constants.js is read by
+       LanderMode every frame). -->
+  <div id="inventory-overlay" class="overlay map-overlay" hidden>
+    <h2>LANDER INVENTORY</h2>
+    <p class="map-sub">Tap an item to stow it in the lander.</p>
+    <ul id="inventory-list"></ul>
+    <div class="inv-mass-row">
+      <span>EFFECTIVE THRUST</span>
+      <span id="inv-thrust-pct">100%</span>
+    </div>
+    <button id="btn-close-inventory" class="big">CLOSE</button>
   </div>
 
   <!-- The HUD overlay lives in the DOM, NOT in a Three.js scene.
@@ -208,8 +225,8 @@
       <li><kbd>W</kbd> <kbd>S</kbd> <span>forward / back</span></li>
       <li><kbd>A</kbd> <kbd>D</kbd> <span>strafe</span></li>
       <li><kbd>mouse</kbd> <span>turn astronaut + pitch camera</span></li>
-      <li><kbd>E</kbd> <span>interact / board lander</span></li>
-      <li class="touch-hint">On touch: joystick to move, <kbd>E</kbd> to interact</li>
+      <li><kbd>tap</kbd> / <kbd>E</kbd> <span>interact / board lander</span></li>
+      <li class="touch-hint">On touch: joystick to move, tap any item or the lander to interact</li>
     </ul>
     <h4>ON THE MOON</h4>
     <ul class="bullet">
@@ -217,7 +234,8 @@
       <li><span class="pill kit">SUPPLY CRATE</span> adds a repair kit.</li>
       <li><span class="pill sample">SAMPLE</span> +50 score, banks toward SAMPLE COLLECTOR.</li>
       <li><span class="pill damaged">DAMAGED PROBE</span> spends a kit, +500 score.</li>
-      <li>Walk to your lander and press <kbd>E</kbd> when you're done.</li>
+      <li>Walk to your lander and tap it (or press <kbd>E</kbd>) when you're done.</li>
+      <li>Tap a CARRY entry on the HUD to drop that item where you're standing.</li>
     </ul>
     <h4>ANYWHERE</h4>
     <ul class="controls">
