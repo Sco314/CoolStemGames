@@ -198,6 +198,12 @@ export const INTERACTABLE_TYPES = Object.freeze({
     prompt: 'PRESS E TO PICK UP REPAIR PART',
     color:  0x66ff88,
     hp:     25      // applied to GameState.lander.hp on stow at the lander
+  },
+  healthpack: {
+    label:  'HEALTH PACK',
+    prompt: 'PRESS E TO PICK UP HEALTH PACK',
+    color:  0xff66aa,
+    hp:     25      // applied immediately to GameState.astronaut.hp on pickup
   }
 });
 
@@ -238,6 +244,34 @@ export const APOLLO_SITES = [
     walkPos: [-90, -90],
     artifactScore: 350,
     comms: 'APOLLO 12 ARTIFACT COLLECTED — OCEAN OF STORMS'
+  },
+  {
+    id: 'apollo-14',
+    name: 'APOLLO 14 (FRA MAURO)',
+    walkPos: [120, 90],
+    artifactScore: 400,
+    comms: 'APOLLO 14 ARTIFACT COLLECTED — FRA MAURO HIGHLANDS'
+  },
+  {
+    id: 'apollo-15',
+    name: 'APOLLO 15 (HADLEY-APENNINE)',
+    walkPos: [-130, 100],
+    artifactScore: 450,
+    comms: 'APOLLO 15 ARTIFACT COLLECTED — HADLEY-APENNINE'
+  },
+  {
+    id: 'apollo-16',
+    name: 'APOLLO 16 (DESCARTES HIGHLANDS)',
+    walkPos: [80, -140],
+    artifactScore: 500,
+    comms: 'APOLLO 16 ARTIFACT COLLECTED — DESCARTES HIGHLANDS'
+  },
+  {
+    id: 'apollo-17',
+    name: 'APOLLO 17 (TAURUS-LITTROW)',
+    walkPos: [-150, -50],
+    artifactScore: 550,
+    comms: 'APOLLO 17 ARTIFACT COLLECTED — TAURUS-LITTROW VALLEY'
   }
 ];
 
@@ -396,6 +430,15 @@ export const HOT_SWAP_HIGH_FUEL     = 800;
 export const LANDER_MAX_HP        = 100;
 export const LANDER_CRASH_DAMAGE  = 25;     // hp lost per crash
 export const LANDER_REPAIR_PER_PART = 25;   // hp restored per repair part stowed
+
+// ---------- Astronaut HP (Batch 1) ----------
+// Walk-mode-only HP pool. No automatic damage source yet — habitats heal
+// you, health packs at Apollo sites top you up. Future batches add
+// drains (O₂ consumption, alien attacks). HP=0 doesn't end the run yet;
+// it just stops you from picking things up until you heal.
+export const ASTRO_MAX_HP         = 100;
+export const HABITAT_HEAL_AMOUNT  = 20;     // hp restored per habitat visit (one-shot per habitat)
+export const HEALTH_PACK_AMOUNT   = 25;     // hp restored per health-pack pickup
 
 // ---------- Mode identifiers ----------
 // Use strings so console logs and save files are human-readable.

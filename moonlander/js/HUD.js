@@ -20,6 +20,7 @@ const el = {
   time:    document.getElementById('hud-time'),
   fuel:    document.getElementById('hud-fuel'),
   hull:    document.getElementById('hud-hull'),
+  health:  document.getElementById('hud-health'),
   kits:    document.getElementById('hud-kits'),
   samples: document.getElementById('hud-samples'),
   carry:    document.getElementById('hud-carry'),
@@ -453,6 +454,12 @@ function onStateChange(state /*, changeKey */) {
     const hpFrac = state.lander.maxHp ? state.lander.hp / state.lander.maxHp : 0;
     const hullState = hpFrac <= 0.2 ? 'danger' : hpFrac <= 0.5 ? 'warn' : 'ok';
     setGaugeClass(el.hull, hullState);
+  }
+  if (el.health && state.astronaut) {
+    el.health.textContent = `${state.astronaut.hp | 0}/${state.astronaut.maxHp | 0}`;
+    const aFrac = state.astronaut.maxHp ? state.astronaut.hp / state.astronaut.maxHp : 0;
+    const healthState = aFrac <= 0.2 ? 'danger' : aFrac <= 0.5 ? 'warn' : 'ok';
+    setGaugeClass(el.health, healthState);
   }
   if (el.carryRow && el.carry) {
     const carry = state.carrying || [];

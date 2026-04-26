@@ -15,7 +15,7 @@
 
 import {
   STARTING_FUEL, MODE, OBJECTIVES, ACHIEVEMENTS, HIGH_SCORE_SLOTS,
-  LANDER_MAX_HP
+  LANDER_MAX_HP, ASTRO_MAX_HP
 } from './Constants.js';
 
 export const GameState = {
@@ -27,6 +27,7 @@ export const GameState = {
   fuel:     { current: STARTING_FUEL, capacity: STARTING_FUEL },
   supplies: { repairKits: 0, scienceSamples: 0 },
   lander:   { hp: LANDER_MAX_HP, maxHp: LANDER_MAX_HP, wrecked: false },
+  astronaut:{ hp: ASTRO_MAX_HP,  maxHp: ASTRO_MAX_HP },
   // Items the astronaut is carrying in walk mode but hasn't deposited at
   // the lander yet. Each entry: { type, amount }. Cleared on stow.
   carrying: [],
@@ -131,6 +132,7 @@ export function startNewRun() {
   GameState.supplies.repairKits = 0;
   GameState.supplies.scienceSamples = 0;
   GameState.lander = { hp: LANDER_MAX_HP, maxHp: LANDER_MAX_HP, wrecked: false };
+  GameState.astronaut = { hp: ASTRO_MAX_HP, maxHp: ASTRO_MAX_HP };
   GameState.carrying = [];
   GameState.score = 0;
   GameState.timeElapsed = 0;
