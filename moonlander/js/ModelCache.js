@@ -6,17 +6,19 @@
 // invariant so mode-exit disposal lists don't accidentally delete a cached
 // scene's geometry.
 //
-// Failure modes are explicitly graceful:
-//   - On Device.LOW_END the load is skipped entirely (rejects with
-//     'low-end'), so the caller's fallback path runs immediately.
-//   - On 404 / parse error the load also rejects; callers `.catch()` and
-//     fall back to procedural primitives. No console spam beyond a single
-//     warn per URL.
+// Failure modes are explicitly graceful: on 404 / parse error the load
+// rejects; callers `.catch()` and fall back to procedural primitives.
+// No console spam beyond a single warn per URL.
+//
+// Note: asset loading is NOT gated by `Device.LOW_END`. Our NASA GLBs
+// are 0.5-2.5 MB Draco-compressed each, a one-time cost that any
+// Chromebook can absorb. `LOW_END` still drives per-frame perf
+// adjustments (particle pool size, starfield/Earth skip), but
+// download/decode is unconditional.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { STLLoader }  from 'three/addons/loaders/STLLoader.js';
-import { LOW_END } from './Device.js';
 
 const _modelCache   = new Map(); // url → Promise<THREE.Object3D> (prototype)
 const _stlCache     = new Map(); // url → Promise<THREE.BufferGeometry>
@@ -31,11 +33,9 @@ function stl()  { return _stlLoader  || (_stlLoader  = new STLLoader()); }
 /**
  * Async-load a GLB/GLTF from `url`. Returns a fresh clone each call so the
  * caller can position/scale it independently. Console-warn (once) on
- * failure; skip outright on low-end devices.
+ * failure.
  */
 export function loadModel(url) {
-  if (LOW_END) return Promise.reject(new Error('low-end'));
-
   let proto = _modelCache.get(url);
   if (!proto) {
     proto = new Promise((resolve, reject) => {
@@ -70,8 +70,6 @@ export function loadModel(url) {
  * the same shared geometry each call (callers must not mutate vertices).
  */
 export function loadSTL(url) {
-  if (LOW_END) return Promise.reject(new Error('low-end'));
-
   let geomPromise = _stlCache.get(url);
   if (!geomPromise) {
     geomPromise = new Promise((resolve, reject) => {
@@ -104,7 +102,6 @@ export function loadSTL(url) {
  * applies its own MeshLambertMaterial.
  */
 export function loadTerrainGeometry(url) {
-  if (LOW_END) return Promise.reject(new Error('low-end'));
   if (/\.stl$/i.test(url)) return loadSTL(url);
 
   let geomPromise = _terrainCache.get(url);

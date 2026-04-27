@@ -402,8 +402,8 @@ export function apolloSiteForLevel(level) {
 // ---------- NASA 3D Resources model paths (Phase 8) ----------
 // Files live under moonlander/assets/nasa_models/. Source repo:
 //   https://github.com/nasa/NASA-3D-Resources/tree/11ebb4ee043715aefbba6aeec8a61746fad67fa7/3D%20Models
-// Code paths for each load are wrapped in try/catch + low-end skip, so
-// missing files degrade gracefully to procedural primitives.
+// Code paths for each load are wrapped in try/catch, so missing files
+// degrade gracefully to procedural primitives.
 //
 // Habitat note: NASA publishes the Demonstration Unit as TWO GLB files
 // ("part 1" and "part 2"). We expose them as separate `habitat1` /

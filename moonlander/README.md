@@ -162,13 +162,16 @@ memory budget. Key design choices that keep it light:
   CanvasTexture allocated in a mode's `enter()` is pushed to a list and
   cleaned up in `exit()`. Round-tripping lander↔walk dozens of times
   doesn't grow heap monotonically.
-- **`Device.LOW_END` profile.** Trips on Chromebook (CrOS UA), tight
-  RAM (`navigator.deviceMemory ≤ 4`), low core count (≤ 4), or any
-  touch device. When set:
+- **`Device.LOW_END` profile.** Trips on Chromebook (CrOS UA) or tight
+  RAM (`navigator.deviceMemory ≤ 4`). Touch and `hardwareConcurrency`
+  are NOT signals — both falsely tagged modern iPhones as low-end.
+  When set:
   - Particle pools shrink ~65 % and emit rate further drops 45 %.
-  - **All NASA model loads (`ModelCache`) are skipped** and the
-    procedural fallbacks render instead — no GLB/STL upload.
+  - Starfield panorama + Earth sphere skipped (per-tab GPU memory).
   - Walk-mode fog disabled by `Quality.onQualityChange`.
+  - NASA model loads (`ModelCache`) are NOT gated — they're a
+    one-time cost in the 0.5-2.5 MB range that any Chromebook
+    handles fine.
 - **Adaptive quality.** Rolling FPS sample over ~2 s; if average drops
   below 30, particle emit rate scales by 0.4 ×. If it recovers above
   55, full quality is restored.
