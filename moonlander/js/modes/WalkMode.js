@@ -69,7 +69,7 @@ let lastFootprintPos = null;   // THREE.Vector3 — last spot we dropped a print
 // NASA 3D Resources GLB integration. When the file is present + decoded
 // these references hold the swapped-in mesh; the procedural primitive
 // underneath is hidden but kept around as a fallback. `null` means we're
-// running on the procedural fallback (LOW_END device or missing file).
+// running on the procedural fallback (missing file or decode failure).
 let astronautModel = null;     // Mercury Spacesuit GLB scene
 let astronautProceduralVisible = true;
 let landerModel3D = null;      // Apollo Lunar Module GLB scene
@@ -1187,7 +1187,7 @@ function spawnInteractables() {
   }
 
   // Static landmarks (habitats + Atlas 6) — each tries to load its NASA
-  // GLB; on failure or LOW_END the placeholder primitive stays.
+  // GLB; on failure (404 / decode error) the placeholder primitive stays.
   for (const spec of LANDMARKS) {
     const [sx, sz] = spec.walkPos;
     const it = buildLandmark(spec, sx, sz);
