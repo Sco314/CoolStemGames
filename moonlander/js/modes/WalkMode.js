@@ -66,6 +66,17 @@ let footprints = [];           // pooled fading prints behind the astronaut
 let footprintCursor = 0;       // ring-buffer write index
 let lastFootprintPos = null;   // THREE.Vector3 — last spot we dropped a print
 
+// NASA terrain mesh tracking. When the GLB resolves and tiles are placed,
+// `terrainTiles` holds the per-tile Mesh refs and `groundHeight()` switches
+// from its sin-sum fallback to raycasting against these tiles so the
+// astronaut and every placed item end up on the actual NASA crater surface
+// instead of floating on the procedural plane underneath.
+let terrainTiles = [];
+let terrainActive = false;
+const _terrainRay     = new THREE.Raycaster();
+const _terrainRayDir  = new THREE.Vector3(0, -1, 0);
+const _terrainRayOrig = new THREE.Vector3();
+
 // NASA 3D Resources GLB integration. When the file is present + decoded
 // these references hold the swapped-in mesh; the procedural primitive
 // underneath is hidden but kept around as a fallback. `null` means we're
@@ -258,6 +269,8 @@ export const WalkMode = {
     landerModel = null;
     landerModel3D = null;
     interactables = [];
+    terrainTiles = [];
+    terrainActive = false;
     footprints = [];
     footprintCursor = 0;
     lastFootprintPos = null;
@@ -706,20 +719,83 @@ function updateChaseCamera() {
 // ---------- world build ----------
 
 function buildLighting() {
-  const ambient = new THREE.AmbientLight(0x404060, 0.6);
+  // Hemisphere light gives the lunar slab a sky-tinted top → ground-tinted
+  // underside gradient instead of pure black on faces that point away
+  // from the sun. Without it, the NASA terrain's vertical side walls (the
+  // 3D-printable thickness block) read as solid black slashes against
+  // the sky and look broken. Combined with a low directional sun for the
+  // crisp "moon" shadow direction.
+  const hemi = new THREE.HemisphereLight(0xa0a8c0, 0x303038, 0.6);
+  scene.add(hemi);
+  const ambient = new THREE.AmbientLight(0x404060, 0.35);
   scene.add(ambient);
   const sun = new THREE.DirectionalLight(0xffffff, 1.2);
   sun.position.set(50, 80, 30);
   scene.add(sun);
 }
 
-/** Deterministic sin-sum heightmap — shared by buildGround() and ground-follow. */
-function groundHeight(x, z) {
+/**
+ * Sample the NASA terrain mesh's top surface Y at (x, z) by casting a
+ * downward ray. Returns null if no tile covers (x, z) — caller falls
+ * back to the procedural sin-sum.
+ */
+function terrainHeightAt(x, z) {
+  if (!terrainActive || terrainTiles.length === 0) return null;
+  _terrainRayOrig.set(x, 1000, z);
+  _terrainRay.set(_terrainRayOrig, _terrainRayDir);
+  _terrainRay.far = 2000;
+  const hits = _terrainRay.intersectObjects(terrainTiles, false);
+  return hits.length ? hits[0].point.y : null;
+}
+
+/** Deterministic sin-sum heightmap. The shape of the procedural plane
+ *  underneath the NASA tiles, and the fallback for any (x, z) the NASA
+ *  tiles don't cover. Pure function — no scene state.
+ */
+function proceduralGround(x, z) {
   const a = Math.sin(x * 0.08) * 1.2;
   const b = Math.cos(z * 0.06) * 1.0;
   const c = Math.sin((x + z) * 0.045) * 0.6;
   const d = Math.sin(x * 0.19 - z * 0.13) * 0.4;
   return (a + b + c + d) * (WALK_GROUND_AMPLITUDE / 3.2);
+}
+
+/**
+ * Ground height at (x, z). When the NASA terrain GLB is loaded and (x, z)
+ * is inside one of its tiles, returns the actual mesh top — astronaut
+ * walks on the cratered surface and items rest on it. Otherwise returns
+ * the procedural sin-sum (also the shape of the plane underneath).
+ */
+function groundHeight(x, z) {
+  const t = terrainHeightAt(x, z);
+  return t !== null ? t : proceduralGround(x, z);
+}
+
+/**
+ * After the NASA terrain finishes loading, every item placed before that
+ * point — lander sprite, lander GLB if it landed first, every loot crate
+ * and landmark — is sitting on the procedural sin-sum surface, which is
+ * now buried under the NASA crater terrain. Walk those items and shift
+ * each by the per-(x, z) delta so they end up on the new top surface.
+ *
+ * The astronaut updates per-frame from `groundHeight()` directly, so it
+ * self-corrects without a re-snap pass. Footprints + breadcrumb rings
+ * already laid down stay where they are — they're tiny decals that will
+ * read as "dust on the surface" even if they're a tenth of a unit off.
+ */
+function resnapWorldToTerrain() {
+  const shift = (obj3d) => {
+    if (!obj3d) return;
+    const x = obj3d.position.x;
+    const z = obj3d.position.z;
+    const delta = groundHeight(x, z) - proceduralGround(x, z);
+    if (delta !== 0) obj3d.position.y += delta;
+  };
+  shift(landerModel);
+  shift(landerModel3D);
+  for (const it of interactables) {
+    if (it && it.object3d) shift(it.object3d);
+  }
 }
 
 function buildGround() {
@@ -809,9 +885,15 @@ function buildGround() {
           groundHeight(tx, tz) - TERRAIN_TILE_SINK,
           tz - tcz
         );
+        tile.updateMatrixWorld(true);
         scene.add(tile);
+        terrainTiles.push(tile);
       }
-      console.log(`[WalkMode] Apollo 11 terrain tiles active (${TERRAIN_TILE_POSITIONS.length})`);
+      // Activate the raycast-based heightmap so groundHeight() now reads
+      // from the actual NASA crater surface for any (x, z) the tiles cover.
+      terrainActive = true;
+      resnapWorldToTerrain();
+      console.log(`[WalkMode] Apollo 11 terrain tiles active (${TERRAIN_TILE_POSITIONS.length}) — heightmap engaged`);
       // Note: STL geometry is owned by ModelCache (shared by every tile)
       // and is NOT pushed to disposables — exit() leaves it in the cache.
     })
