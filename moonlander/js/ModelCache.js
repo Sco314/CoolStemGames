@@ -15,19 +15,48 @@
 // Chromebook can absorb. `LOW_END` still drives per-frame perf
 // adjustments (particle pool size, starfield/Earth skip), but
 // download/decode is unconditional.
+//
+// Draco decode: every NASA GLB declares `KHR_draco_mesh_compression`
+// in `extensionsRequired`, so GLTFLoader needs a DRACOLoader wired in
+// or it hard-fails with "No DRACOLoader instance provided". The WASM
+// decoder + JS wrapper are vendored at `assets/draco/` (~250 KB)
+// rather than fetched from a CDN — no external runtime dep, works
+// offline.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { STLLoader }  from 'three/addons/loaders/STLLoader.js';
+import { GLTFLoader }  from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { STLLoader }   from 'three/addons/loaders/STLLoader.js';
+
+const DRACO_DECODER_PATH = 'assets/draco/';
 
 const _modelCache   = new Map(); // url → Promise<THREE.Object3D> (prototype)
 const _stlCache     = new Map(); // url → Promise<THREE.BufferGeometry>
 const _terrainCache = new Map(); // url → Promise<THREE.BufferGeometry> (.glb terrain)
 
-let _gltfLoader = null;
-let _stlLoader = null;
+let _gltfLoader  = null;
+let _dracoLoader = null;
+let _stlLoader   = null;
 
-function gltf() { return _gltfLoader || (_gltfLoader = new GLTFLoader()); }
+function draco() {
+  if (!_dracoLoader) {
+    _dracoLoader = new DRACOLoader();
+    _dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
+    // 'js' picks the JS-only fallback; we ship the WASM wrapper +
+    // wasm binary, so leave the default decoder type (auto-prefers
+    // WASM and falls back internally).
+  }
+  return _dracoLoader;
+}
+
+function gltf() {
+  if (!_gltfLoader) {
+    _gltfLoader = new GLTFLoader();
+    _gltfLoader.setDRACOLoader(draco());
+  }
+  return _gltfLoader;
+}
+
 function stl()  { return _stlLoader  || (_stlLoader  = new STLLoader()); }
 
 /**
