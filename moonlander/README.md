@@ -181,7 +181,9 @@ memory budget. Key design choices that keep it light:
 - **Draco-compressed terrain.** Landing-site GLBs are 5-10× smaller on
   the wire than the source STLs (~1 MB vs ~7 MB). The loader prefers
   the GLB and falls back to the STL when missing — see
-  `docs/asset-pipeline.md`.
+  `docs/asset-pipeline.md`. The Draco WASM decoder is vendored at
+  `assets/draco/` (~250 KB) so decoding works offline / without an
+  external CDN.
 - **Footprint pool capped at 200** prints, ring-buffered by oldest.
   ~few hundred KB total.
 
