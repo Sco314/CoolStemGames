@@ -670,6 +670,48 @@ export const ASTRO_MAX_HP         = 100;
 export const HABITAT_HEAL_AMOUNT  = 20;     // hp restored per habitat visit (one-shot per habitat)
 export const HEALTH_PACK_AMOUNT   = 25;     // hp restored per health-pack pickup
 
+// ---------- Input bindings (Batch 6 — input/UX audit) ----------
+// One source of truth for what keys map to what action. Modes call
+// `Input.isAnyDown(BINDINGS.WALK_FORWARD)` etc. instead of querying raw
+// keys directly, so adding/removing alternate keys is a one-line change
+// here.
+//
+// Values use the same identifiers `KeyboardEvent.key` produces on a US
+// layout: single chars for letters (' ' = Space), and the standard
+// browser names for arrows/Escape. Touch buttons inject these same key
+// strings via `Input.setSyntheticKey()` so a thumb-tap and a real key
+// press feed identical state.
+//
+// Note on Space: the spec allows Space as a SECONDARY interact key in
+// walk mode because the game has no jump mechanic. If/when jump lands,
+// Space should move out of WALK_ACTION and into a JUMP binding.
+export const BINDINGS = Object.freeze({
+  WALK_FORWARD:        ['w', 'W', 'ArrowUp'],
+  WALK_BACKWARD:       ['s', 'S', 'ArrowDown'],
+  WALK_LEFT:           ['a', 'A', 'ArrowLeft'],
+  WALK_RIGHT:          ['d', 'D', 'ArrowRight'],
+  WALK_ACTION:         ['e', 'E', ' '],          // primary interact + secondary (Space)
+  WALK_DROP:           ['q', 'Q', 'g', 'G'],
+  WALK_RESET_CAMERA:   ['c', 'C'],
+  MAP:                 ['m', 'M'],
+  INVENTORY:           ['i', 'I', 'b', 'B'],
+  PAUSE:               ['Escape'],
+  LANDER_THRUST:       ['w', 'W', 'ArrowUp', ' '],
+  LANDER_ROTATE_LEFT:  ['a', 'A', 'ArrowLeft'],
+  LANDER_ROTATE_RIGHT: ['d', 'D', 'ArrowRight']
+});
+
+// Keys for which we suppress the browser's default behavior (page scroll
+// on Space + arrows, focus-shift on Tab) when the game canvas is the
+// active focus target. Consumers of the global keydown listener check
+// the active element and skip preventDefault() for input/textarea/form
+// fields so settings sliders, math-challenge answer fields, and the
+// name-entry overlay still accept normal keystrokes.
+export const PREVENT_DEFAULT_KEYS = Object.freeze(new Set([
+  ' ',           // Space — would scroll the page in lander mode
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'
+]));
+
 // ---------- Mode identifiers ----------
 // Use strings so console logs and save files are human-readable.
 export const MODE = Object.freeze({

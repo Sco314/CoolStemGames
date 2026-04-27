@@ -9,7 +9,10 @@
 //   body.mode-walk   → walk joystick visible
 // Other modes: controls hidden.
 
-import { setSyntheticKey } from './Input.js';
+import { setSyntheticKey, Input } from './Input.js';
+
+/** Mark touch as the active input device for adaptive prompts. */
+function flagTouch() { Input.noteInputType('touch'); }
 
 const TOUCH_SUPPORTED = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
@@ -32,8 +35,17 @@ export function initTouchControls() {
 function bindHoldButton(id, key) {
   const el = document.getElementById(id);
   if (!el) return;
-  const press = (e) => { e.preventDefault(); setSyntheticKey(key, true); el.classList.add('pressed'); };
-  const release = (e) => { e.preventDefault(); setSyntheticKey(key, false); el.classList.remove('pressed'); };
+  const press = (e) => {
+    e.preventDefault();
+    flagTouch();
+    setSyntheticKey(key, true);
+    el.classList.add('pressed');
+  };
+  const release = (e) => {
+    e.preventDefault();
+    setSyntheticKey(key, false);
+    el.classList.remove('pressed');
+  };
   el.addEventListener('touchstart', press, { passive: false });
   el.addEventListener('touchend',   release);
   el.addEventListener('touchcancel', release);
@@ -48,6 +60,7 @@ function bindTapButton(id, key) {
   if (!el) return;
   const tap = (e) => {
     e.preventDefault();
+    flagTouch();
     setSyntheticKey(key, true);
     setTimeout(() => setSyntheticKey(key, false), 50);
     el.classList.add('pressed');
@@ -85,6 +98,7 @@ function bindJoystick() {
 
   const start = (e) => {
     if (activeId !== null) return;
+    flagTouch();
     const t = e.touches ? e.touches[0] : e;
     activeId = t.identifier ?? 'mouse';
     const rect = pad.getBoundingClientRect();

@@ -397,7 +397,7 @@ export function setLadderProviders({ climb, descend } = {}) {
  * overlay. Otherwise rejects with a comms blip telling the player where
  * to go. Direct showMap() callers (e.g. tests) skip the gate.
  */
-function requestOpenMap() {
+export function requestOpenMap() {
   if (!mapDataProvider) return;
   const data = mapDataProvider();
   if (!data) return;

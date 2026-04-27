@@ -31,7 +31,7 @@ import {
   LANDER_BEACON_RADIUS, LANDER_BEACON_OPACITY,
   CARGO_REMINDER_INTERVAL_S, CARGO_REMINDER_MIN_DIST,
   LOW_FUEL_RETURN_FRAC,
-  MODE
+  MODE, BINDINGS
 } from '../Constants.js';
 import {
   GameState, update as updateState, notify, refreshObjectives,
@@ -89,7 +89,14 @@ let onReturnToLanderCallback = null;
 // Camera-orbit state — yaw also rotates the astronaut (strict chase cam).
 let yawRad = 0;
 let pitchRad = 0.55;
-let pointerLocked = false;
+// Drag-orbit state. The default camera is press-and-drag like Roblox /
+// most third-person browser games — no pointer lock required, no Esc
+// dance to recover the cursor. `mouseOrbiting` flips on mousedown and
+// off on mouseup / mouseleave / blur. Pointer-lock state is gone; we
+// keep the variable name only because legacy tests occasionally peek at
+// it (always false now).
+let mouseOrbiting = false;
+const pointerLocked = false;
 let walkPhase = 0;             // drives the leg/arm cycle
 
 // Phase-5 scripted disembark/embark animation state. While non-null, player
@@ -103,7 +110,9 @@ let alien = null;
 
 // Mouse-move handler bound in enter(), unbound in exit().
 let onMouseMove = null;
-let onPointerLockChange = null;
+let onMouseDown = null;
+let onMouseUp = null;
+let onMouseLeave = null;
 let onCanvasClick = null;
 let onCanvasTouchStart = null;
 let onCanvasTouchMove = null;
@@ -274,7 +283,7 @@ export const WalkMode = {
     footprints = [];
     footprintCursor = 0;
     lastFootprintPos = null;
-    pointerLocked = false;
+    mouseOrbiting = false;
     scripted = null;
   },
 
@@ -323,19 +332,20 @@ export const WalkMode = {
     const fwdZ = -Math.cos(yawRad);
 
     let moveSign = 0;
-    if (Input.isDown('w') || Input.isDown('W')) moveSign += 1;
-    if (Input.isDown('s') || Input.isDown('S')) moveSign -= 1;
+    if (Input.isAnyDown(BINDINGS.WALK_FORWARD))  moveSign += 1;
+    if (Input.isAnyDown(BINDINGS.WALK_BACKWARD)) moveSign -= 1;
     if (moveSign !== 0) {
       astronaut.position.x += fwdX * WALK_SPEED * dt * moveSign;
       astronaut.position.z += fwdZ * WALK_SPEED * dt * moveSign;
     }
 
-    // Strafe with A/D — works whether or not the pointer is locked. Mouse X
-    // handles turning (when locked); the player will see "CLICK TO LOOK
-    // AROUND" until they engage pointer lock.
+    // Strafe — works regardless of camera-orbit state. Camera turning is
+    // press-and-drag (no pointer lock by default) so the cursor stays
+    // free for HUD use; strafe + forward let the player explore without
+    // ever needing to drag.
     let strafeSign = 0;
-    if (Input.isDown('a') || Input.isDown('A')) strafeSign -= 1;
-    if (Input.isDown('d') || Input.isDown('D')) strafeSign += 1;
+    if (Input.isAnyDown(BINDINGS.WALK_LEFT))  strafeSign -= 1;
+    if (Input.isAnyDown(BINDINGS.WALK_RIGHT)) strafeSign += 1;
     if (strafeSign !== 0) {
       const rightX = -fwdZ, rightZ = fwdX;
       astronaut.position.x += rightX * WALK_SPEED * dt * strafeSign;
@@ -374,8 +384,20 @@ export const WalkMode = {
     }
 
     // --- interaction: pick the closest in-range interactable, fall back to
-    // the parked lander if none is near. Prompts and E-key are handled here. ---
-    const ePressed = Input.wasPressed('e') || Input.wasPressed('E');
+    // the parked lander if none is near. Prompts and the E/Space-key are
+    // handled here. Space is allowed as a SECONDARY interact key per the
+    // input spec because the game has no jump mechanic; if jump lands
+    // later, move Space out of WALK_ACTION into a JUMP binding. ---
+    const ePressed = Input.wasAnyPressed(BINDINGS.WALK_ACTION);
+    const cPressed = Input.wasAnyPressed(BINDINGS.WALK_RESET_CAMERA);
+    const dropPressed = Input.wasAnyPressed(BINDINGS.WALK_DROP);
+    if (cPressed) { yawRad = 0; pitchRad = 0.55; }   // snap behind astronaut
+    if (dropPressed && GameState.carrying.length > 0) {
+      // Drop the most-recently-stowed item at current foot position. The
+      // carry inventory is LIFO, so the latest entry is the easiest to
+      // reason about for the player.
+      dropCarryItem(GameState.carrying.length - 1);
+    }
     const closest = pickClosestInteractable();
     if (closest) {
       setCenterMessage(promptFor(closest));
@@ -598,25 +620,35 @@ function updateReturnToLanderSignposting() {
 }
 
 function bindMouse() {
+  // Drag-to-orbit camera (Roblox-style third-person). Press the canvas,
+  // drag to look around, release to stop. No pointer lock, no Esc dance.
+  // The cursor stays visible the whole time and the player can move it
+  // off-canvas at any moment to use the HUD / overlays.
+  onMouseDown = (e) => {
+    if (e.button !== 0) return;          // only left-button starts orbit
+    if (scripted) return;
+    mouseOrbiting = true;
+    canvasEl.classList.add('orbiting');  // CSS hides the cursor while held
+  };
   onMouseMove = (e) => {
-    if (!pointerLocked || scripted) return;
+    if (!mouseOrbiting || scripted) return;
     const pitchSign = GameState.settings?.invertY ? -1 : 1;
+    // movementX/Y are populated for any captured mouse move regardless
+    // of pointer-lock state — drag deltas come through the same way.
     yawRad   -= e.movementX * WALK_MOUSE_SENSITIVITY;
     pitchRad += e.movementY * WALK_MOUSE_SENSITIVITY * pitchSign;
     if (pitchRad < WALK_PITCH_MIN) pitchRad = WALK_PITCH_MIN;
     if (pitchRad > WALK_PITCH_MAX) pitchRad = WALK_PITCH_MAX;
   };
-  onPointerLockChange = () => {
-    pointerLocked = document.pointerLockElement === canvasEl;
+  onMouseUp = () => {
+    if (!mouseOrbiting) return;
+    mouseOrbiting = false;
+    canvasEl.classList.remove('orbiting');
   };
-  onCanvasClick = () => {
-    // Skip pointer-lock requests on touch devices — they get screen-swipe
-    // controls instead, and a synthetic click after touchend would otherwise
-    // trip the lock dialog.
-    if (touchActiveId !== null) return;
-    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
-    if (!pointerLocked) canvasEl.requestPointerLock?.();
-  };
+  // Cursor leaving the canvas (or window blur) immediately ends orbit so
+  // the player never gets a "stuck spin" after switching apps mid-drag.
+  onMouseLeave = () => onMouseUp();
+  onCanvasClick = null;   // legacy pointer-lock click handler retired
 
   // ----- Mobile touch handlers (canvas only) -----
   // Drag → camera/astronaut yaw + pitch. Tap → tap-to-interact.
@@ -668,9 +700,11 @@ function bindMouse() {
     }
   };
 
-  window.addEventListener('mousemove', onMouseMove);
-  document.addEventListener('pointerlockchange', onPointerLockChange);
-  canvasEl.addEventListener('click', onCanvasClick);
+  canvasEl.addEventListener('mousedown',  onMouseDown);
+  window.addEventListener('mousemove',    onMouseMove);
+  window.addEventListener('mouseup',      onMouseUp);
+  canvasEl.addEventListener('mouseleave', onMouseLeave);
+  window.addEventListener('blur',         onMouseLeave);
   canvasEl.addEventListener('touchstart',  onCanvasTouchStart, { passive: true });
   canvasEl.addEventListener('touchmove',   onCanvasTouchMove,  { passive: false });
   canvasEl.addEventListener('touchend',    onCanvasTouchEnd);
@@ -678,15 +712,18 @@ function bindMouse() {
 }
 
 function unbindMouse() {
-  if (onMouseMove) window.removeEventListener('mousemove', onMouseMove);
-  if (onPointerLockChange) document.removeEventListener('pointerlockchange', onPointerLockChange);
-  if (onCanvasClick && canvasEl) canvasEl.removeEventListener('click', onCanvasClick);
+  if (canvasEl && onMouseDown)  canvasEl.removeEventListener('mousedown',  onMouseDown);
+  if (onMouseMove)              window.removeEventListener('mousemove',    onMouseMove);
+  if (onMouseUp)                window.removeEventListener('mouseup',      onMouseUp);
+  if (canvasEl && onMouseLeave) canvasEl.removeEventListener('mouseleave', onMouseLeave);
+  if (onMouseLeave)             window.removeEventListener('blur',         onMouseLeave);
   if (canvasEl) {
     if (onCanvasTouchStart)  canvasEl.removeEventListener('touchstart',  onCanvasTouchStart);
     if (onCanvasTouchMove)   canvasEl.removeEventListener('touchmove',   onCanvasTouchMove);
     if (onCanvasTouchEnd)    canvasEl.removeEventListener('touchend',    onCanvasTouchEnd);
     if (onCanvasTouchEnd)    canvasEl.removeEventListener('touchcancel', onCanvasTouchEnd);
   }
+  mouseOrbiting = false;
   onMouseMove = onPointerLockChange = onCanvasClick = null;
   onCanvasTouchStart = onCanvasTouchMove = onCanvasTouchEnd = null;
   touchActiveId = null;
