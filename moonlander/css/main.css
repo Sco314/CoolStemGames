@@ -10,7 +10,12 @@ html, body {
   font-family: "VT323", "Courier New", Courier, monospace;
 }
 
-canvas { display: block; }
+canvas { display: block; touch-action: none; }
+/* `.orbiting` toggles while the player drag-orbits the third-person camera
+ * (added/removed by WalkMode's mousedown/mouseup handlers). Hides the
+ * cursor so the drag feels like a "look-around" instead of accidental
+ * text selection. The cursor returns the moment the button releases. */
+canvas.orbiting { cursor: none; }
 
 /* Cinematic transition chrome. Letterbox bars slide in from off-screen; the
  * fade overlay's opacity is driven imperatively each frame by TransitionMode. */
@@ -651,6 +656,9 @@ body.mode-walk #hud-objectives.walk-only { display: block; }
   z-index: 45;
   display: none;
   pointer-events: none;       /* children opt in */
+  touch-action: none;         /* don't let browser eat our touches as scroll */
+  user-select: none;
+  -webkit-user-select: none;
 }
 body.touch.mode-lander #touch-lander { display: flex; left: 0; right: 0; justify-content: space-between; padding: 0 14px; }
 body.touch.mode-walk   #touch-walk   { display: flex; left: 0; right: 0; justify-content: space-between; padding: 0 14px; align-items: flex-end; }

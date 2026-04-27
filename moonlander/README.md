@@ -76,25 +76,34 @@ Tracked in detail in `docs/rev2plan.md`. Highlights still open:
 
 **Lander (2D side view)**
 
-- `↑` thrust · `←` `→` rotate
+- `W` / `↑` / `Space` thrust · `A` `D` / `←` `→` rotate
 - Touch down softly on any flat pad with both feet on the pad
 - Bonus pads (`X2` / `X3` / `X5`) multiply the landing score
 - Hitting terrain at speed, at an angle, or half-off a pad — that's a crash
 
 **Walk (3D third-person)**
 
-- Click the canvas to engage pointer lock
-- Mouse turns the astronaut and orbits the camera pitch
-- `W` `S` walk forward / back · `A` `D` strafe · `E` interact
+- `W` `A` `S` `D` or arrow keys to walk + strafe
+- Drag mouse / trackpad to look around — release to stop. No pointer lock,
+  no Esc dance: cursor stays free for HUD use.
+- `E` or `Space` to interact / pick up / board the lander
+- `Q` or `G` to drop the most-recently-carried item
+- `M` opens the map · `C` resets camera behind astronaut
 - Pick up fuel drums, supply crates (repair kits), science samples; if you
   have a kit, repair the damaged probe for a big score
 - Walk up to the parked lander and press `E` to return to lander mode
 
 **Menus / global**
 
-- `Esc` toggles the settings overlay (master volume, invert-Y, fullscreen)
+- `Esc` priority: close the topmost open overlay (map / inventory /
+  settings) first; otherwise opens the settings overlay (master volume,
+  invert-Y, fullscreen)
+- `M` toggles the map (walk mode) or the inventory (lander mode)
+- `I` / `B` opens inventory in lander mode
 - Tab/Enter navigates menu buttons
-- Touch devices get on-screen controls automatically
+- Touch devices get on-screen controls automatically; the HUD adapts the
+  prompt text based on the most recently used input device (keyboard /
+  trackpad / touch)
 - Top-left **STEM** button opens a math challenge (O₂, fuel, fall-speed,
   walk-time); 3 attempts per session
 

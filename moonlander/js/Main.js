@@ -17,20 +17,22 @@
 //           fuel-zero crash, settings toggle on Escape.
 
 import * as THREE from 'three';
-import { MODE, GAME_WIDTH, GAME_HEIGHT } from './Constants.js';
+import { MODE, GAME_WIDTH, GAME_HEIGHT, BINDINGS } from './Constants.js';
 import {
   GameState, notify,
   startNewRun, commitRunToHighScores,
   load as loadSave
 } from './GameState.js';
-import { initInput } from './Input.js';
+import { initInput, Input } from './Input.js';
 import { initSound } from './Sound.js';
 import {
   initHUD, renderFrame as renderHUDFrame,
   showMainMenu, hideMainMenu,
   showGameOver, hideGameOver,
   showSettings, hideSettings, isSettingsOpen,
-  toggleMute
+  toggleMute,
+  requestOpenMap, hideMap, isMapOpen,
+  showInventory, hideInventory, isInventoryOpen
 } from './HUD.js';
 import { LanderMode }     from './modes/LanderMode.js';
 import { WalkMode }       from './modes/WalkMode.js';
@@ -110,6 +112,11 @@ function animate() {
   lastFrameTime = now;
 
   sampleFps(dt);
+
+  // Global hotkeys polled once per frame so they work in any mode
+  // without each mode re-implementing them. Only reads edge-triggered
+  // state (`wasAnyPressed`), so a held key fires once.
+  pollGlobalHotkeys();
 
   if (GameState.mode !== MODE.PAUSED && currentMode) {
     if (GameState.mode === MODE.LANDER || GameState.mode === MODE.WALK || GameState.mode === MODE.TRANSITION) {
@@ -302,19 +309,48 @@ function handleReturnToLander() {
 
 // ---------- keyboard routing ----------
 function onGlobalKey(e) {
+  // Escape priority (input spec §Esc behavior):
+  //   1. If a modal overlay is open, close the topmost.
+  //   2. Otherwise toggle settings (paused) — but skip during transitions
+  //      so we don't leave a cinematic camera half-lerped.
+  // Map (M) and inventory (I/B) are polled in pollGlobalHotkeys() during
+  // the animation loop, not here, so they edge-trigger via Input.* and
+  // don't fire while typing in form inputs.
   if (e.key === 'Escape') {
-    // Escape toggles the settings overlay. Only allow opening outside of
-    // transitions/cinematics to avoid leaving cameras half-lerped.
+    if (isMapOpen())              { hideMap();       return; }
+    if (isInventoryOpen())        { hideInventory(); return; }
     const transitioning = GameState.mode === MODE.TRANSITION;
     if (isSettingsOpen()) {
       hideSettings();
     } else if (!transitioning) {
       showSettings({ onClose: hideSettings, onLunarCheat: triggerLunarCheat });
     }
-  } else if (e.key === 'm' || e.key === 'M') {
-    // Mute toggle — the corner button is unreachable while pointer-locked
-    // in walk mode, so keep a keyboard shortcut available everywhere.
-    toggleMute();
+  }
+}
+
+/**
+ * Edge-triggered hotkeys polled every animate() frame. Routes through
+ * Input.wasAnyPressed so the same dispatch table covers physical keys,
+ * synthetic keys from Touch.js, and any future gamepad mapping. Skipped
+ * during transitions and when the active overlay would consume the key.
+ */
+function pollGlobalHotkeys() {
+  if (GameState.mode === MODE.TRANSITION) return;
+  // M opens the map in walk mode (or the inventory in lander mode — the
+  // map button is mode-aware). Same single-keystroke dispatch the corner
+  // button uses, so the behavior matches across keyboard / touch.
+  if (Input.wasAnyPressed(BINDINGS.MAP)) {
+    if (isMapOpen())             { hideMap(); }
+    else if (isInventoryOpen())  { hideInventory(); }
+    else if (GameState.mode === MODE.LANDER) showInventory();
+    else if (GameState.mode === MODE.WALK)   requestOpenMap();
+  }
+  // I or B explicitly opens the inventory. In walk mode there isn't a
+  // walk-only inventory overlay — the map already shows carrying state —
+  // so I/B is a no-op outside lander mode for now.
+  if (Input.wasAnyPressed(BINDINGS.INVENTORY)) {
+    if (isInventoryOpen()) { hideInventory(); }
+    else if (GameState.mode === MODE.LANDER) showInventory();
   }
 }
 

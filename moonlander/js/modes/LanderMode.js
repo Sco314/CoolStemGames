@@ -36,7 +36,7 @@ import {
   SCRAPE_PARTICLE_COUNT, SCRAPE_COLOR_START, SCRAPE_COLOR_END,
   SCRAPE_SPEED_MIN, SCRAPE_SPEED_MAX,
   SCRAPE_LIFETIME_MIN, SCRAPE_LIFETIME_MAX, SCRAPE_GRAVITY, SCRAPE_COOLDOWN_S,
-  ORTHO_NEAR, ORTHO_FAR, MODE
+  ORTHO_NEAR, ORTHO_FAR, MODE, BINDINGS
 } from '../Constants.js';
 import { GameState, update as updateState, notify, unlockAchievement } from '../GameState.js';
 import { Input } from '../Input.js';
@@ -216,12 +216,16 @@ export const LanderMode = {
     }
 
     // --- rotation ---
-    if (Input.isDown('ArrowLeft'))  lander.rotation.z += ANGULAR_VELOCITY * dt;
-    if (Input.isDown('ArrowRight')) lander.rotation.z -= ANGULAR_VELOCITY * dt;
+    if (Input.isAnyDown(BINDINGS.LANDER_ROTATE_LEFT))  lander.rotation.z += ANGULAR_VELOCITY * dt;
+    if (Input.isAnyDown(BINDINGS.LANDER_ROTATE_RIGHT)) lander.rotation.z -= ANGULAR_VELOCITY * dt;
     lander.rotation.z = Math.max(-Math.PI/2, Math.min(Math.PI/2, lander.rotation.z));
 
     // --- thrust (jerk-based, per tblazevic) ---
-    const wantThrust = Input.isDown('ArrowUp') && GameState.fuel.current > 0;
+    // BINDINGS.LANDER_THRUST covers W, ArrowUp, and Space — all three are
+    // valid thrust inputs in 2D mode. Space is thrust-only here (it does
+    // NOT interact); walk mode is where Space doubles as a secondary
+    // interact key.
+    const wantThrust = Input.isAnyDown(BINDINGS.LANDER_THRUST) && GameState.fuel.current > 0;
     if (wantThrust) {
       currentAcceleration = Math.min(
         THRUSTER_ACCEL_MAX,
