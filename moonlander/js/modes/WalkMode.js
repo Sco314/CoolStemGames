@@ -31,7 +31,8 @@ import {
   LANDER_BEACON_RADIUS, LANDER_BEACON_OPACITY,
   CARGO_REMINDER_INTERVAL_S, CARGO_REMINDER_MIN_DIST,
   LOW_FUEL_RETURN_FRAC,
-  MODE, BINDINGS
+  MODE, BINDINGS,
+  APOLLO_LM_SIZE_WU, SPACESUIT_SIZE_WU
 } from '../Constants.js';
 import {
   GameState, update as updateState, notify, refreshObjectives,
@@ -1154,7 +1155,7 @@ function buildAstronaut() {
   loadModel(MODEL_PATHS.spacesuit)
     .then(model => {
       if (!astronaut) return;             // mode already exited
-      placeOnGround(model, 0, 0, 0, 3.2);
+      placeOnGround(model, 0, 0, 0, SPACESUIT_SIZE_WU);
       astronaut.add(model);
       astronautModel = model;
       // Hide every procedural mesh under the astronaut group (helmet,
@@ -1201,7 +1202,11 @@ function buildParkedLander() {
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
-  const size = LANDER_SCALE * 0.8;
+  // Anchor the sprite placeholder to the real-world LM size (9.4 m
+  // footpad span ≈ 14.98 wu) so the brief moment the sprite is visible
+  // before the GLB resolves matches what the player will see afterwards.
+  // Was `LANDER_SCALE * 0.8` (25.6 wu) — about 67 % too big at our scale.
+  const size = APOLLO_LM_SIZE_WU;
   landerModel = new THREE.Sprite(mat);
   landerModel.scale.set(size, size, 1);
   const lx = 0, lz = 0;
@@ -1215,7 +1220,9 @@ function buildParkedLander() {
     .then(model => {
       if (!scene) return;                 // mode already exited
       landerModel3D = model;
-      placeOnGround(model, lx, lz, groundHeight(lx, lz), LANDER_SCALE * 0.7);
+      // 9.4 m footpad span = APOLLO_LM_SIZE_WU. Was `LANDER_SCALE * 0.7`
+      // (22.4 wu, ~50 % oversized vs astronaut).
+      placeOnGround(model, lx, lz, groundHeight(lx, lz), APOLLO_LM_SIZE_WU);
       scene.add(model);
       // Hide the placeholder sprite. Keep landerModel as the proximity
       // anchor so existing distance checks (boarding, breadcrumb origin)
