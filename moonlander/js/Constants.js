@@ -339,6 +339,14 @@ export const BEGINNER_PAD_TOLERANCE = 2;  // world units
 // landable) are filtered out so they don't get multiplier labels.
 export const MIN_PAD_WIDTH = 10;
 
+// ---- Debug toggles ----------------------------------------------------
+// Set to true to skip loading the NASA Apollo .glb / .stl terrain meshes
+// and run with the procedural sin-sum plane as the only ground visual.
+// Used for A/B comparing the math-generated lunar surface against the
+// NASA cladding. The procedural plane is always built either way — see
+// WalkMode.buildGround. Flip back to false to restore NASA cladding.
+export const SKIP_NASA_TERRAIN = true;
+
 // Apollo landing sites placed in walk mode at fixed positions. Each entry
 // also drops a `part` (repair-part) interactable next to its landmark when
 // the site is the current level's destination. Add 14/15/16/17 here and
