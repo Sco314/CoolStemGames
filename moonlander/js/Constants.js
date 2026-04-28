@@ -345,12 +345,21 @@ export const MIN_PAD_WIDTH = 10;
 // Used for A/B comparing the math-generated lunar surface against the
 // NASA cladding. The procedural plane is always built either way — see
 // WalkMode.buildGround. Flip back to false to restore NASA cladding.
-export const SKIP_NASA_TERRAIN = true;
+export const SKIP_NASA_TERRAIN = false;
 // Show the on-screen terrain diagnostic overlay (top-right corner) while
 // walk mode is active. Reports NASA mesh load status, tile count, current
 // astronaut (x, z), which surface he's on, and the procedural-vs-NASA
 // delta. Lets you verify whether the NASA terrain is actually engaging
 // without opening DevTools. Flip to false to hide.
+// Set to true to hide the procedural sin-sum mesh (visual only) so that
+// only the NASA cladding tiles render. The procedural sin-sum MATH is
+// still used by groundHeight() as the fallback for any (x, z) outside
+// a NASA tile (the play area extends past tile coverage — see
+// TERRAIN_TILE_POSITIONS). Hiding the visible procedural mesh prevents
+// it from peeking out at tile edges; the math underneath keeps the
+// astronaut from walking off the world. Has no effect when
+// SKIP_NASA_TERRAIN is true.
+export const HIDE_PROCEDURAL_MESH = false;
 export const SHOW_TERRAIN_DEBUG = true;
 // Apollo landing sites placed in walk mode at fixed positions. Each entry
 // also drops a `part` (repair-part) interactable next to its landmark when
