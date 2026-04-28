@@ -488,6 +488,57 @@ export const LEVEL1_FIXED_LOOT = [
   ['damaged',  -40, -10]
 ];
 
+// ---------- Real-world scale (Batch 6 — proportions audit) ----------
+// One world unit is anchored to the Mercury Spacesuit GLB: it's placed
+// with `targetHeight = 3.2` world units (see WalkMode buildAstronaut) and
+// the user's modeled spacesuit is 79.06 inches = 2.008 m tall. Therefore:
+//
+//   1 metre  ≈ 1.594 world units
+//   1 unit   ≈ 0.628 m
+//
+// Use `METERS_TO_WU` when sizing new NASA models so they share the same
+// real-world scale as the astronaut. The `*_SIZE_WU` constants below are
+// derived once from real-world dimensions; pass them straight to
+// `placeOnGround(obj, cx, cz, bottomY, targetSize)`. Note: `targetSize`
+// constrains the model's longest axis (see ModelCache.placeOnGround), so
+// for objects wider than they are tall (e.g. the LM is 9.4 m footpad
+// span vs 7 m descent-stage height) the WIDTH is what we anchor.
+//
+// Declared *above* LANDMARKS because the array's `targetHeight` fields
+// reference these constants — the previous file order put the constants
+// after LANDMARKS, which silently kept the array on its hardcoded 7.97
+// values (TDZ would have thrown on a real reference) so the habitat
+// scale bump to 11.96 wu was dead code at runtime. Moved up.
+export const METERS_TO_WU = 3.2 / 2.008;            // ≈ 1.594
+
+// Apollo Lunar Module: 7.04 m tall, 9.4 m wide footpad-to-footpad. The
+// landing legs splay wider than the descent stage is tall, so 9.4 m is
+// the longest dimension and that's what placeOnGround anchors.
+export const APOLLO_LM_SIZE_WU      = 9.4 * METERS_TO_WU;   // ~14.98 wu
+
+// NASA Habitat Demonstration Unit (each part). Real HDU vertical core:
+// 5.0 m diameter × 3.2 m pressure-vessel height. The shipped GLBs include
+// ramps, railings, and a foundation skirt that all live inside the
+// `placeOnGround` bounding box — so a literal `5.0 * METERS_TO_WU` budget
+// gets eaten by those structural extras and the visible module reads as
+// roughly astronaut-height, not the intended 2-storey scale.
+//
+// Empirically tuned to ~7.5 m of longest-axis budget so the core module
+// presents at the real-world ~5 m diameter once the ramp/skirt is
+// subtracted from the bbox. Adjust if a future GLB swap changes the
+// foundation footprint.
+export const HABITAT_PART_SIZE_WU   = 7.5 * METERS_TO_WU;   // ~11.96 wu
+
+// Atlas LV-3B Mercury launch vehicle (Friendship 7). Capsule + escape
+// tower presents at ~9 m even though the full rocket is much taller.
+// Kept at the existing 14-wu value because user feedback called this
+// scale "ok-ish".
+export const ATLAS_6_SIZE_WU        = 14;                   // unchanged
+
+// Mercury Spacesuit (the player). Anchor for the scale system above —
+// don't change without revisiting METERS_TO_WU.
+export const SPACESUIT_SIZE_WU      = 3.2;                  // ~2.008 m
+
 // Standalone landmark interactables placed in walk mode (not Apollo sites).
 // Each spawns once per walk session, talks via the existing 'apollo'-style
 // interactable contract (artifactScore + comms blip).
@@ -500,7 +551,7 @@ export const LANDMARKS = [
     score: 150,
     comms: 'HABITAT MODULE A — LIFE SUPPORT NOMINAL',
     name: 'HABITAT MODULE A',
-    targetHeight: 7.97   // ≈ 5 m at METERS_TO_WU 1.594 — see HABITAT_PART_SIZE_WU
+    targetHeight: HABITAT_PART_SIZE_WU
   },
   {
     id: 'habitat-b',
@@ -510,7 +561,7 @@ export const LANDMARKS = [
     score: 150,
     comms: 'HABITAT MODULE B — STORES READY',
     name: 'HABITAT MODULE B',
-    targetHeight: 7.97   // matches habitat-a — both parts of one HDU
+    targetHeight: HABITAT_PART_SIZE_WU
   },
   {
     id: 'atlas-6',
@@ -520,7 +571,7 @@ export const LANDMARKS = [
     score: 250,
     comms: 'FRIENDSHIP 7 — MERCURY-ATLAS 6 LAUNCH VEHICLE',
     name: 'ATLAS 6 (FRIENDSHIP 7)',
-    targetHeight: 14     // ATLAS_6_SIZE_WU — capsule + escape tower, user-confirmed
+    targetHeight: ATLAS_6_SIZE_WU
   }
 ];
 
@@ -679,51 +730,6 @@ export const LANDER_REPAIR_PER_PART = 25;   // hp restored per repair part stowe
 export const ASTRO_MAX_HP         = 100;
 export const HABITAT_HEAL_AMOUNT  = 20;     // hp restored per habitat visit (one-shot per habitat)
 export const HEALTH_PACK_AMOUNT   = 25;     // hp restored per health-pack pickup
-
-// ---------- Real-world scale (Batch 6 — proportions audit) ----------
-// One world unit is anchored to the Mercury Spacesuit GLB: it's placed
-// with `targetHeight = 3.2` world units (see WalkMode buildAstronaut) and
-// the user's modeled spacesuit is 79.06 inches = 2.008 m tall. Therefore:
-//
-//   1 metre  ≈ 1.594 world units
-//   1 unit   ≈ 0.628 m
-//
-// Use `METERS_TO_WU` when sizing new NASA models so they share the same
-// real-world scale as the astronaut. The `*_SIZE_WU` constants below are
-// derived once from real-world dimensions; pass them straight to
-// `placeOnGround(obj, cx, cz, bottomY, targetSize)`. Note: `targetSize`
-// constrains the model's longest axis (see ModelCache.placeOnGround), so
-// for objects wider than they are tall (e.g. the LM is 9.4 m footpad
-// span vs 7 m descent-stage height) the WIDTH is what we anchor.
-export const METERS_TO_WU = 3.2 / 2.008;            // ≈ 1.594
-
-// Apollo Lunar Module: 7.04 m tall, 9.4 m wide footpad-to-footpad. The
-// landing legs splay wider than the descent stage is tall, so 9.4 m is
-// the longest dimension and that's what placeOnGround anchors.
-export const APOLLO_LM_SIZE_WU      = 9.4 * METERS_TO_WU;   // ~14.98 wu
-
-// NASA Habitat Demonstration Unit (each part). Real HDU vertical core:
-// 5.0 m diameter × 3.2 m pressure-vessel height. The shipped GLBs include
-// ramps, railings, and a foundation skirt that all live inside the
-// `placeOnGround` bounding box — so a literal `5.0 * METERS_TO_WU` budget
-// gets eaten by those structural extras and the visible module reads as
-// roughly astronaut-height, not the intended 2-storey scale.
-//
-// Empirically tuned to ~7.5 m of longest-axis budget so the core module
-// presents at the real-world ~5 m diameter once the ramp/skirt is
-// subtracted from the bbox. Adjust if a future GLB swap changes the
-// foundation footprint.
-export const HABITAT_PART_SIZE_WU   = 7.5 * METERS_TO_WU;   // ~11.96 wu
-
-// Atlas LV-3B Mercury launch vehicle (Friendship 7). Capsule + escape
-// tower presents at ~9 m even though the full rocket is much taller.
-// Kept at the existing 14-wu value because user feedback called this
-// scale "ok-ish".
-export const ATLAS_6_SIZE_WU        = 14;                   // unchanged
-
-// Mercury Spacesuit (the player). Anchor for the scale system above —
-// don't change without revisiting METERS_TO_WU.
-export const SPACESUIT_SIZE_WU      = 3.2;                  // ~2.008 m
 
 // ---------- Input bindings (Batch 6 — input/UX audit) ----------
 // One source of truth for what keys map to what action. Modes call
