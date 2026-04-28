@@ -300,6 +300,31 @@ export const WalkMode = {
     // Scripted disembark / embark takes priority over player input. It drives
     // position, yaw, walk animation, and camera each frame, then bails out
     // before the normal input loop runs.
+    if (SHOW_TERRAIN_DEBUG && _debugEl && astronaut) {
+    const ax = astronaut.position.x;
+    const az = astronaut.position.z;
+    const tH = terrainHeightAt(ax, az); // null if outside tile or inactive
+    const pH = proceduralGround(ax, az);
+    const onNasa = tH !== null;
+    const status =
+      _debugLoadStatus === 'loaded' ? `<span class="ok">LOADED</span>` :
+      _debugLoadStatus === 'failed' ? `<span class="bad">FAILED</span>` :
+                                      `<span class="warn">PENDING</span>`;
+    _debugEl.innerHTML =
+      `terrain debug\n` +
+      `─────────────\n` +
+      `mesh load:    ${status}\n` +
+      `url:          ${_debugLoadedUrl ? _debugLoadedUrl.split('/').pop() : '—'}\n` +
+      `terrainActive: ${terrainActive ? '<span class="ok">true</span>' : '<span class="bad">false</span>'}\n` +
+      `tiles:        ${terrainTiles.length}\n` +
+      `astro x,z:    ${ax.toFixed(1)}, ${az.toFixed(1)}\n` +
+      `astro y:      ${astronaut.position.y.toFixed(2)}\n` +
+      `on surface:   ${onNasa ? '<span class="ok">NASA tile</span>' : '<span class="warn">procedural</span>'}\n` +
+      `nasa h:       ${onNasa ? tH.toFixed(2) : '—'}\n` +
+      `procedural h: ${pH.toFixed(2)}\n` +
+      `delta:        ${onNasa ? (tH - pH).toFixed(2) : '—'}`;
+  }
+    
     if (scripted) {
       scripted.t = Math.min(1, scripted.t + dt / scripted.duration);
       const t = scripted.t;
