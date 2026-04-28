@@ -451,13 +451,23 @@ export function apolloSiteGlbPath(level) {
   return stlPath ? stlPath.replace(/\.stl$/i, '.glb') : null;
 }
 
-// Visible terrain tiles laid out in a 2×2 grid centered on the play area.
-// Each tile is one mesh instance sharing the cached STL geometry; their xz
-// positions in WORLD coords. The base sin-displaced plane sits underneath
-// so the corners between tiles still have ground.
+// Visible terrain tiles laid out as a 2×2 grid that *overlaps at the
+// origin* so the astronaut spawn point sits squarely on NASA terrain
+// (not in a hole between tiles, which is what the old ±150 anchors did —
+// the 0,0 spawn fell into the gap and `terrainHeightAt` returned null,
+// dropping the player back onto the procedural sin-sum plane while the
+// NASA tiles rendered as floating mountains around them).
+//
+// With anchors at ±100 and TERRAIN_TILE_SIZE = 240, each tile spans
+// e.g. (-220 .. +20, -220 .. +20) — they overlap a 40-wu strip across
+// the origin in both axes, so every (x, z) within ~±220 wu (well past
+// the play radius the astronaut typically reaches) is covered by at
+// least one tile. `Raycaster.intersectObjects` returns the highest hit
+// first, so overlapping tiles produce a clean "topmost surface wins"
+// composite — no z-fighting, no double-counting.
 export const TERRAIN_TILE_POSITIONS = [
-  [-150, -150], [150, -150],
-  [-150,  150], [150,  150]
+  [-100, -100], [100, -100],
+  [-100,  100], [100,  100]
 ];
 export const TERRAIN_TILE_SIZE = 240;   // target horizontal extent in world units
 export const TERRAIN_TILE_SINK = 8;     // bury this many units below ground
@@ -692,11 +702,18 @@ export const METERS_TO_WU = 3.2 / 2.008;            // ≈ 1.594
 // the longest dimension and that's what placeOnGround anchors.
 export const APOLLO_LM_SIZE_WU      = 9.4 * METERS_TO_WU;   // ~14.98 wu
 
-// NASA Habitat Demonstration Unit (each part). The full HDU is a ~12 m
-// horizontal cylinder; we ship "part 1" + "part 2" as separate GLBs that
-// each present as a self-contained living module. Treat each as a ~5 m
-// unit so the astronaut clearly has a 2-storey building beside them.
-export const HABITAT_PART_SIZE_WU   = 5.0 * METERS_TO_WU;   // ~7.97 wu
+// NASA Habitat Demonstration Unit (each part). Real HDU vertical core:
+// 5.0 m diameter × 3.2 m pressure-vessel height. The shipped GLBs include
+// ramps, railings, and a foundation skirt that all live inside the
+// `placeOnGround` bounding box — so a literal `5.0 * METERS_TO_WU` budget
+// gets eaten by those structural extras and the visible module reads as
+// roughly astronaut-height, not the intended 2-storey scale.
+//
+// Empirically tuned to ~7.5 m of longest-axis budget so the core module
+// presents at the real-world ~5 m diameter once the ramp/skirt is
+// subtracted from the bbox. Adjust if a future GLB swap changes the
+// foundation footprint.
+export const HABITAT_PART_SIZE_WU   = 7.5 * METERS_TO_WU;   // ~11.96 wu
 
 // Atlas LV-3B Mercury launch vehicle (Friendship 7). Capsule + escape
 // tower presents at ~9 m even though the full rocket is much taller.

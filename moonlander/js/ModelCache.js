@@ -163,13 +163,23 @@ export function loadTerrainGeometry(url) {
   return geomPromise;
 }
 
+// 1 m in world units, derived from the procedural-astronaut height anchor
+// (3.2 wu = 2.008 m). Mirrors `Constants.METERS_TO_WU` — duplicated here
+// so the bbox debug log doesn't pull a circular import on Constants.js.
+const _METERS_TO_WU = 3.2 / 2.008;
+
 /**
  * Helper: position and scale `obj` so its bounding-box bottom sits at world
  * y = `bottomY` and its tallest dimension is `targetHeight`. Centers x/z on
  * the supplied (cx, cz). Returns the chosen uniform scale so callers can
  * tune. Used by every model placement to avoid floating / buried meshes.
+ *
+ * Also logs the source GLB's bounding box in meters (pre-scale) so future
+ * size-tuning rounds don't have to guess at the model's natural extents.
+ * Pass `tag` to label the log line — typically the model identifier (e.g.
+ * "habitat-a", "apolloLM"). Optional; falls through to the obj's name.
  */
-export function placeOnGround(obj, cx, cz, bottomY, targetHeight) {
+export function placeOnGround(obj, cx, cz, bottomY, targetHeight, tag = null) {
   obj.updateMatrixWorld(true);
   const bbox = new THREE.Box3().setFromObject(obj);
   const size = new THREE.Vector3();
@@ -185,6 +195,20 @@ export function placeOnGround(obj, cx, cz, bottomY, targetHeight) {
     cx - (min.x + max.x) / 2,
     bottomY - min.y,
     cz - (min.z + max.z) / 2
+  );
+  // Print pre-scale bbox in meters + the chosen scale so size constants
+  // can be tuned to actual GLB extents. Example output:
+  //   [placeOnGround] habitat-a: bbox 6.52 × 3.18 × 4.10 m (worst 6.52 m),
+  //   target 7.50 m, scale 1.150
+  const label = tag || obj.name || 'unnamed';
+  console.log(
+    `[placeOnGround] ${label}: bbox ` +
+    `${(size.x / _METERS_TO_WU).toFixed(2)} × ` +
+    `${(size.y / _METERS_TO_WU).toFixed(2)} × ` +
+    `${(size.z / _METERS_TO_WU).toFixed(2)} m ` +
+    `(worst ${(tallest / _METERS_TO_WU).toFixed(2)} m), ` +
+    `target ${(targetHeight / _METERS_TO_WU).toFixed(2)} m, ` +
+    `scale ${scale.toFixed(3)}`
   );
   return scale;
 }

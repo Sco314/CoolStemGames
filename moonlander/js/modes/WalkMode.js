@@ -1155,7 +1155,7 @@ function buildAstronaut() {
   loadModel(MODEL_PATHS.spacesuit)
     .then(model => {
       if (!astronaut) return;             // mode already exited
-      placeOnGround(model, 0, 0, 0, SPACESUIT_SIZE_WU);
+      placeOnGround(model, 0, 0, 0, SPACESUIT_SIZE_WU, 'spacesuit');
       astronaut.add(model);
       astronautModel = model;
       // Hide every procedural mesh under the astronaut group (helmet,
@@ -1222,7 +1222,7 @@ function buildParkedLander() {
       landerModel3D = model;
       // 9.4 m footpad span = APOLLO_LM_SIZE_WU. Was `LANDER_SCALE * 0.7`
       // (22.4 wu, ~50 % oversized vs astronaut).
-      placeOnGround(model, lx, lz, groundHeight(lx, lz), APOLLO_LM_SIZE_WU);
+      placeOnGround(model, lx, lz, groundHeight(lx, lz), APOLLO_LM_SIZE_WU, 'apolloLM');
       scene.add(model);
       // Hide the placeholder sprite. Keep landerModel as the proximity
       // anchor so existing distance checks (boarding, breadcrumb origin)
@@ -1615,7 +1615,7 @@ function buildApolloSite(site, x, z) {
   loadModel(MODEL_PATHS.apolloLM)
     .then(model => {
       if (!group.parent) return;
-      placeOnGround(model, 0, 0, 0, 5);
+      placeOnGround(model, 0, 0, 0, 5, 'apolloLM-landmark');
       group.add(model);
       base.visible = false;
     })
@@ -1706,7 +1706,7 @@ function buildLandmark(spec, x, z) {
         if (!scene) return;
         // Compute the right scale + ground placement, then attach to the
         // landmark group so it shares the group's position.
-        placeOnGround(model, 0, 0, 0, spec.targetHeight ?? 5);
+        placeOnGround(model, 0, 0, 0, spec.targetHeight ?? 5, spec.id);
         group.add(model);
         ph.visible = false;
         console.log(`[WalkMode] ${spec.id} GLB active`);
