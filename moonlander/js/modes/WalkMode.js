@@ -873,6 +873,15 @@ function buildGround() {
   // on the wire than the raw `.stl`, so we try it first per level. The
   // `.stl` stays as a graceful fallback for assets that haven't been
   // re-encoded yet — see moonlander/docs/asset-pipeline.md.
+// Debug toggle: skip NASA cladding entirely and run procedural-only.
+  // The procedural plane built above remains; groundHeight() will fall
+  // through to proceduralGround() for every (x, z) since terrainActive
+  // never flips to true.
+  if (SKIP_NASA_TERRAIN) {
+    console.log('🌙 [WalkMode] SKIP_NASA_TERRAIN=true — using procedural sin-sum surface only');
+    return;
+  }
+
   const perLevelGlb = apolloSiteGlbPath(GameState.level);
   const perLevelStl = apolloSiteStlPath(GameState.level);
   const apollo11Stl = MODEL_PATHS.apollo11Site;
