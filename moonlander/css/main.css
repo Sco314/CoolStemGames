@@ -948,6 +948,31 @@ body.touch #hud-carry .carry-tag,
   margin-right: 4px;
   vertical-align: -1px;
 }
+/* ---- Debug terrain overlay (added v0.x.x) ----------------------------
+   Shows live state of NASA mesh load + raycast vs procedural fallback.
+   Toggle off by removing #terrain-debug from index.html or setting
+   SHOW_TERRAIN_DEBUG = false in Constants.js.
+*/
+#terrain-debug {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 9999;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #c8e6ff;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  border: 1px solid #345;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: pre;
+  min-width: 220px;
+}
+#terrain-debug .ok   { color: #6f6; }
+#terrain-debug .bad  { color: #f77; }
+#terrain-debug .warn { color: #fc6; }
 .dot-astronaut { background: #66c8ff; }
 .dot-lander    { background: #ffee88; }
 .dot-fuel      { background: #ffb020; }
