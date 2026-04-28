@@ -346,7 +346,12 @@ export const MIN_PAD_WIDTH = 10;
 // NASA cladding. The procedural plane is always built either way — see
 // WalkMode.buildGround. Flip back to false to restore NASA cladding.
 export const SKIP_NASA_TERRAIN = true;
-
+// Show the on-screen terrain diagnostic overlay (top-right corner) while
+// walk mode is active. Reports NASA mesh load status, tile count, current
+// astronaut (x, z), which surface he's on, and the procedural-vs-NASA
+// delta. Lets you verify whether the NASA terrain is actually engaging
+// without opening DevTools. Flip to false to hide.
+export const SHOW_TERRAIN_DEBUG = true;
 // Apollo landing sites placed in walk mode at fixed positions. Each entry
 // also drops a `part` (repair-part) interactable next to its landmark when
 // the site is the current level's destination. Add 14/15/16/17 here and
