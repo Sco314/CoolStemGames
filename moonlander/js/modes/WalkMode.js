@@ -24,7 +24,7 @@ import {
   DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
   TRANSITION_WIND_VOL,
   HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
-  MODEL_PATHS, SKIP_NASA_TERRAIN, LANDMARKS, LEVEL1_FIXED_LOOT,
+  MODEL_PATHS, SKIP_NASA_TERRAIN, HIDE_PROCEDURAL_MESH, SHOW_TERRAIN_DEBUG, LANDMARKS, LEVEL1_FIXED_LOOT,
   TERRAIN_TILE_POSITIONS, TERRAIN_TILE_SIZE, TERRAIN_TILE_SINK,
   LANDER_REPAIR_PER_PART, HABITAT_HEAL_AMOUNT, HEALTH_PACK_AMOUNT,
   LANDER_BEACON_COLOR, LANDER_BEACON_HEIGHT,
@@ -77,7 +77,12 @@ let terrainActive = false;
 const _terrainRay     = new THREE.Raycaster();
 const _terrainRayDir  = new THREE.Vector3(0, -1, 0);
 const _terrainRayOrig = new THREE.Vector3();
-
+// Debug overlay state — populated each frame from update() and the
+// terrain-load promise. Null until init() runs at least once. Pure
+// diagnostic; no scene effect.
+let _debugEl = null;
+let _debugLoadStatus = 'pending'; // 'pending' | 'loaded:<url>' | 'failed'
+let _debugLoadedUrl  = null;
 // NASA 3D Resources GLB integration. When the file is present + decoded
 // these references hold the swapped-in mesh; the procedural primitive
 // underneath is hidden but kept around as a fallback. `null` means we're
@@ -178,7 +183,10 @@ export const WalkMode = {
     setObjectivesForLevel(GameState.level);
     spawnInteractables();
     buildFootprintPool();
-
+    if (SHOW_TERRAIN_DEBUG) {
+    _debugEl = document.getElementById('terrain-debug');
+    if (_debugEl) _debugEl.style.display = 'block';
+  }
     // Reset per-walk-session signposting state so reminders don't carry
     // over from the previous trip's timestamps.
     walkSessionElapsed = 0;
@@ -942,11 +950,16 @@ function buildGround() {
       resnapWorldToTerrain();
       const _site = apolloSiteForLevel(GameState.level);
       const _siteLabel = _site?.id || `level-${GameState.level}`;
-      console.log(`[WalkMode] terrain tiles active for ${_siteLabel} (${TERRAIN_TILE_POSITIONS.length}) — heightmap engaged`);
+      console.log(`[WalkMode] ✅ terrain tiles active for ${_siteLabel} (${TERRAIN_TILE_POSITIONS.length}) — heightmap engaged`);
+      _debugLoadStatus = 'loaded';
+      _debugLoadedUrl  = candidates.find(Boolean) || '?';
       // Note: STL geometry is owned by ModelCache (shared by every tile)
       // and is NOT pushed to disposables — exit() leaves it in the cache.
     })
-    .catch(() => { /* keep procedural ground as the only visual */ });
+    .catch((err) => {
+      console.warn('❌ [WalkMode] all NASA terrain candidates failed — procedural sin-sum is the only ground:', err?.message || err);
+      _debugLoadStatus = 'failed';
+    });
 }
 
 // ---------- Boot-print trail ----------
