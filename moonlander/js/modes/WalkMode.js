@@ -931,7 +931,9 @@ function buildGround() {
       // from the actual NASA crater surface for any (x, z) the tiles cover.
       terrainActive = true;
       resnapWorldToTerrain();
-      console.log(`[WalkMode] Apollo 11 terrain tiles active (${TERRAIN_TILE_POSITIONS.length}) — heightmap engaged`);
+      const _site = apolloSiteForLevel(GameState.level);
+      const _siteLabel = _site?.id || `level-${GameState.level}`;
+      console.log(`[WalkMode] terrain tiles active for ${_siteLabel} (${TERRAIN_TILE_POSITIONS.length}) — heightmap engaged`);
       // Note: STL geometry is owned by ModelCache (shared by every tile)
       // and is NOT pushed to disposables — exit() leaves it in the cache.
     })
