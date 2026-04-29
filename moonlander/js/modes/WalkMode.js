@@ -19,13 +19,11 @@ import {
   WALK_PLAY_RADIUS, WALK_MOUSE_SENSITIVITY,
   WALK_PITCH_MIN, WALK_PITCH_MAX,
   WALK_GROUND_AMPLITUDE, WALK_CRATER_COUNT,
-  INTERACTABLE_TYPES, APOLLO_SITES, apolloSiteForLevel, apolloSiteStlPath,
-  apolloSiteGlbPath,
+  INTERACTABLE_TYPES, APOLLO_SITES, apolloSiteForLevel,
   DISEMBARK_DURATION_S, DISEMBARK_STEP_UNITS, EMBARK_DURATION_S,
   TRANSITION_WIND_VOL,
   HOT_SWAP_LOW_FUEL, HOT_SWAP_HIGH_FUEL,
-  MODEL_PATHS, SKIP_NASA_TERRAIN, HIDE_PROCEDURAL_MESH, SHOW_TERRAIN_DEBUG, LANDMARKS, LEVEL1_FIXED_LOOT,
-  TERRAIN_TILE_POSITIONS, TERRAIN_TILE_SIZE, TERRAIN_TILE_SINK,
+  MODEL_PATHS, LANDMARKS, LEVEL1_FIXED_LOOT,
   LANDER_REPAIR_PER_PART, HABITAT_HEAL_AMOUNT, HEALTH_PACK_AMOUNT,
   LANDER_BEACON_COLOR, LANDER_BEACON_HEIGHT,
   LANDER_BEACON_RADIUS, LANDER_BEACON_OPACITY,
@@ -49,7 +47,8 @@ import { Sounds } from '../Sound.js';
 import { effectiveFuelGain } from '../Progression.js';
 import { getQuality, onQualityChange } from '../Quality.js';
 import { getSharedTexture } from '../AssetCache.js';
-import { loadModel, loadTerrainGeometry, placeOnGround } from '../ModelCache.js';
+import { loadModel, placeOnGround } from '../ModelCache.js';
+import { loadBakeForLevel, sampleHeight, bakeFootprintWU } from '../BakedTerrain.js';
 import * as Story from '../Story.js';
 import { Alien } from './walk/Alien.js';
 import { ALIEN_MIN_LEVEL, ALIEN_SPAWN_CHANCE } from '../Constants.js';
@@ -67,22 +66,17 @@ let footprints = [];           // pooled fading prints behind the astronaut
 let footprintCursor = 0;       // ring-buffer write index
 let lastFootprintPos = null;   // THREE.Vector3 — last spot we dropped a print
 
-// NASA terrain mesh tracking. When the GLB resolves and tiles are placed,
-// `terrainTiles` holds the per-tile Mesh refs and `groundHeight()` switches
-// from its sin-sum fallback to raycasting against these tiles so the
-// astronaut and every placed item end up on the actual NASA crater surface
-// instead of floating on the procedural plane underneath.
-let terrainTiles = [];
-let terrainActive = false;
-const _terrainRay     = new THREE.Raycaster();
-const _terrainRayDir  = new THREE.Vector3(0, -1, 0);
-const _terrainRayOrig = new THREE.Vector3();
-// Debug overlay state — populated each frame from update() and the
-// terrain-load promise. Null until init() runs at least once. Pure
-// diagnostic; no scene effect.
-let _debugEl = null;
-let _debugLoadStatus = 'pending'; // 'pending' | 'loaded:<url>' | 'failed'
-let _debugLoadedUrl  = null;
+// Baked-terrain heightmap (PR #104). `_bake` is the parsed JSON for the
+// current Apollo site, fetched async on enter(). Null while the fetch is in
+// flight or if it failed; `groundHeight()` falls back to the procedural
+// sin-sum until the bake arrives. `_bakeHalfExtent` caches the world-unit
+// half-footprint so `sampleHeight()` doesn't recompute it each call.
+let _bake = null;
+let _bakeHalfExtent = 0;
+// Reference to the visible ground plane's geometry, kept on a module-level
+// let so `redisplaceGroundMesh()` can re-displace its vertices once the
+// bake JSON resolves.
+let _groundGeom = null;
 // NASA 3D Resources GLB integration. When the file is present + decoded
 // these references hold the swapped-in mesh; the procedural primitive
 // underneath is hidden but kept around as a fallback. `null` means we're
@@ -181,12 +175,28 @@ export const WalkMode = {
     // Rebuild the objectives list from career + this level's Apollo briefs
     // BEFORE spawning loot, so the HUD can show the full list immediately.
     setObjectivesForLevel(GameState.level);
+    // Kick off the baked-terrain fetch for this level. The procedural plane
+    // is the ground until the bake arrives; once it does, the visible mesh
+    // is re-displaced and any items placed before then are re-snapped to
+    // the new heights. Resolves to null on 404 / network error — in that
+    // case we just stay on procedural.
+    loadBakeForLevel(GameState.level).then((b) => {
+      if (!scene) return;  // mode exited before fetch resolved
+      _bake = b;
+      if (b) {
+        _bakeHalfExtent = bakeFootprintWU(b).halfExtentWU;
+        console.log(
+          `✅ [WalkMode] baked terrain loaded: ${b.site} ` +
+          `(${b.size}×${b.size}, ${(b.maxM - b.minM).toFixed(1)} m relief)`
+        );
+        redisplaceGroundMesh();
+        resnapWorldToBakedTerrain();
+      } else {
+        console.warn('⚠️ [WalkMode] no baked terrain for this level — procedural sin-sum only');
+      }
+    });
     spawnInteractables();
     buildFootprintPool();
-    if (SHOW_TERRAIN_DEBUG) {
-    _debugEl = document.getElementById('terrain-debug');
-    if (_debugEl) _debugEl.style.display = 'block';
-  }
     // Reset per-walk-session signposting state so reminders don't carry
     // over from the previous trip's timestamps.
     walkSessionElapsed = 0;
@@ -287,8 +297,9 @@ export const WalkMode = {
     landerModel = null;
     landerModel3D = null;
     interactables = [];
-    terrainTiles = [];
-    terrainActive = false;
+    _bake = null;
+    _bakeHalfExtent = 0;
+    _groundGeom = null;
     footprints = [];
     footprintCursor = 0;
     lastFootprintPos = null;
@@ -300,31 +311,6 @@ export const WalkMode = {
     // Scripted disembark / embark takes priority over player input. It drives
     // position, yaw, walk animation, and camera each frame, then bails out
     // before the normal input loop runs.
-    if (SHOW_TERRAIN_DEBUG && _debugEl && astronaut) {
-    const ax = astronaut.position.x;
-    const az = astronaut.position.z;
-    const tH = terrainHeightAt(ax, az); // null if outside tile or inactive
-    const pH = proceduralGround(ax, az);
-    const onNasa = tH !== null;
-    const status =
-      _debugLoadStatus === 'loaded' ? `<span class="ok">LOADED</span>` :
-      _debugLoadStatus === 'failed' ? `<span class="bad">FAILED</span>` :
-                                      `<span class="warn">PENDING</span>`;
-    _debugEl.innerHTML =
-      `terrain debug\n` +
-      `─────────────\n` +
-      `mesh load:    ${status}\n` +
-      `url:          ${_debugLoadedUrl ? _debugLoadedUrl.split('/').pop() : '—'}\n` +
-      `terrainActive: ${terrainActive ? '<span class="ok">true</span>' : '<span class="bad">false</span>'}\n` +
-      `tiles:        ${terrainTiles.length}\n` +
-      `astro x,z:    ${ax.toFixed(1)}, ${az.toFixed(1)}\n` +
-      `astro y:      ${astronaut.position.y.toFixed(2)}\n` +
-      `on surface:   ${onNasa ? '<span class="ok">NASA tile</span>' : '<span class="warn">procedural</span>'}\n` +
-      `nasa h:       ${onNasa ? tH.toFixed(2) : '—'}\n` +
-      `procedural h: ${pH.toFixed(2)}\n` +
-      `delta:        ${onNasa ? (tH - pH).toFixed(2) : '—'}`;
-  }
-    
     if (scripted) {
       scripted.t = Math.min(1, scripted.t + dt / scripted.duration);
       const t = scripted.t;
@@ -805,23 +791,9 @@ function buildLighting() {
   scene.add(sun);
 }
 
-/**
- * Sample the NASA terrain mesh's top surface Y at (x, z) by casting a
- * downward ray. Returns null if no tile covers (x, z) — caller falls
- * back to the procedural sin-sum.
- */
-function terrainHeightAt(x, z) {
-  if (!terrainActive || terrainTiles.length === 0) return null;
-  _terrainRayOrig.set(x, 1000, z);
-  _terrainRay.set(_terrainRayOrig, _terrainRayDir);
-  _terrainRay.far = 2000;
-  const hits = _terrainRay.intersectObjects(terrainTiles, false);
-  return hits.length ? hits[0].point.y : null;
-}
-
-/** Deterministic sin-sum heightmap. The shape of the procedural plane
- *  underneath the NASA tiles, and the fallback for any (x, z) the NASA
- *  tiles don't cover. Pure function — no scene state.
+/** Deterministic sin-sum heightmap. The shape of the procedural plane that
+ *  shows initially, and the fallback for any (x, z) outside the bake's
+ *  footprint after the bake arrives. Pure function — no scene state.
  */
 function proceduralGround(x, z) {
   const a = Math.sin(x * 0.08) * 1.2;
@@ -832,35 +804,49 @@ function proceduralGround(x, z) {
 }
 
 /**
- * Ground height at (x, z). When the NASA terrain GLB is loaded and (x, z)
- * is inside one of its tiles, returns the actual mesh top — astronaut
- * walks on the cratered surface and items rest on it. Otherwise returns
- * the procedural sin-sum (also the shape of the plane underneath).
+ * Ground height at (x, z). Reads the baked Apollo-site heightmap when (x, z)
+ * is inside its footprint (bake.groundExtentM ÷ 2 ÷ metersPerWU on each
+ * axis around the origin). Falls back to the procedural sin-sum outside
+ * that footprint or while the bake is still loading.
  */
 function groundHeight(x, z) {
-  const t = terrainHeightAt(x, z);
-  return t !== null ? t : proceduralGround(x, z);
+  const baked = sampleHeight(_bake, x, z);
+  return baked !== null ? baked : proceduralGround(x, z);
 }
 
 /**
- * After the NASA terrain finishes loading, every item placed before that
- * point — lander sprite, lander GLB if it landed first, every loot crate
- * and landmark — is sitting on the procedural sin-sum surface, which is
- * now buried under the NASA crater terrain. Walk those items and shift
- * each by the per-(x, z) delta so they end up on the new top surface.
+ * Re-displace the visible procedural ground plane using the just-loaded
+ * baked heightmap. Walks the geometry's position attribute, sets each
+ * vertex y to `groundHeight(x, z)` (which now consults the bake), and
+ * recomputes vertex normals so flat-shading lights the new surface.
+ */
+function redisplaceGroundMesh() {
+  if (!_groundGeom) return;
+  const pos = _groundGeom.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    pos.setY(i, groundHeight(x, z));
+  }
+  pos.needsUpdate = true;
+  _groundGeom.computeVertexNormals();
+}
+
+/**
+ * After the bake finishes loading, every item placed during the procedural
+ * window — lander sprite, lander GLB if it landed first, every loot crate
+ * and landmark — is sitting on the sin-sum surface. Walk those items and
+ * lift each to the bake's height at its (x, z).
  *
  * The astronaut updates per-frame from `groundHeight()` directly, so it
  * self-corrects without a re-snap pass. Footprints + breadcrumb rings
- * already laid down stay where they are — they're tiny decals that will
- * read as "dust on the surface" even if they're a tenth of a unit off.
+ * already laid down stay where they are — tiny decals read as dust on the
+ * surface even if a tenth of a unit off.
  */
-function resnapWorldToTerrain() {
+function resnapWorldToBakedTerrain() {
   const shift = (obj3d) => {
     if (!obj3d) return;
-    const x = obj3d.position.x;
-    const z = obj3d.position.z;
-    const delta = groundHeight(x, z) - proceduralGround(x, z);
-    if (delta !== 0) obj3d.position.y += delta;
+    obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z);
   };
   shift(landerModel);
   shift(landerModel3D);
@@ -870,10 +856,10 @@ function resnapWorldToTerrain() {
 }
 
 function buildGround() {
-  // Procedural sin-displaced plane stays as the SOURCE OF TRUTH for ground
-  // height — astronaut, footprints, landmarks all sample groundHeight(x,z).
-  // This way swapping in / failing to swap in the STL never affects collision
-  // or placement; the STL is purely visual cladding on top.
+  // Visible procedural plane built up-front using the sin-sum. Once the
+  // bake JSON arrives `redisplaceGroundMesh()` re-runs the displacement
+  // with the new heights; any (x, z) outside the bake footprint stays on
+  // the procedural sin-sum so the play area can extend past coverage.
   const size = WALK_PLAY_RADIUS * 2.4;
   const segs = 128;
   const geom = new THREE.PlaneGeometry(size, size, segs, segs);
@@ -889,102 +875,7 @@ function buildGround() {
   const mesh = new THREE.Mesh(geom, mat);
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
-
-  // Async upgrade: tile the NASA height-map STL across the play area as
-  // visual cladding. The STL is "thicker than needed" — it's a 3D-
-  // printable height block — so we sink each tile by TERRAIN_TILE_SINK
-  // units. From astronaut height the buried bottom is invisible; only
-  // the top surface reads. The procedural plane underneath fills gaps.
-  //
-  // Batch 5 #23: try the per-Apollo path first (e.g. Apollo 12 / 14 /
-  // 15 / 16 / 17 - Landing Site) and fall back to the bundled Apollo 11
-  // asset if it's missing. Only Apollo 11 ships today; dropping
-  // additional NASA terrains into assets/nasa_models/ activates them
-  // automatically with no further code change.
-  //
-  // Format preference: the Draco-compressed `.glb` is ~5-10x smaller
-  // on the wire than the raw `.stl`, so we try it first per level. The
-  // `.stl` stays as a graceful fallback for assets that haven't been
-  // re-encoded yet — see moonlander/docs/asset-pipeline.md.
-// Debug toggle: skip NASA cladding entirely and run procedural-only.
-  // The procedural plane built above remains; groundHeight() will fall
-  // through to proceduralGround() for every (x, z) since terrainActive
-  // never flips to true.
-  if (SKIP_NASA_TERRAIN) {
-    console.log('🌙 [WalkMode] SKIP_NASA_TERRAIN=true — using procedural sin-sum surface only');
-    return;
-  }
-
-  const perLevelGlb = apolloSiteGlbPath(GameState.level);
-  const perLevelStl = apolloSiteStlPath(GameState.level);
-  const apollo11Stl = MODEL_PATHS.apollo11Site;
-  const apollo11Glb = apollo11Stl.replace(/\.stl$/i, '.glb');
-  const candidates = [perLevelGlb, perLevelStl, apollo11Glb, apollo11Stl]
-    .filter((u, i, arr) => u && arr.indexOf(u) === i);
-  const stlPromise = candidates.reduce(
-    (p, url) => p.catch(() => loadTerrainGeometry(url)),
-    Promise.reject(new Error('init'))
-  );
-  stlPromise
-    .then(stlGeom => {
-      if (!scene) return;
-      const tileMat = new THREE.MeshLambertMaterial({
-        color: 0x7c7c84, flatShading: true
-      });
-      disposables.push({ material: tileMat });
-      // Compute a uniform scale so the longest STL dimension fits
-      // TERRAIN_TILE_SIZE world units. Centered per-tile via geometry
-      // bounding box so each instance lines up on its anchor.
-      stlGeom.computeBoundingBox();
-      const bb = stlGeom.boundingBox;
-      const sizeX = bb.max.x - bb.min.x;
-      const sizeY = bb.max.y - bb.min.y;
-      const sizeZ = bb.max.z - bb.min.z;
-      const longest = Math.max(sizeX, sizeY, sizeZ) || 1;
-      const tileScale = TERRAIN_TILE_SIZE / longest;
-      // STL files commonly use Z-up; rotate to Y-up if the model was
-      // exported as a horizontal slab seen from above (Z is the "thickness"
-      // axis). We detect by which axis is shortest — the thin one is the
-      // height for a top-down lunar terrain.
-      const shortest = Math.min(sizeX, sizeY, sizeZ);
-      const needsZupFix = (shortest === sizeZ);
-
-      for (const [tx, tz] of TERRAIN_TILE_POSITIONS) {
-        const tile = new THREE.Mesh(stlGeom, tileMat);
-        if (needsZupFix) tile.rotation.x = -Math.PI / 2;
-        tile.scale.setScalar(tileScale);
-        // Center the tile horizontally on (tx, tz) and sink it so the
-        // visible top surface meets the procedural ground level near the
-        // anchor point (groundHeight is small relative to tile height).
-        tile.updateMatrixWorld(true);
-        const tbb = new THREE.Box3().setFromObject(tile);
-        const tcx = (tbb.min.x + tbb.max.x) / 2;
-        const tcz = (tbb.min.z + tbb.max.z) / 2;
-        tile.position.set(
-          tx - tcx,
-          groundHeight(tx, tz) - TERRAIN_TILE_SINK,
-          tz - tcz
-        );
-        tile.updateMatrixWorld(true);
-        scene.add(tile);
-        terrainTiles.push(tile);
-      }
-      // Activate the raycast-based heightmap so groundHeight() now reads
-      // from the actual NASA crater surface for any (x, z) the tiles cover.
-      terrainActive = true;
-      resnapWorldToTerrain();
-      const _site = apolloSiteForLevel(GameState.level);
-      const _siteLabel = _site?.id || `level-${GameState.level}`;
-      console.log(`[WalkMode] ✅ terrain tiles active for ${_siteLabel} (${TERRAIN_TILE_POSITIONS.length}) — heightmap engaged`);
-      _debugLoadStatus = 'loaded';
-      _debugLoadedUrl  = candidates.find(Boolean) || '?';
-      // Note: STL geometry is owned by ModelCache (shared by every tile)
-      // and is NOT pushed to disposables — exit() leaves it in the cache.
-    })
-    .catch((err) => {
-      console.warn('❌ [WalkMode] all NASA terrain candidates failed — procedural sin-sum is the only ground:', err?.message || err);
-      _debugLoadStatus = 'failed';
-    });
+  _groundGeom = geom;
 }
 
 // ---------- Boot-print trail ----------
