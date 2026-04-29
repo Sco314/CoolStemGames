@@ -360,7 +360,7 @@ export const SKIP_NASA_TERRAIN = false;
 // astronaut from walking off the world. Has no effect when
 // SKIP_NASA_TERRAIN is true.
 export const HIDE_PROCEDURAL_MESH = false;
-export const SHOW_TERRAIN_DEBUG = false;
+export const SHOW_TERRAIN_DEBUG = true;
 // Apollo landing sites placed in walk mode at fixed positions. Each entry
 // also drops a `part` (repair-part) interactable next to its landmark when
 // the site is the current level's destination. Add 14/15/16/17 here and
