@@ -88,5 +88,12 @@ export function sampleHeight(bake, x, z) {
   const bot = n01 * (1 - fu) + n11 * fu;
   const norm = top * (1 - fv) + bot * fv;
   const heightM = bake.minM + norm * (bake.maxM - bake.minM);
-  return heightM / METERS_PER_WU;
+  // Return height RELATIVE to the bake's local mean so each Apollo
+  // site plays at y≈0 regardless of its absolute lunar elevation. Mare
+  // sites sit ~2 km below mean lunar radius and Taurus-Littrow sits
+  // ~2.6 km below; converting absolute elevation directly to world
+  // units would place the entire visible plane far below the camera
+  // and the play-radius / fog constants would no longer apply.
+  const meanM = (bake.minM + bake.maxM) / 2;
+  return (heightM - meanM) / METERS_PER_WU;
 }
