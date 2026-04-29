@@ -1,0 +1,11 @@
+{
+  "name": "moonlander-bake-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bake-terrain": "node bake-terrain.mjs"
+  },
+  "devDependencies": {
+    "geotiff": "^2.1.3"
+  }
+}
