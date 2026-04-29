@@ -340,6 +340,12 @@ export const BEGINNER_PAD_TOLERANCE = 2;  // world units
 // landable) are filtered out so they don't get multiplier labels.
 export const MIN_PAD_WIDTH = 10;
 
+// ---- Runtime diagnostics ----------------------------------------------
+// Shows on-screen overlay with bake/texture load status + per-frame
+// sample values. Safe to leave off in production; flip on for QA on
+// machines without DevTools access.
+export const SHOW_TERRAIN_DEBUG = false;
+
 // Apollo landing sites placed in walk mode at fixed positions. Each entry
 // also drops a `part` (repair-part) interactable next to its landmark when
 // the site is the current level's destination. Add 14/15/16/17 here and

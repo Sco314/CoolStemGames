@@ -30,7 +30,8 @@ import {
   CARGO_REMINDER_INTERVAL_S, CARGO_REMINDER_MIN_DIST,
   LOW_FUEL_RETURN_FRAC,
   MODE, BINDINGS,
-  APOLLO_LM_SIZE_WU, SPACESUIT_SIZE_WU
+  APOLLO_LM_SIZE_WU, SPACESUIT_SIZE_WU,
+  SHOW_TERRAIN_DEBUG
 } from '../Constants.js';
 import {
   GameState, update as updateState, notify, refreshObjectives,
@@ -81,6 +82,23 @@ let _groundGeom = null;
 // colour texture can be swapped onto its `map` once it loads. Default is
 // the flat-grey lambert created in `buildGround()`.
 let _groundMat = null;
+
+// Diagnostic state for the on-screen overlay (gated by
+// Constants.SHOW_TERRAIN_DEBUG). Updated at every relevant point in the
+// bake/texture pipeline + on every groundHeight() call so QA on machines
+// without DevTools can see what the runtime sees. Pure instrumentation —
+// when SHOW_TERRAIN_DEBUG is false, nothing reads or writes these fields.
+const _debugStatus = {
+  bakeState: 'idle',       // 'idle'|'fetching'|'loaded'|'failed'
+  bakeUrl: '',
+  bakeMin: null, bakeMax: null,
+  colorState: 'idle',      // 'idle'|'fetching'|'loaded'|'failed'
+  colorUrl: '',
+  materialMode: 'grey-lambert',  // 'grey-lambert'|'textured'
+  lastSampleSource: '',          // 'bake'|'procedural'
+  lastSampleY: 0,
+  lastProcY: 0
+};
 // NASA 3D Resources GLB integration. When the file is present + decoded
 // these references hold the swapped-in mesh; the procedural primitive
 // underneath is hidden but kept around as a fallback. `null` means we're
@@ -184,11 +202,26 @@ export const WalkMode = {
     // is re-displaced and any items placed before then are re-snapped to
     // the new heights. Resolves to null on 404 / network error — in that
     // case we just stay on procedural.
+    if (SHOW_TERRAIN_DEBUG) {
+      const site = apolloSiteForLevel(GameState.level);
+      _debugStatus.bakeState = 'fetching';
+      _debugStatus.bakeUrl = site ? `assets/baked_terrain/${site.id}.json` : '';
+      _debugStatus.bakeMin = null;
+      _debugStatus.bakeMax = null;
+      _debugStatus.colorState = 'idle';
+      _debugStatus.colorUrl = '';
+      _debugStatus.materialMode = 'grey-lambert';
+    }
     loadBakeForLevel(GameState.level).then((b) => {
       if (!scene) return;  // mode exited before fetch resolved
       _bake = b;
       if (b) {
         _bakeHalfExtent = bakeFootprintWU(b).halfExtentWU;
+        if (SHOW_TERRAIN_DEBUG) {
+          _debugStatus.bakeState = 'loaded';
+          _debugStatus.bakeMin = b.minM;
+          _debugStatus.bakeMax = b.maxM;
+        }
         console.log(
           `✅ [WalkMode] baked terrain loaded: ${b.site} ` +
           `(${b.size}×${b.size}, ${(b.maxM - b.minM).toFixed(1)} m relief)`
@@ -197,6 +230,7 @@ export const WalkMode = {
         resnapWorldToBakedTerrain();
         loadColorTextureForBake(b);
       } else {
+        if (SHOW_TERRAIN_DEBUG) _debugStatus.bakeState = 'failed';
         console.warn('⚠️ [WalkMode] no baked terrain for this level — procedural sin-sum only');
       }
     });
@@ -267,6 +301,10 @@ export const WalkMode = {
 
   exit() {
     console.log('◀ WalkMode.exit');
+    // Hide the diagnostic overlay so it doesn't leak into other modes.
+    // (Cheap when the flag is off — the element is already display:none.)
+    const _dbg = document.getElementById('terrain-debug');
+    if (_dbg) _dbg.style.display = 'none';
     unbindMouse();
     if (unsubQuality) { unsubQuality(); unsubQuality = null; }
     if (document.pointerLockElement) document.exitPointerLock();
@@ -314,6 +352,7 @@ export const WalkMode = {
   },
 
   update(dt) {
+    if (SHOW_TERRAIN_DEBUG) updateTerrainDebugOverlay();
     // Scripted disembark / embark takes priority over player input. It drives
     // position, yaw, walk animation, and camera each frame, then bails out
     // before the normal input loop runs.
@@ -817,6 +856,12 @@ function proceduralGround(x, z) {
  */
 function groundHeight(x, z) {
   const baked = sampleHeight(_bake, x, z);
+  if (SHOW_TERRAIN_DEBUG) {
+    const procY = proceduralGround(x, z);
+    _debugStatus.lastSampleSource = baked !== null ? 'bake' : 'procedural';
+    _debugStatus.lastSampleY = baked !== null ? baked : procY;
+    _debugStatus.lastProcY = procY;
+  }
   return baked !== null ? baked : proceduralGround(x, z);
 }
 
@@ -903,6 +948,10 @@ function loadColorTextureForBake(bake) {
   // `uvScale` fraction of the texture.
   const uvScale = planeSide / (2 * halfExtentWU);
   const offset = (1 - uvScale) / 2;
+  if (SHOW_TERRAIN_DEBUG) {
+    _debugStatus.colorState = 'fetching';
+    _debugStatus.colorUrl = url;
+  }
   new THREE.TextureLoader().load(
     url,
     (tex) => {
@@ -927,13 +976,47 @@ function loadColorTextureForBake(bake) {
       _groundMat.color.set(0xffffff);
       _groundMat.needsUpdate = true;
       disposables.push({ texture: tex });
+      if (SHOW_TERRAIN_DEBUG) {
+        _debugStatus.colorState = 'loaded';
+        _debugStatus.materialMode = 'textured';
+      }
       console.log(`✅ [WalkMode] colour texture applied: ${bake.site}`);
     },
     undefined,
     () => {
+      if (SHOW_TERRAIN_DEBUG) _debugStatus.colorState = 'failed';
       console.warn(`⚠️ [WalkMode] no color texture for ${bake.site} — using grey lambert`);
     }
   );
+}
+
+/**
+ * Per-frame writer for the #terrain-debug overlay. Only called when
+ * Constants.SHOW_TERRAIN_DEBUG is true; otherwise the overlay element
+ * stays display:none and this function isn't invoked. Renders the bake
+ * fetch state, colour fetch state, current material mode, the
+ * astronaut's xz/y, and the most recent groundHeight() sample (which
+ * source it came from + the bake-vs-procedural delta).
+ */
+function updateTerrainDebugOverlay() {
+  const el = document.getElementById('terrain-debug');
+  if (!el || !astronaut) return;
+  el.style.display = 'block';
+  const a = astronaut.position;
+  const fmt = (v) => (v === null ? '—' : v.toFixed(1));
+  el.textContent =
+    `level: ${GameState.level}\n` +
+    `bake:  ${_debugStatus.bakeState}\n` +
+    `       ${_debugStatus.bakeUrl}\n` +
+    `       range: ${fmt(_debugStatus.bakeMin)}..${fmt(_debugStatus.bakeMax)} m\n` +
+    `color: ${_debugStatus.colorState}\n` +
+    `       ${_debugStatus.colorUrl}\n` +
+    `mat:   ${_debugStatus.materialMode}\n` +
+    `pos:   x=${a.x.toFixed(1)} z=${a.z.toFixed(1)} y=${a.y.toFixed(2)}\n` +
+    `samp:  src=${_debugStatus.lastSampleSource}\n` +
+    `       bakeY=${_debugStatus.lastSampleY.toFixed(2)}\n` +
+    `       procY=${_debugStatus.lastProcY.toFixed(2)}\n` +
+    `       Δ=${(_debugStatus.lastSampleY - _debugStatus.lastProcY).toFixed(2)}`;
 }
 
 // ---------- Boot-print trail ----------
