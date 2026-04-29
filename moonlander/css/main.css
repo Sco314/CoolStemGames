@@ -956,3 +956,43 @@ body.touch #hud-carry .carry-tag,
 .dot-damaged   { background: #f08080; }
 .dot-landmark  { background: #c0c0c8; }
 .dot-apollo    { background: #ffd860; }
+
+/* Floating settings button — always visible top-right across every mode
+   (menu / lander / walk / pause / game-over). Opens the existing
+   #settings-menu overlay; admin entry sits inside that. */
+#btn-settings-floating {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 9000;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #345;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #c8e6ff;
+  font-size: 20px;
+  line-height: 38px;
+  text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+  user-select: none;
+}
+#btn-settings-floating:hover { background: rgba(0, 0, 0, 0.8); color: #fff; }
+#btn-settings-floating:active { transform: translateY(1px); }
+
+/* Admin overlay sub-sections. Reuses .overlay / .row from settings;
+   adds spacing for grouped buttons. */
+#admin-menu .admin-section {
+  margin: 12px 0;
+  padding: 8px 0;
+  border-top: 1px solid #345;
+}
+#admin-menu .admin-section-label {
+  color: #ffd860;
+  font-size: 12px;
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+}
+#admin-menu .admin-walk-jump { display: block; width: 100%; margin: 4px 0; }

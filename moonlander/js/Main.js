@@ -205,7 +205,7 @@ function openMainMenu() {
       startRun();
     },
     onSettings: () => {
-      showSettings({ onClose: hideSettings, onLunarCheat: triggerLunarCheat });
+      showSettings({ onClose: hideSettings, onWalkJump: enterWalkAtLevel });
     }
   });
 }
@@ -216,25 +216,23 @@ function startRun() {
 }
 
 /**
- * Hidden cheat triggered from the settings overlay (master=19, music=69,
- * lunar=11). Skips the 2D descent and drops the player straight into
- * walk-mode level 1 with 5% fuel and a fuel drum within reach. The
- * dismount happens after a tick so the settings-input event finishes
- * cleanly before mode swap.
+ * Admin-menu walk-mode jump. Skips the 2D descent and drops the player
+ * straight into walk mode at the requested Apollo level (0-indexed,
+ * matching APOLLO_SITES). Full fuel, full HP — this is a debug entry
+ * point, not a gameplay hook. Defers the mode swap a tick so the
+ * settings-overlay close event finishes cleanly.
  */
-function triggerLunarCheat() {
-  console.log('🌙 LUNAR CHEAT — 19 69 11');
+function enterWalkAtLevel(level) {
+  console.log(`🛠 ADMIN — walk jump to level ${level}`);
   hideSettings();
   hideMainMenu();
   setTimeout(() => {
     startNewRun();
-    // 5% fuel, as ordered.
-    GameState.fuel.current = GameState.fuel.capacity * 0.05;
-    // Pretend we just landed cleanly on a plain pad at the world origin,
-    // matching the parked-lander default position. WalkMode reads
-    // lastLanding.padKind to decide what extra loot to spawn — 'plain'
-    // skips the beginner-pad fuel drum freebie so the only nearby drum
-    // is the one in LEVEL1_FIXED_LOOT (the cheat-spawn target).
+    GameState.level = level | 0;
+    // Pretend we just landed cleanly on a plain pad at the world origin.
+    // WalkMode reads lastLanding.padKind to decide what extra loot to
+    // spawn — 'plain' skips the beginner-pad freebie so the layout is
+    // deterministic for debugging.
     GameState.hasLanded = true;
     GameState.lastLanding.padCenterX = 0;
     GameState.lastLanding.padWidth = 30;
@@ -323,7 +321,7 @@ function onGlobalKey(e) {
     if (isSettingsOpen()) {
       hideSettings();
     } else if (!transitioning) {
-      showSettings({ onClose: hideSettings, onLunarCheat: triggerLunarCheat });
+      showSettings({ onClose: hideSettings, onWalkJump: enterWalkAtLevel });
     }
   }
 }

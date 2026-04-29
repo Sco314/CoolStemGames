@@ -17,6 +17,7 @@ import {
 } from './Constants.js';
 import { setMasterVolume, setMuted, isMuted, setMusicVolume } from './Sound.js';
 import { generateChallenge, validate as validateMath } from './MathChallenge.js';
+import { getShowTerrainDebug, setShowTerrainDebug } from './DevSettings.js';
 
 // ---------- cached DOM refs ----------
 const el = {
@@ -60,10 +61,14 @@ const overlay = {
   setMusicVolume:   document.getElementById('set-music-volume'),
   setMusicVolLabel: document.getElementById('set-music-volume-label'),
   setInvertY:       document.getElementById('set-invert-y'),
-  setLunar:         document.getElementById('set-lunar'),
-  setLunarLabel:    document.getElementById('set-lunar-label'),
   btnFullscreen:    document.getElementById('btn-fullscreen'),
+  btnAdmin:         document.getElementById('btn-admin'),
+  btnSettingsFloating: document.getElementById('btn-settings-floating'),
   btnCloseSettings: document.getElementById('btn-close-settings'),
+  adminMenu:           document.getElementById('admin-menu'),
+  adminTerrainDebug:   document.getElementById('admin-terrain-debug'),
+  adminWalkJumps:      Array.from(document.querySelectorAll('.admin-walk-jump')),
+  btnCloseAdmin:       document.getElementById('btn-close-admin'),
   muteBtn:          document.getElementById('mute-btn'),
   muteIcon:         document.querySelector('#mute-btn .mute-icon'),
   toastTitle:       document.querySelector('#achievement-toast .toast-title'),
@@ -126,11 +131,11 @@ let settingsCb = () => {};
 let restartCb = () => {};
 let menuCb = () => {};
 let closeSettingsCb = () => {};
-// Cheat-code callback fired from the settings overlay when the player
-// dials in the magic triplet (see checkLunarCheat). Wired by Main.js
-// inside its showSettings(...) calls.
-let lunarCheatCb = null;
-let lunarCheatFired = false;   // one-shot per settings session
+// Admin-menu hooks (PIN-protected). The PIN check lives in HUD.js so the
+// gating UI is self-contained; the underlying actions (terrain-debug
+// toggle, walk-mode level jump) are supplied by callers via showSettings().
+const ADMIN_PIN = '196911';   // dev shortcut, NOT a security boundary
+let walkJumpCb = null;        // (level:number) => void
 
 // ---------- init ----------
 export function initHUD() {
@@ -157,7 +162,6 @@ function bindOverlayButtons() {
     setMasterVolume(v);
     GameState.settings.masterVolume = v;
     persistSettings();
-    checkLunarCheat();
   });
   overlay.setMusicVolume?.addEventListener('input', (e) => {
     const pct = Number(e.target.value);
@@ -166,33 +170,52 @@ function bindOverlayButtons() {
     setMusicVolume(v);
     GameState.settings.musicVolume = v;
     persistSettings();
-    checkLunarCheat();
   });
   overlay.setInvertY.addEventListener('change', (e) => {
     GameState.settings.invertY = !!e.target.checked;
     persistSettings();
   });
-  // Both `input` (continuous, fires on every drag tick) AND `change` (fires
-  // when the drag finishes / on tap-to-set). Some touch / accessibility
-  // paths only deliver `change`. Either path runs the same body.
-  const onLunarInput = (e) => {
-    const pct = Number(e.target.value);
-    if (overlay.setLunarLabel) overlay.setLunarLabel.textContent = String(pct);
-    GameState.settings.lunar = pct;
-    persistSettings();
-    checkLunarCheat();
-  };
-  if (overlay.setLunar) {
-    overlay.setLunar.addEventListener('input',  onLunarInput);
-    overlay.setLunar.addEventListener('change', onLunarInput);
-    console.log('[HUD] LUNAR slider listener bound');
-  } else {
-    console.warn('[HUD] LUNAR slider element not found — id="set-lunar" missing');
-  }
   overlay.btnFullscreen.addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen?.();
     else document.documentElement.requestFullscreen?.();
   });
+
+  // Floating settings button — visible across every mode. Opens the
+  // SETTINGS overlay; close behaviour is the same as the menu's button.
+  overlay.btnSettingsFloating?.addEventListener('click', () => {
+    if (overlay.settings.hidden) settingsCb();
+    else hideSettings();
+  });
+
+  // Admin entry — PIN-gated. The PIN is hardcoded client-side; this is
+  // a developer shortcut, not a security boundary.
+  overlay.btnAdmin?.addEventListener('click', () => {
+    const entered = (typeof window !== 'undefined' && typeof window.prompt === 'function')
+      ? window.prompt('Admin PIN:')
+      : '';
+    if (entered !== ADMIN_PIN) {
+      if (entered !== null) console.warn('[HUD] admin: wrong PIN');
+      return;
+    }
+    showAdmin();
+  });
+  overlay.btnCloseAdmin?.addEventListener('click', hideAdmin);
+
+  // Admin: terrain-debug toggle. Reflects + writes the runtime flag.
+  overlay.adminTerrainDebug?.addEventListener('change', (e) => {
+    setShowTerrainDebug(!!e.target.checked);
+  });
+
+  // Admin: walk-mode level jumps.
+  for (const btn of overlay.adminWalkJumps) {
+    btn.addEventListener('click', () => {
+      const level = Number(btn.dataset.level);
+      if (!Number.isFinite(level) || !walkJumpCb) return;
+      hideAdmin();
+      hideSettings();
+      walkJumpCb(level);
+    });
+  }
 
   // Always-visible corner mute toggle. Click flips state, persists,
   // retunes every live Sound. The same path is exposed as toggleMute()
@@ -552,37 +575,17 @@ function applySettings(settings) {
     if (overlay.setMusicVolLabel) overlay.setMusicVolLabel.textContent = overlay.setMusicVolume.value;
   }
   overlay.setInvertY.checked = !!settings.invertY;
-  if (overlay.setLunar) {
-    const lunar = settings.lunar | 0;
-    overlay.setLunar.value = String(lunar);
-    if (overlay.setLunarLabel) overlay.setLunarLabel.textContent = String(lunar);
-  }
   refreshMuteIcon();
 }
 
-/**
- * Hidden cheat: dialing master=19, music=69, lunar=11 in the settings
- * overlay drops the player straight into walk-mode level 1 with 5% fuel
- * and a fuel drum within reach. Fires only once per settings session so
- * adjusting another slider afterward doesn't re-trigger it. Cleared on
- * the next showSettings() call.
- */
-function checkLunarCheat() {
-  if (lunarCheatFired || !lunarCheatCb) return;
-  const s = GameState.settings;
-  const masterPct = Math.round((s.masterVolume ?? 0) * 100);
-  const musicPct  = Math.round((s.musicVolume  ?? 0) * 100);
-  // Read lunar straight off the DOM as a fallback — if for any reason
-  // the input listener didn't update GameState.settings.lunar (e.g.
-  // the slider element was rebuilt or another script swallowed the
-  // event), the slider's actual value still wins.
-  const lunarFromState = s.lunar | 0;
-  const lunarFromDom   = Number(overlay.setLunar?.value ?? NaN);
-  const lunarPct       = Number.isFinite(lunarFromDom) ? Math.round(lunarFromDom) : lunarFromState;
-  if (masterPct === 19 && musicPct === 69 && lunarPct === 11) {
-    lunarCheatFired = true;
-    lunarCheatCb();
-  }
+function showAdmin() {
+  if (!overlay.adminMenu) return;
+  if (overlay.adminTerrainDebug) overlay.adminTerrainDebug.checked = !!getShowTerrainDebug();
+  overlay.adminMenu.hidden = false;
+}
+
+function hideAdmin() {
+  if (overlay.adminMenu) overlay.adminMenu.hidden = true;
 }
 
 /**
@@ -717,15 +720,17 @@ export function showGameOver({ score, level, landings, rank, onRestart, onMenu }
 }
 export function hideGameOver() { overlay.gameOver.hidden = true; }
 
-export function showSettings({ onClose, onLunarCheat } = {}) {
+export function showSettings({ onClose, onWalkJump } = {}) {
   closeSettingsCb = onClose || (() => { hideSettings(); });
-  lunarCheatCb = onLunarCheat || null;
-  lunarCheatFired = false;
+  walkJumpCb = onWalkJump || null;
   applySettings(GameState.settings);
   overlay.settings.hidden = false;
   requestAnimationFrame(() => overlay.btnCloseSettings.focus());
 }
-export function hideSettings() { overlay.settings.hidden = true; }
+export function hideSettings() {
+  overlay.settings.hidden = true;
+  hideAdmin();
+}
 
 export function isSettingsOpen() { return !overlay.settings.hidden; }
 export function isMenuOpen() { return !overlay.mainMenu.hidden; }

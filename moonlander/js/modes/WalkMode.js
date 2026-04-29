@@ -30,9 +30,9 @@ import {
   CARGO_REMINDER_INTERVAL_S, CARGO_REMINDER_MIN_DIST,
   LOW_FUEL_RETURN_FRAC,
   MODE, BINDINGS,
-  APOLLO_LM_SIZE_WU, SPACESUIT_SIZE_WU,
-  SHOW_TERRAIN_DEBUG
+  APOLLO_LM_SIZE_WU, SPACESUIT_SIZE_WU
 } from '../Constants.js';
+import { getShowTerrainDebug } from '../DevSettings.js';
 import {
   GameState, update as updateState, notify, refreshObjectives,
   unlockAchievement, setObjectivesForLevel
@@ -83,11 +83,10 @@ let _groundGeom = null;
 // the flat-grey lambert created in `buildGround()`.
 let _groundMat = null;
 
-// Diagnostic state for the on-screen overlay (gated by
-// Constants.SHOW_TERRAIN_DEBUG). Updated at every relevant point in the
-// bake/texture pipeline + on every groundHeight() call so QA on machines
-// without DevTools can see what the runtime sees. Pure instrumentation —
-// when SHOW_TERRAIN_DEBUG is false, nothing reads or writes these fields.
+// Diagnostic state for the on-screen overlay (gated at the per-frame DOM
+// update by getShowTerrainDebug()). Always written so toggling the flag
+// mid-session via the admin menu shows current reality, not stale values.
+// Cost is a few field assignments per groundHeight() call — negligible.
 const _debugStatus = {
   bakeState: 'idle',       // 'idle'|'fetching'|'loaded'|'failed'
   bakeUrl: '',
@@ -202,7 +201,7 @@ export const WalkMode = {
     // is re-displaced and any items placed before then are re-snapped to
     // the new heights. Resolves to null on 404 / network error — in that
     // case we just stay on procedural.
-    if (SHOW_TERRAIN_DEBUG) {
+    {
       const site = apolloSiteForLevel(GameState.level);
       _debugStatus.bakeState = 'fetching';
       _debugStatus.bakeUrl = site ? `assets/baked_terrain/${site.id}.json` : '';
@@ -217,11 +216,9 @@ export const WalkMode = {
       _bake = b;
       if (b) {
         _bakeHalfExtent = bakeFootprintWU(b).halfExtentWU;
-        if (SHOW_TERRAIN_DEBUG) {
-          _debugStatus.bakeState = 'loaded';
-          _debugStatus.bakeMin = b.minM;
-          _debugStatus.bakeMax = b.maxM;
-        }
+        _debugStatus.bakeState = 'loaded';
+        _debugStatus.bakeMin = b.minM;
+        _debugStatus.bakeMax = b.maxM;
         console.log(
           `✅ [WalkMode] baked terrain loaded: ${b.site} ` +
           `(${b.size}×${b.size}, ${(b.maxM - b.minM).toFixed(1)} m relief)`
@@ -230,7 +227,7 @@ export const WalkMode = {
         resnapWorldToBakedTerrain();
         loadColorTextureForBake(b);
       } else {
-        if (SHOW_TERRAIN_DEBUG) _debugStatus.bakeState = 'failed';
+        _debugStatus.bakeState = 'failed';
         console.warn('⚠️ [WalkMode] no baked terrain for this level — procedural sin-sum only');
       }
     });
@@ -242,10 +239,10 @@ export const WalkMode = {
     lastCargoReminderAt = -Infinity;
     if (GameState.flags) GameState.flags.lowFuelReturnFired = false;
 
-    // Spawn next to the parked lander, facing away from it. The lunar
-    // cheat (Main.js:triggerLunarCheat) overrides this to drop the
-    // astronaut next to the LEVEL1_FIXED_LOOT fuel drum at (34, -28),
-    // facing it, so the player can grab the drum immediately.
+    // Spawn next to the parked lander, facing away from it. The admin
+    // walk-jump (Main.js:enterWalkAtLevel) sets `cheatSpawn` to drop
+    // the astronaut next to the LEVEL1_FIXED_LOOT fuel drum at (34,
+    // -28), facing it, so the player can grab the drum immediately.
     if (callbacks.cheatSpawn) {
       astronaut.position.set(30, 0, -25);
       astronaut.position.y = groundHeight(astronaut.position.x, astronaut.position.z);
@@ -352,7 +349,7 @@ export const WalkMode = {
   },
 
   update(dt) {
-    if (SHOW_TERRAIN_DEBUG) updateTerrainDebugOverlay();
+    if (getShowTerrainDebug()) updateTerrainDebugOverlay();
     // Scripted disembark / embark takes priority over player input. It drives
     // position, yaw, walk animation, and camera each frame, then bails out
     // before the normal input loop runs.
@@ -856,13 +853,11 @@ function proceduralGround(x, z) {
  */
 function groundHeight(x, z) {
   const baked = sampleHeight(_bake, x, z);
-  if (SHOW_TERRAIN_DEBUG) {
-    const procY = proceduralGround(x, z);
-    _debugStatus.lastSampleSource = baked !== null ? 'bake' : 'procedural';
-    _debugStatus.lastSampleY = baked !== null ? baked : procY;
-    _debugStatus.lastProcY = procY;
-  }
-  return baked !== null ? baked : proceduralGround(x, z);
+  const procY = proceduralGround(x, z);
+  _debugStatus.lastSampleSource = baked !== null ? 'bake' : 'procedural';
+  _debugStatus.lastSampleY = baked !== null ? baked : procY;
+  _debugStatus.lastProcY = procY;
+  return baked !== null ? baked : procY;
 }
 
 /**
@@ -948,10 +943,8 @@ function loadColorTextureForBake(bake) {
   // `uvScale` fraction of the texture.
   const uvScale = planeSide / (2 * halfExtentWU);
   const offset = (1 - uvScale) / 2;
-  if (SHOW_TERRAIN_DEBUG) {
-    _debugStatus.colorState = 'fetching';
-    _debugStatus.colorUrl = url;
-  }
+  _debugStatus.colorState = 'fetching';
+  _debugStatus.colorUrl = url;
   new THREE.TextureLoader().load(
     url,
     (tex) => {
@@ -976,15 +969,13 @@ function loadColorTextureForBake(bake) {
       _groundMat.color.set(0xffffff);
       _groundMat.needsUpdate = true;
       disposables.push({ texture: tex });
-      if (SHOW_TERRAIN_DEBUG) {
-        _debugStatus.colorState = 'loaded';
-        _debugStatus.materialMode = 'textured';
-      }
+      _debugStatus.colorState = 'loaded';
+      _debugStatus.materialMode = 'textured';
       console.log(`✅ [WalkMode] colour texture applied: ${bake.site}`);
     },
     undefined,
     () => {
-      if (SHOW_TERRAIN_DEBUG) _debugStatus.colorState = 'failed';
+      _debugStatus.colorState = 'failed';
       console.warn(`⚠️ [WalkMode] no color texture for ${bake.site} — using grey lambert`);
     }
   );
@@ -992,8 +983,8 @@ function loadColorTextureForBake(bake) {
 
 /**
  * Per-frame writer for the #terrain-debug overlay. Only called when
- * Constants.SHOW_TERRAIN_DEBUG is true; otherwise the overlay element
- * stays display:none and this function isn't invoked. Renders the bake
+ * `getShowTerrainDebug()` is true (admin-menu toggle); otherwise the
+ * overlay element stays display:none and this function isn't invoked. Renders the bake
  * fetch state, colour fetch state, current material mode, the
  * astronaut's xz/y, and the most recent groundHeight() sample (which
  * source it came from + the bake-vs-procedural delta).
