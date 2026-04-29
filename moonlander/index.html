@@ -299,14 +299,36 @@
       <input type="checkbox" id="set-invert-y">
       <span>INVERT MOUSE Y</span>
     </label>
-    <label class="row">
-      <span>LUNAR</span>
-      <input type="range" min="0" max="100" step="1" value="0" id="set-lunar">
-      <span id="set-lunar-label">0</span>
-    </label>
     <button id="btn-fullscreen" class="small">TOGGLE FULLSCREEN</button>
+    <button id="btn-admin" class="small">ADMIN</button>
     <button id="btn-close-settings" class="big">CLOSE</button>
   </div>
+
+  <!-- Admin overlay (PIN-gated). Lists dev tools: terrain-debug toggle
+       and per-level walk-mode jumps. The PIN is client-side only — this
+       is a developer shortcut, not a security boundary. -->
+  <div id="admin-menu" class="overlay" hidden>
+    <h2>ADMIN</h2>
+    <label class="row">
+      <input type="checkbox" id="admin-terrain-debug">
+      <span>SHOW TERRAIN DEBUG OVERLAY</span>
+    </label>
+    <div class="admin-section">
+      <div class="admin-section-label">JUMP TO WALK MODE</div>
+      <button class="small admin-walk-jump" data-level="0">APOLLO 11 (LVL 1)</button>
+      <button class="small admin-walk-jump" data-level="1">APOLLO 12 (LVL 2)</button>
+      <button class="small admin-walk-jump" data-level="2">APOLLO 14 (LVL 3)</button>
+      <button class="small admin-walk-jump" data-level="3">APOLLO 15 (LVL 4)</button>
+      <button class="small admin-walk-jump" data-level="4">APOLLO 16 (LVL 5)</button>
+      <button class="small admin-walk-jump" data-level="5">APOLLO 17 (LVL 6)</button>
+    </div>
+    <button id="btn-close-admin" class="big">CLOSE</button>
+  </div>
+
+  <!-- Floating settings button — always visible top-right, opens the
+       SETTINGS overlay regardless of current mode. Provides the only
+       entry point to the admin menu. -->
+  <button id="btn-settings-floating" type="button" aria-label="Settings">⚙</button>
 
   <div id="achievement-toast" class="toast" hidden>
     <div class="toast-label">ACHIEVEMENT UNLOCKED</div>
@@ -343,6 +365,16 @@
          handled by tap-on-canvas (see js/modes/WalkMode.js bindMouse()),
          so this slot is intentionally empty. -->
   </div>
+
+  <!-- Walk-mode terrain diagnostic overlay. Hidden by default; populated
+       by WalkMode.update() when Constants.SHOW_TERRAIN_DEBUG is true.
+       For QA on machines without DevTools access. -->
+  <div id="terrain-debug" style="display:none;
+       position:fixed; top:8px; right:8px; z-index:9999;
+       padding:8px 10px; background:rgba(0,0,0,0.78); color:#9fe;
+       font:11px/1.35 ui-monospace, Menlo, Consolas, monospace;
+       white-space:pre; pointer-events:none; border:1px solid #2a4;
+       max-width:340px;"></div>
 
   <script type="module" src="js/Main.js"></script>
 </body>
