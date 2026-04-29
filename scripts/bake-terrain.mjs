@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fromFile } from 'geotiff';
+import { PNG } from 'pngjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,14 +13,7 @@ const REPO_ROOT = resolve(__dirname, '..');
 
 const RELEASE_OWNER = 'Sco314';
 const RELEASE_REPO = 'CoolStemGames';
-const RELEASE_TAG = 'assets/ldem-16-uint';
-const RELEASE_ASSET_NAME = 'ldem_16_uint.tif';
-const TIFF_PATH = resolve(__dirname, 'ldem_16_uint.tif');
 const OUT_DIR = resolve(REPO_ROOT, 'moonlander/assets/baked_terrain');
-
-const TIFF_WIDTH = 5760;
-const TIFF_HEIGHT = 2880;
-const PIXELS_PER_DEG = 16;
 
 // CGI Moon Kit LDEM encoding: pixel value * 0.5 m above 1727.4 km reference.
 // Mean lunar surface is at 1737.4 km, so subtract 10000 m to get meters
@@ -30,7 +24,8 @@ const HEIGHT_OFFSET = -10000;
 const MEAN_LUNAR_RADIUS_M = 1737400;
 const METERS_PER_DEG_LAT = (Math.PI * MEAN_LUNAR_RADIUS_M) / 180;
 
-const OUT_SIZE = 65;
+const HEIGHT_OUT_SIZE = 65;
+const COLOR_OUT_SIZE = 256;
 const GROUND_EXTENT_M = 1600;
 
 const SITES = [
@@ -41,6 +36,34 @@ const SITES = [
   { id: 'apollo-16', lat: -8.9734, lon:  15.5011 },
   { id: 'apollo-17', lat: 20.1908, lon:  30.7717 },
 ];
+
+// Asset descriptors. Each TIFF source is parameterized so the LDEM and
+// LROC paths share the download / parse / sample machinery. Width and
+// height are validated against expected dims; pixels-per-degree is
+// derived from width (= width / 360) so re-encoded sources at different
+// resolutions just work.
+const ASSETS = {
+  ldem: {
+    tag: 'assets/ldem-16-uint',
+    name: 'ldem_16_uint.tif',
+    cachePath: resolve(__dirname, 'ldem_16_uint.tif'),
+    expectedDims: [5760, 2880],
+    expectedBps: 16,
+    expectedSpp: 1,
+    sizeMinBytes: 30e6,
+    sizeMaxBytes: 35e6,
+  },
+  lroc: {
+    tag: 'assets/lroc-color-4k',
+    name: 'lroc_color_16bit_srgb_4k.tif',
+    cachePath: resolve(__dirname, 'lroc_color_16bit_srgb_4k.tif'),
+    expectedDims: [4096, 2048],
+    expectedBps: 16,
+    expectedSpp: 3,
+    sizeMinBytes: 50e6,
+    sizeMaxBytes: 70e6,
+  },
+};
 
 function fail(msg) {
   console.error(msg);
@@ -56,46 +79,47 @@ async function fileExists(p) {
   }
 }
 
-async function resolveAssetUrl() {
-  // Use the API to look up the asset by name. This endpoint works for both
-  // public and private repos, whereas the user-facing /releases/download/...
-  // URL returns 404 for private repos even with a valid token.
+async function downloadAsset(asset) {
+  // Public-repo download URL works without auth; the API path with
+  // GITHUB_TOKEN is the fallback for private-repo runs.
+  const publicUrl =
+    `https://github.com/${RELEASE_OWNER}/${RELEASE_REPO}` +
+    `/releases/download/${asset.tag}/${asset.name}`;
   const token = process.env.GITHUB_TOKEN;
-  const apiHeaders = {
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-  const releaseUrl = `https://api.github.com/repos/${RELEASE_OWNER}/${RELEASE_REPO}/releases/tags/${RELEASE_TAG}`;
-  const rel = await fetch(releaseUrl, { headers: apiHeaders });
-  if (!rel.ok) {
-    const hint = !token && (rel.status === 404 || rel.status === 403)
-      ? ' (private-repo asset? set GITHUB_TOKEN env var with Contents:Read)'
-      : '';
-    fail(`❌ Release lookup failed: HTTP ${rel.status} ${rel.statusText}${hint}`);
+
+  let res = await fetch(publicUrl, { redirect: 'follow' });
+  if (!res.ok) {
+    if (token) {
+      // Private-repo path: look up the asset by name via API, then GET its
+      // API URL with Accept: application/octet-stream + auth.
+      const apiHeaders = {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        Authorization: `Bearer ${token}`,
+      };
+      const releaseUrl = `https://api.github.com/repos/${RELEASE_OWNER}/${RELEASE_REPO}/releases/tags/${asset.tag}`;
+      const rel = await fetch(releaseUrl, { headers: apiHeaders });
+      if (!rel.ok) fail(`❌ Release lookup failed: HTTP ${rel.status} ${rel.statusText}`);
+      const release = await rel.json();
+      const meta = release.assets?.find((a) => a.name === asset.name);
+      if (!meta) fail(`❌ Asset ${asset.name} not found on release ${asset.tag}`);
+      res = await fetch(meta.url, {
+        headers: { ...apiHeaders, Accept: 'application/octet-stream' },
+        redirect: 'follow',
+      });
+    }
+    if (!res.ok) {
+      const hint = !token
+        ? ' (private-repo asset? set GITHUB_TOKEN env var)'
+        : '';
+      fail(`❌ ${asset.name} download failed: HTTP ${res.status} ${res.statusText}${hint}`);
+    }
   }
-  const release = await rel.json();
-  const asset = release.assets?.find((a) => a.name === RELEASE_ASSET_NAME);
-  if (!asset) fail(`❌ Asset ${RELEASE_ASSET_NAME} not found on release ${RELEASE_TAG}`);
-  return asset.url;
-}
 
-async function downloadTiff() {
-  const assetUrl = await resolveAssetUrl();
-  console.log(`Downloading ${RELEASE_ASSET_NAME} via release API`);
-  const token = process.env.GITHUB_TOKEN;
-  const headers = {
-    Accept: 'application/octet-stream',
-    'X-GitHub-Api-Version': '2022-11-28',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-  const res = await fetch(assetUrl, { headers, redirect: 'follow' });
-  if (!res.ok) fail(`❌ TIFF download failed: HTTP ${res.status} ${res.statusText}`);
-
+  console.log(`Downloading ${asset.name}`);
   const total = Number(res.headers.get('content-length')) || 0;
   let received = 0;
   let nextPct = 10;
-
   const reporter = new TransformStream({
     transform(chunk, controller) {
       received += chunk.byteLength;
@@ -109,21 +133,49 @@ async function downloadTiff() {
       controller.enqueue(chunk);
     },
   });
+  await pipeline(Readable.fromWeb(res.body.pipeThrough(reporter)), createWriteStream(asset.cachePath));
 
-  const body = res.body.pipeThrough(reporter);
-  await pipeline(Readable.fromWeb(body), createWriteStream(TIFF_PATH));
-
-  const { size } = await stat(TIFF_PATH);
+  const { size } = await stat(asset.cachePath);
   const mb = size / 1e6;
-  if (size < 30e6 || size > 35e6) {
-    await unlink(TIFF_PATH).catch(() => {});
-    fail(`❌ TIFF download invalid (wrong size ${mb.toFixed(1)} MB) — re-run script`);
+  if (size < asset.sizeMinBytes || size > asset.sizeMaxBytes) {
+    await unlink(asset.cachePath).catch(() => {});
+    fail(`❌ ${asset.name} download invalid (wrong size ${mb.toFixed(1)} MB) — re-run script`);
   }
   console.log(`✅ Downloaded ${mb.toFixed(1)} MB`);
 }
 
-function bilinearSample(raster, width, height, x, y) {
-  // x,y are floating pixel coordinates. Caller guarantees they're inside
+async function ensureAsset(asset, forceDownload) {
+  if (forceDownload || !(await fileExists(asset.cachePath))) {
+    if (forceDownload && (await fileExists(asset.cachePath))) {
+      await unlink(asset.cachePath);
+    }
+    await downloadAsset(asset);
+  } else {
+    console.log(`Using cached ${asset.name}`);
+  }
+}
+
+async function loadTiff(asset, { interleave }) {
+  console.log(`Parsing ${asset.name}...`);
+  const tiff = await fromFile(asset.cachePath);
+  const image = await tiff.getImage();
+  const width = image.getWidth();
+  const height = image.getHeight();
+  const bps = image.getBitsPerSample();
+  const spp = image.getSamplesPerPixel();
+  const [expW, expH] = asset.expectedDims;
+
+  if (width !== expW || height !== expH || bps !== asset.expectedBps || spp !== asset.expectedSpp) {
+    fail(`❌ Source TIFF has unexpected dimensions or layout: ${width}x${height}, ${bps}-bit, ${spp} samples/px`);
+  }
+
+  const rasters = await image.readRasters({ interleave });
+  console.log(`✅ Parsed ${width}×${height}, ${bps}-bit, ${spp}-channel`);
+  return { width, height, bps, spp, rasters };
+}
+
+function bilinearSample1(raster, width, height, x, y) {
+  // Single-channel bilinear. Caller guarantees x,y are inside
   // [0, width-1] × [0, height-1] (no wrap-around).
   const x0 = Math.floor(x);
   const y0 = Math.floor(y);
@@ -140,12 +192,9 @@ function bilinearSample(raster, width, height, x, y) {
   return top * (1 - fy) + bot * fy;
 }
 
-function bakeSite(site, raster) {
+function pixelBoundsForSite(site, width, height) {
   const halfM = GROUND_EXTENT_M / 2;
-  // Latitude: meters→degrees is constant.
   const halfDegLat = halfM / METERS_PER_DEG_LAT;
-  // Longitude: meters→degrees scales by 1/cos(lat). At Apollo latitudes
-  // the cos is well above 0, so no singularity worries.
   const metersPerDegLon = METERS_PER_DEG_LAT * Math.cos((site.lat * Math.PI) / 180);
   const halfDegLon = halfM / metersPerDegLon;
 
@@ -154,29 +203,31 @@ function bakeSite(site, raster) {
   const lonW = site.lon - halfDegLon;
   const lonE = site.lon + halfDegLon;
 
-  const xMin = (lonW + 180) * PIXELS_PER_DEG;
-  const xMax = (lonE + 180) * PIXELS_PER_DEG;
-  const yMin = (90 - latN) * PIXELS_PER_DEG; // north edge → smaller y
-  const yMax = (90 - latS) * PIXELS_PER_DEG;
+  const ppd = width / 360;
+  const xMin = (lonW + 180) * ppd;
+  const xMax = (lonE + 180) * ppd;
+  const yMin = (90 - latN) * ppd; // north edge → smaller y
+  const yMax = (90 - latS) * ppd;
 
-  // Assert the cropped window fits without wrap-around. None of the
-  // Apollo sites are anywhere near the antimeridian or the poles, but a
-  // future site addition could drift, so catch it here.
-  if (xMin < 0 || xMax > TIFF_WIDTH - 1 || yMin < 0 || yMax > TIFF_HEIGHT - 1) {
+  if (xMin < 0 || xMax > width - 1 || yMin < 0 || yMax > height - 1) {
     fail(`❌ ${site.id}: crop window out of bounds (x=${xMin.toFixed(2)}..${xMax.toFixed(2)}, y=${yMin.toFixed(2)}..${yMax.toFixed(2)})`);
   }
+  return { xMin, xMax, yMin, yMax };
+}
 
-  const heightsM = new Float64Array(OUT_SIZE * OUT_SIZE);
+function bakeSiteHeights(site, raster, width, height) {
+  const { xMin, xMax, yMin, yMax } = pixelBoundsForSite(site, width, height);
+  const heightsM = new Float64Array(HEIGHT_OUT_SIZE * HEIGHT_OUT_SIZE);
   let minM = Infinity;
   let maxM = -Infinity;
 
-  for (let r = 0; r < OUT_SIZE; r++) {
-    const y = yMin + (r / (OUT_SIZE - 1)) * (yMax - yMin);
-    for (let c = 0; c < OUT_SIZE; c++) {
-      const x = xMin + (c / (OUT_SIZE - 1)) * (xMax - xMin);
-      const pix = bilinearSample(raster, TIFF_WIDTH, TIFF_HEIGHT, x, y);
+  for (let r = 0; r < HEIGHT_OUT_SIZE; r++) {
+    const y = yMin + (r / (HEIGHT_OUT_SIZE - 1)) * (yMax - yMin);
+    for (let c = 0; c < HEIGHT_OUT_SIZE; c++) {
+      const x = xMin + (c / (HEIGHT_OUT_SIZE - 1)) * (xMax - xMin);
+      const pix = bilinearSample1(raster, width, height, x, y);
       const m = pix * HEIGHT_SCALE + HEIGHT_OFFSET;
-      heightsM[r * OUT_SIZE + c] = m;
+      heightsM[r * HEIGHT_OUT_SIZE + c] = m;
       if (m < minM) minM = m;
       if (m > maxM) maxM = m;
     }
@@ -187,7 +238,7 @@ function bakeSite(site, raster) {
   }
 
   const range = maxM - minM;
-  const heights = new Array(OUT_SIZE * OUT_SIZE);
+  const heights = new Array(HEIGHT_OUT_SIZE * HEIGHT_OUT_SIZE);
   for (let i = 0; i < heightsM.length; i++) {
     const n = (heightsM[i] - minM) / range;
     if (!Number.isFinite(n) || n < 0 || n > 1) {
@@ -196,60 +247,117 @@ function bakeSite(site, raster) {
     heights[i] = n;
   }
 
-  if (heights.length !== OUT_SIZE * OUT_SIZE) {
-    fail(`❌ ${site.id}: heights.length=${heights.length} expected ${OUT_SIZE * OUT_SIZE}`);
+  if (heights.length !== HEIGHT_OUT_SIZE * HEIGHT_OUT_SIZE) {
+    fail(`❌ ${site.id}: heights.length=${heights.length} expected ${HEIGHT_OUT_SIZE * HEIGHT_OUT_SIZE}`);
   }
 
   return { minM, maxM, heights };
 }
 
-async function main() {
-  const forceDownload = process.argv.includes('--force-download');
+function bakeSiteColor(site, lrocBands, width, height) {
+  // lrocBands: [Uint16Array R, Uint16Array G, Uint16Array B] returned by
+  // geotiff.readRasters({ interleave: false }).
+  const [rBand, gBand, bBand] = lrocBands;
+  const { xMin, xMax, yMin, yMax } = pixelBoundsForSite(site, width, height);
 
-  if (forceDownload || !(await fileExists(TIFF_PATH))) {
-    if (forceDownload && (await fileExists(TIFF_PATH))) {
-      await unlink(TIFF_PATH);
+  const png = new PNG({ width: COLOR_OUT_SIZE, height: COLOR_OUT_SIZE, colorType: 2 /* RGB */ });
+  // pngjs' Buffer is RGBA even for colorType 2 (it allocates 4 bytes/px and
+  // discards alpha on encode). Pack as RGBA, alpha = 255.
+  let lumSum = 0;
+  for (let r = 0; r < COLOR_OUT_SIZE; r++) {
+    const y = yMin + (r / (COLOR_OUT_SIZE - 1)) * (yMax - yMin);
+    for (let c = 0; c < COLOR_OUT_SIZE; c++) {
+      const x = xMin + (c / (COLOR_OUT_SIZE - 1)) * (xMax - xMin);
+      // 16-bit sRGB → 8-bit sRGB is a straight high-byte truncation. The
+      // browser's PNG sampling assumes sRGB, so no gamma adjustment.
+      const r16 = bilinearSample1(rBand, width, height, x, y);
+      const g16 = bilinearSample1(gBand, width, height, x, y);
+      const b16 = bilinearSample1(bBand, width, height, x, y);
+      const r8 = Math.max(0, Math.min(255, Math.round(r16 / 257)));
+      const g8 = Math.max(0, Math.min(255, Math.round(g16 / 257)));
+      const b8 = Math.max(0, Math.min(255, Math.round(b16 / 257)));
+      // Rec.709 luminance for the sanity-check mean.
+      lumSum += 0.2126 * r8 + 0.7152 * g8 + 0.0722 * b8;
+      const idx = (r * COLOR_OUT_SIZE + c) * 4;
+      png.data[idx]     = r8;
+      png.data[idx + 1] = g8;
+      png.data[idx + 2] = b8;
+      png.data[idx + 3] = 255;
     }
-    await downloadTiff();
-  } else {
-    console.log(`Using cached TIFF at ${TIFF_PATH}`);
   }
-
-  console.log('Parsing TIFF...');
-  const tiff = await fromFile(TIFF_PATH);
-  const image = await tiff.getImage();
-  const width = image.getWidth();
-  const height = image.getHeight();
-  const bitsPerSample = image.getBitsPerSample();
-
-  if (width !== TIFF_WIDTH || height !== TIFF_HEIGHT || bitsPerSample !== 16) {
-    fail(`❌ Source TIFF has unexpected dimensions or bit depth: ${width}x${height}, ${bitsPerSample}-bit`);
+  const meanL = lumSum / (COLOR_OUT_SIZE * COLOR_OUT_SIZE) / 255;
+  if (meanL < 0.05 || meanL > 0.95) {
+    fail(`❌ ${site.id} color: mean luminance out of range (${meanL.toFixed(3)})`);
   }
+  const buf = PNG.sync.write(png);
+  return { buf, meanL };
+}
 
-  const rasters = await image.readRasters({ interleave: true });
-  console.log(`✅ Parsed ${width}×${height}, ${bitsPerSample}-bit (${rasters.length.toLocaleString()} samples)`);
+function parseFlags() {
+  const argv = process.argv.slice(2);
+  const flags = {
+    color: argv.includes('--color'),
+    heights: argv.includes('--heights'),
+    all: argv.includes('--all'),
+    forceDownload: argv.includes('--force-download'),
+  };
+  // Default: --color (heightmaps were baked in PR #104; re-baking them
+  // produces byte-identical output but creates noise for diff tools, so
+  // require an explicit opt-in).
+  if (!flags.color && !flags.heights && !flags.all) flags.color = true;
+  if (flags.all) { flags.color = true; flags.heights = true; }
+  return flags;
+}
 
+async function main() {
+  const flags = parseFlags();
   await mkdir(OUT_DIR, { recursive: true });
 
-  for (const site of SITES) {
-    const { minM, maxM, heights } = bakeSite(site, rasters);
-    const out = {
-      site: site.id,
-      lat: site.lat,
-      lon: site.lon,
-      size: OUT_SIZE,
-      groundExtentM: GROUND_EXTENT_M,
-      minM,
-      maxM,
-      heights,
-    };
-    const outPath = resolve(OUT_DIR, `${site.id}.json`);
-    const json = JSON.stringify(out);
-    await writeFile(outPath, json);
-    const kb = Math.round(json.length / 1024);
-    console.log(
-      `✅ ${site.id}: ${OUT_SIZE}×${OUT_SIZE} heights, range ${minM.toFixed(1)} .. ${maxM.toFixed(1)} m (Δ ${(maxM - minM).toFixed(1)} m), ${kb} KB`,
-    );
+  if (flags.heights) {
+    await ensureAsset(ASSETS.ldem, flags.forceDownload);
+    const { width, height, rasters } = await loadTiff(ASSETS.ldem, { interleave: true });
+    for (const site of SITES) {
+      const { minM, maxM, heights } = bakeSiteHeights(site, rasters, width, height);
+      const out = {
+        site: site.id, lat: site.lat, lon: site.lon,
+        size: HEIGHT_OUT_SIZE, groundExtentM: GROUND_EXTENT_M,
+        minM, maxM, heights,
+      };
+      const outPath = resolve(OUT_DIR, `${site.id}.json`);
+      const json = JSON.stringify(out);
+      await writeFile(outPath, json);
+      const kb = Math.round(json.length / 1024);
+      console.log(
+        `✅ ${site.id}: ${HEIGHT_OUT_SIZE}×${HEIGHT_OUT_SIZE} heights, range ${minM.toFixed(1)} .. ${maxM.toFixed(1)} m (Δ ${(maxM - minM).toFixed(1)} m), ${kb} KB`,
+      );
+    }
+  }
+
+  if (flags.color) {
+    await ensureAsset(ASSETS.lroc, flags.forceDownload);
+    const { width, height, rasters } = await loadTiff(ASSETS.lroc, { interleave: false });
+    if (!Array.isArray(rasters) || rasters.length !== 3) {
+      fail(`❌ LROC raster: expected 3-band array, got ${Array.isArray(rasters) ? rasters.length : typeof rasters}`);
+    }
+    for (const site of SITES) {
+      const { buf, meanL } = bakeSiteColor(site, rasters, width, height);
+      const outPath = resolve(OUT_DIR, `${site.id}_color.png`);
+      await writeFile(outPath, buf);
+      const { size } = await stat(outPath);
+      // Size floor is intentionally low: at the LROC source's ~11 ppd
+      // a 1600 m × 1600 m crop spans <1 source pixel per side, so the
+      // 256×256 output is essentially a single bilinearly-interpolated
+      // colour and PNG compresses uniform fills to a few hundred bytes.
+      // Mean-luminance is the real sanity check; size just catches a
+      // truly empty file.
+      if (size < 256 || size > 500 * 1024) {
+        fail(`❌ ${site.id} color: PNG size ${size} bytes outside [256 B, 500 KB]`);
+      }
+      const kb = Math.round(size / 1024);
+      console.log(
+        `✅ ${site.id} color: ${COLOR_OUT_SIZE}×${COLOR_OUT_SIZE}, mean L=${meanL.toFixed(2)}, ${kb} KB`,
+      );
+    }
   }
 }
 

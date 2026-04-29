@@ -77,6 +77,10 @@ let _bakeHalfExtent = 0;
 // let so `redisplaceGroundMesh()` can re-displace its vertices once the
 // bake JSON resolves.
 let _groundGeom = null;
+// Reference to the ground plane's material, kept so the per-site LROC
+// colour texture can be swapped onto its `map` once it loads. Default is
+// the flat-grey lambert created in `buildGround()`.
+let _groundMat = null;
 // NASA 3D Resources GLB integration. When the file is present + decoded
 // these references hold the swapped-in mesh; the procedural primitive
 // underneath is hidden but kept around as a fallback. `null` means we're
@@ -191,6 +195,7 @@ export const WalkMode = {
         );
         redisplaceGroundMesh();
         resnapWorldToBakedTerrain();
+        loadColorTextureForBake(b);
       } else {
         console.warn('⚠️ [WalkMode] no baked terrain for this level — procedural sin-sum only');
       }
@@ -300,6 +305,7 @@ export const WalkMode = {
     _bake = null;
     _bakeHalfExtent = 0;
     _groundGeom = null;
+    _groundMat = null;
     footprints = [];
     footprintCursor = 0;
     lastFootprintPos = null;
@@ -876,6 +882,58 @@ function buildGround() {
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
   _groundGeom = geom;
+  _groundMat = mat;
+}
+
+/**
+ * Fetch the per-site LROC colour PNG and apply it as the ground material's
+ * `map`. The PNG covers `bake.groundExtentM` of real Moon (much larger than
+ * the visible plane), so the visible plane samples just the central
+ * `WALK_PLAY_RADIUS * 2.4 / halfExtentWU` fraction of the texture, biased
+ * to the centre via `tex.repeat`/`tex.offset`. On failure the grey lambert
+ * stays as-is.
+ */
+function loadColorTextureForBake(bake) {
+  if (!bake || !_groundMat) return;
+  const url = `assets/baked_terrain/${bake.site}_color.png`;
+  const halfExtentWU = bakeFootprintWU(bake).halfExtentWU;
+  const planeSide = WALK_PLAY_RADIUS * 2.4;
+  // The visible plane is much smaller than the colour crop (planeSide ≈
+  // 768 wu vs. 2*halfExtentWU ≈ 2550 wu), so we sample only the central
+  // `uvScale` fraction of the texture.
+  const uvScale = planeSide / (2 * halfExtentWU);
+  const offset = (1 - uvScale) / 2;
+  new THREE.TextureLoader().load(
+    url,
+    (tex) => {
+      if (!scene || !_groundMat) {
+        tex.dispose();
+        return;
+      }
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.magFilter = THREE.LinearFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.generateMipmaps = true;
+      tex.repeat.set(uvScale, uvScale);
+      tex.offset.set(offset, offset);
+      tex.needsUpdate = true;
+      _groundMat.map = tex;
+      // Lambert + flatShading produces harsh facet steps under photo
+      // texture; turn it off, white-tint so the texture shows
+      // un-multiplied, and flag the material dirty.
+      _groundMat.flatShading = false;
+      _groundMat.color.set(0xffffff);
+      _groundMat.needsUpdate = true;
+      disposables.push({ texture: tex });
+      console.log(`✅ [WalkMode] colour texture applied: ${bake.site}`);
+    },
+    undefined,
+    () => {
+      console.warn(`⚠️ [WalkMode] no color texture for ${bake.site} — using grey lambert`);
+    }
+  );
 }
 
 // ---------- Boot-print trail ----------
