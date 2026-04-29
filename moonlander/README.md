@@ -214,11 +214,17 @@ returns it to baseline after each cycle), not climb monotonically.
   3D Resources catalog:
   https://github.com/nasa/NASA-3D-Resources/tree/11ebb4ee043715aefbba6aeec8a61746fad67fa7/3D%20Models
   Public-domain works of the U.S. Government per 17 U.S.C. § 105.
-  Used in walk mode for the parked Apollo Lunar Module, the Apollo 11
-  Tranquility-Base height-map terrain, the Mercury Spacesuit astronaut,
-  the Habitat Demonstration Unit landmarks, and the Atlas 6 / Friendship 7
-  rocket. Each load is async with a procedural fallback so the game still
-  runs offline or on low-end devices where the files are skipped.
+  Used in walk mode for the parked Apollo Lunar Module, the Mercury
+  Spacesuit astronaut, the Habitat Demonstration Unit landmarks, and the
+  Atlas 6 / Friendship 7 rocket. Each load is async with a procedural
+  fallback so the game still runs offline or on low-end devices where the
+  files are skipped.
+- Walk-mode terrain in `assets/baked_terrain/` is baked from NASA's
+  public-domain CGI Moon Kit by `scripts/bake-terrain.mjs`:
+  https://svs.gsfc.nasa.gov/4720
+  Heights from the LDEM 16 ppd uint16 mosaic; per-site colour tints from
+  the LROC color 4k sRGB mosaic. Both are public-domain works of the U.S.
+  Government per 17 U.S.C. § 105.
 
   **Rigging note for the Mercury Spacesuit:** the GLB ships as a static
   mesh (no bones / skin weights), so `js/modes/WalkMode.js:updateWalkAnim`
