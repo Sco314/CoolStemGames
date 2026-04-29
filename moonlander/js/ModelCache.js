@@ -1,10 +1,9 @@
 // ModelCache.js — v0.1.0
-// Session-lifetime cache for GLB / GLTF and STL geometry. Keeps a single
-// loaded prototype per URL and returns clones to callers, so re-entering
-// walk mode (or placing N tiles of the same terrain STL) doesn't re-decode
-// the file. Mirrors AssetCache's "cache owns the asset, never disposed"
-// invariant so mode-exit disposal lists don't accidentally delete a cached
-// scene's geometry.
+// Session-lifetime cache for GLB / GLTF geometry. Keeps a single loaded
+// prototype per URL and returns clones to callers, so re-entering walk
+// mode doesn't re-decode the file. Mirrors AssetCache's "cache owns the
+// asset, never disposed" invariant so mode-exit disposal lists don't
+// accidentally delete a cached scene's geometry.
 //
 // Failure modes are explicitly graceful: on 404 / parse error the load
 // rejects; callers `.catch()` and fall back to procedural primitives.
@@ -26,17 +25,13 @@
 import * as THREE from 'three';
 import { GLTFLoader }  from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { STLLoader }   from 'three/addons/loaders/STLLoader.js';
 
 const DRACO_DECODER_PATH = 'assets/draco/';
 
-const _modelCache   = new Map(); // url → Promise<THREE.Object3D> (prototype)
-const _stlCache     = new Map(); // url → Promise<THREE.BufferGeometry>
-const _terrainCache = new Map(); // url → Promise<THREE.BufferGeometry> (.glb terrain)
+const _modelCache = new Map(); // url → Promise<THREE.Object3D> (prototype)
 
 let _gltfLoader  = null;
 let _dracoLoader = null;
-let _stlLoader   = null;
 
 function draco() {
   if (!_dracoLoader) {
@@ -56,8 +51,6 @@ function gltf() {
   }
   return _gltfLoader;
 }
-
-function stl()  { return _stlLoader  || (_stlLoader  = new STLLoader()); }
 
 /**
  * Async-load a GLB/GLTF from `url`. Returns a fresh clone each call so the
@@ -91,76 +84,6 @@ export function loadModel(url) {
     _modelCache.set(url, proto);
   }
   return proto.then(root => root.clone(true));
-}
-
-/**
- * Async-load an STL into a BufferGeometry. STL files have no materials —
- * the caller pairs the geometry with a Material of its choice. Returns
- * the same shared geometry each call (callers must not mutate vertices).
- */
-export function loadSTL(url) {
-  let geomPromise = _stlCache.get(url);
-  if (!geomPromise) {
-    geomPromise = new Promise((resolve, reject) => {
-      stl().load(
-        url,
-        (geom) => {
-          geom.computeVertexNormals();
-          const triCount = geom.attributes.position?.count / 3 | 0;
-          console.log(`[ModelCache] loaded ${url} (${triCount} tris)`);
-          resolve(geom);
-        },
-        undefined,
-        (err) => {
-          console.warn(`[ModelCache] failed to load ${url}:`, err.message || err);
-          reject(err);
-        }
-      );
-    });
-    _stlCache.set(url, geomPromise);
-  }
-  return geomPromise;
-}
-
-/**
- * Async-load a terrain mesh from `url` and return its BufferGeometry.
- * Accepts either a Draco-compressed `.glb` (preferred — much smaller on
- * the wire) or an uncompressed `.stl` (legacy fallback). For `.glb`,
- * walks the scene and returns the first mesh's geometry; the GLB's
- * auto-generated material is discarded since `WalkMode.buildGround`
- * applies its own MeshLambertMaterial.
- */
-export function loadTerrainGeometry(url) {
-  if (/\.stl$/i.test(url)) return loadSTL(url);
-
-  let geomPromise = _terrainCache.get(url);
-  if (!geomPromise) {
-    geomPromise = new Promise((resolve, reject) => {
-      gltf().load(
-        url,
-        (gltfResult) => {
-          const root = gltfResult.scene || gltfResult.scenes?.[0];
-          if (!root) { reject(new Error('GLTF has no scene')); return; }
-          let geom = null;
-          root.traverse(o => {
-            if (!geom && o.isMesh && o.geometry) geom = o.geometry;
-          });
-          if (!geom) { reject(new Error('GLTF has no mesh')); return; }
-          const sizeKb = (gltfResult.parser?.json?.buffers?.[0]?.byteLength | 0) / 1024;
-          const triCount = geom.attributes.position?.count / 3 | 0;
-          console.log(`[ModelCache] loaded ${url} (${sizeKb.toFixed(0)} KB, ${triCount} tris)`);
-          resolve(geom);
-        },
-        undefined,
-        (err) => {
-          console.warn(`[ModelCache] failed to load ${url}:`, err.message || err);
-          reject(err);
-        }
-      );
-    });
-    _terrainCache.set(url, geomPromise);
-  }
-  return geomPromise;
 }
 
 // 1 m in world units, derived from the procedural-astronaut height anchor

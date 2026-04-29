@@ -100,9 +100,10 @@ export const WALK_TURN_SPEED         = 2.2;  // radians per second (keyboard tur
 export const WALK_CAMERA_DISTANCE    = 20;   // how far behind the astronaut
 export const WALK_CAMERA_HEIGHT      = 10;   // how high above
 export const WALK_INTERACT_RADIUS    = 8;    // how close to a fuel tank to interact
-// Bumped 180→320 to give the tiled NASA Apollo-11 terrain room to breathe.
-// Procedural sin-displaced ground still covers everything; STL tiles sit on
-// top as visual cladding.
+// Half-side of the visible procedural plane (mesh side = WALK_PLAY_RADIUS *
+// 2.4). Wide enough that the player can roam beyond the baked-terrain
+// footprint and still see ground; outside the bake the procedural sin-sum
+// takes over.
 export const WALK_PLAY_RADIUS        = 320;
 export const WALK_MOUSE_SENSITIVITY  = 0.0025;
 export const WALK_PITCH_MIN          = -0.45;
@@ -339,28 +340,6 @@ export const BEGINNER_PAD_TOLERANCE = 2;  // world units
 // landable) are filtered out so they don't get multiplier labels.
 export const MIN_PAD_WIDTH = 10;
 
-// ---- Debug toggles ----------------------------------------------------
-// Set to true to skip loading the NASA Apollo .glb / .stl terrain meshes
-// and run with the procedural sin-sum plane as the only ground visual.
-// Used for A/B comparing the math-generated lunar surface against the
-// NASA cladding. The procedural plane is always built either way — see
-// WalkMode.buildGround. Flip back to false to restore NASA cladding.
-export const SKIP_NASA_TERRAIN = false;
-// Show the on-screen terrain diagnostic overlay (top-right corner) while
-// walk mode is active. Reports NASA mesh load status, tile count, current
-// astronaut (x, z), which surface he's on, and the procedural-vs-NASA
-// delta. Lets you verify whether the NASA terrain is actually engaging
-// without opening DevTools. Flip to false to hide.
-// Set to true to hide the procedural sin-sum mesh (visual only) so that
-// only the NASA cladding tiles render. The procedural sin-sum MATH is
-// still used by groundHeight() as the fallback for any (x, z) outside
-// a NASA tile (the play area extends past tile coverage — see
-// TERRAIN_TILE_POSITIONS). Hiding the visible procedural mesh prevents
-// it from peeking out at tile edges; the math underneath keeps the
-// astronaut from walking off the world. Has no effect when
-// SKIP_NASA_TERRAIN is true.
-export const HIDE_PROCEDURAL_MESH = false;
-export const SHOW_TERRAIN_DEBUG = true;
 // Apollo landing sites placed in walk mode at fixed positions. Each entry
 // also drops a `part` (repair-part) interactable next to its landmark when
 // the site is the current level's destination. Add 14/15/16/17 here and
@@ -437,62 +416,8 @@ export const MODEL_PATHS = Object.freeze({
   spacesuit:    'assets/nasa_models/Mercury Spacesuit.glb',
   habitat1:     'assets/nasa_models/Habitat Demonstration Unit (part 1).glb',
   habitat2:     'assets/nasa_models/Habitat Demonstration Unit (part 2).glb',
-  atlas6:       'assets/nasa_models/Atlas 6 (Friendship 7).glb',
-  apollo11Site: 'assets/nasa_models/Apollo 11 - Landing Site.stl'
+  atlas6:       'assets/nasa_models/Atlas 6 (Friendship 7).glb'
 });
-
-/**
- * Batch 5 #23: Per-Apollo terrain STL path for a given level. Returns
- * `assets/nasa_models/Apollo NN - Landing Site.stl` derived from the
- * site id. The loader chain in WalkMode.buildGround prefers the GLB
- * sibling (see `apolloSiteGlbPath`) and falls back to this `.stl` path
- * if the GLB is missing, then to `MODEL_PATHS.apollo11Site`. When
- * NASA-3D-Resources files for 12/14/15/16/17 are dropped into
- * `assets/nasa_models/` matching this pattern, each level swaps
- * automatically with no further code change.
- */
-export function apolloSiteStlPath(level) {
-  const site = apolloSiteForLevel(level);
-  if (!site) return null;
-  // 'apollo-12' → '12'
-  const num = (site.id || '').replace(/^apollo-/, '');
-  if (!num) return null;
-  return `assets/nasa_models/Apollo ${num} - Landing Site.stl`;
-}
-
-/**
- * Per-Apollo terrain GLB path for a given level — the Draco-compressed
- * sibling of `apolloSiteStlPath`. Same naming pattern, `.glb` extension.
- * Loaders try this first (much smaller download, ~5-10x shrink over the
- * raw STL), and fall back to the `.stl` if the `.glb` hasn't been
- * dropped in yet. See moonlander/docs/asset-pipeline.md for the
- * Blender re-encode process.
- */
-export function apolloSiteGlbPath(level) {
-  const stlPath = apolloSiteStlPath(level);
-  return stlPath ? stlPath.replace(/\.stl$/i, '.glb') : null;
-}
-
-// Visible terrain tiles laid out as a 2×2 grid that *overlaps at the
-// origin* so the astronaut spawn point sits squarely on NASA terrain
-// (not in a hole between tiles, which is what the old ±150 anchors did —
-// the 0,0 spawn fell into the gap and `terrainHeightAt` returned null,
-// dropping the player back onto the procedural sin-sum plane while the
-// NASA tiles rendered as floating mountains around them).
-//
-// With anchors at ±100 and TERRAIN_TILE_SIZE = 240, each tile spans
-// e.g. (-220 .. +20, -220 .. +20) — they overlap a 40-wu strip across
-// the origin in both axes, so every (x, z) within ~±220 wu (well past
-// the play radius the astronaut typically reaches) is covered by at
-// least one tile. `Raycaster.intersectObjects` returns the highest hit
-// first, so overlapping tiles produce a clean "topmost surface wins"
-// composite — no z-fighting, no double-counting.
-export const TERRAIN_TILE_POSITIONS = [
-  [-100, -100], [100, -100],
-  [-100,  100], [100,  100]
-];
-export const TERRAIN_TILE_SIZE = 240;   // target horizontal extent in world units
-export const TERRAIN_TILE_SINK = 8;     // bury this many units below ground
 
 // Curated set of items placed in level-1 walk mode (GameState.level === 0)
 // at fixed [type, x, z] positions. The user asked for first-level continuity
