@@ -964,7 +964,15 @@ function buildGround() {
   // which blocks `redisplaceGroundMesh()` from re-lighting the surface
   // after the bake's heights are written. Smooth shading also reads
   // better with photo texture and the gentle relief (±24 wu) we have.
-  const mat = new THREE.MeshLambertMaterial({ color: 0x8c8c90 });
+  // TEMP TEST (requested): commented-out the old flat-grey procedural
+  // lunar surface material so we can verify whether terrain visibility issues
+  // are tied to that default presentation.
+  // const mat = new THREE.MeshLambertMaterial({ color: 0x8c8c90 });
+
+  // TEMP TEST (requested): keep the displaced heightmap mesh, but force a
+  // bright yellow base color so the terrain is unmistakably visible while
+  // debugging texture/placement issues.
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffff00 });
   const mesh = new THREE.Mesh(geom, mat);
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
@@ -1043,7 +1051,8 @@ async function loadColorTextureForBake(bake) {
       // texture; turn it off, white-tint so the texture shows
       // un-multiplied, and flag the material dirty.
       _groundMat.flatShading = false;
-      _groundMat.color.set(0xffffff);
+      // TEMP TEST (requested): keep yellow tint even after color texture bind.
+      _groundMat.color.set(0xffff00);
       _groundMat.needsUpdate = true;
       disposables.push({ texture: tex });
       _debugStatus.colorState = 'loaded';
