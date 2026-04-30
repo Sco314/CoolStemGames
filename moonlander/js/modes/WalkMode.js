@@ -98,7 +98,10 @@ const _debugStatus = {
   materialMode: 'grey-lambert',  // 'grey-lambert'|'textured'
   lastSampleSource: '',          // 'bake'|'procedural'
   lastSampleY: 0,
-  lastProcY: 0
+  lastProcY: 0,
+  meshYMin: null,                // visible-plane vertex y range (post-displacement)
+  meshYMax: null,
+  meshDisplaced: false           // flips true once redisplaceGroundMesh runs
 };
 // NASA 3D Resources GLB integration. When the file is present + decoded
 // these references hold the swapped-in mesh; the procedural primitive
@@ -214,6 +217,9 @@ export const WalkMode = {
       _debugStatus.colorExtentM = null;
       _debugStatus.colorUvScale = null;
       _debugStatus.materialMode = 'grey-lambert';
+      _debugStatus.meshYMin = null;
+      _debugStatus.meshYMax = null;
+      _debugStatus.meshDisplaced = false;
     }
     loadBakeForLevel(GameState.level).then((b) => {
       if (!scene) return;  // mode exited before fetch resolved
@@ -871,15 +877,29 @@ function groundHeight(x, z) {
  * recomputes vertex normals so flat-shading lights the new surface.
  */
 function redisplaceGroundMesh() {
-  if (!_groundGeom) return;
+  if (!_groundGeom) {
+    console.log('❌ [WalkMode] redisplaceGroundMesh: no _groundGeom');
+    return;
+  }
   const pos = _groundGeom.attributes.position;
+  let yMin = Infinity, yMax = -Infinity;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-    pos.setY(i, groundHeight(x, z));
+    const y = groundHeight(x, z);
+    pos.setY(i, y);
+    if (y < yMin) yMin = y;
+    if (y > yMax) yMax = y;
   }
   pos.needsUpdate = true;
   _groundGeom.computeVertexNormals();
+  _debugStatus.meshYMin = yMin;
+  _debugStatus.meshYMax = yMax;
+  _debugStatus.meshDisplaced = true;
+  console.log(
+    `✅ [WalkMode] redisplaceGroundMesh: ${pos.count} verts, ` +
+    `y=[${yMin.toFixed(2)}..${yMax.toFixed(2)}] wu`
+  );
 }
 
 /**
@@ -921,7 +941,11 @@ function buildGround() {
     pos.setY(i, groundHeight(x, z));
   }
   geom.computeVertexNormals();
-  const mat = new THREE.MeshLambertMaterial({ color: 0x8c8c90, flatShading: true });
+  // Smooth-shaded: flatShading caches per-face normals at material init,
+  // which blocks `redisplaceGroundMesh()` from re-lighting the surface
+  // after the bake's heights are written. Smooth shading also reads
+  // better with photo texture and the gentle relief (±24 wu) we have.
+  const mat = new THREE.MeshLambertMaterial({ color: 0x8c8c90 });
   const mesh = new THREE.Mesh(geom, mat);
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
@@ -1044,6 +1068,7 @@ function updateTerrainDebugOverlay() {
     `       ${_debugStatus.colorUrl}\n` +
     `       extent: ${extentKm}  uvScale: ${uvScaleStr}\n` +
     `mat:   ${_debugStatus.materialMode}\n` +
+    `mesh:  yRange=${fmt(_debugStatus.meshYMin)}..${fmt(_debugStatus.meshYMax)} wu  displaced=${_debugStatus.meshDisplaced}\n` +
     `pos:   x=${a.x.toFixed(1)} z=${a.z.toFixed(1)} y=${a.y.toFixed(2)}\n` +
     `samp:  src=${_debugStatus.lastSampleSource}\n` +
     `       bakeY=${_debugStatus.lastSampleY.toFixed(2)}\n` +
