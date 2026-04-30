@@ -101,7 +101,15 @@ const _debugStatus = {
   colorUrl: '',
   colorExtentM: null,            // metres of real moon covered by the colour bake
   colorUvScale: null,            // visible-plane / colour-bake UV ratio
+  colorUvScaleApplied: null,     // final UV scale after debug multiplier/force-repeat
   materialMode: 'grey-lambert',  // 'grey-lambert'|'textured'
+  debugTextureTweaks: false,
+  debugUvScaleMultiplier: 1,
+  debugForceRepeat: null,
+  debugTintHex: '#ffffff',
+  debugEmissiveHex: '#000000',
+  debugEmissiveIntensity: 0,
+  debugContrast: 1,
   lastSampleSource: '',          // 'bake'|'procedural'
   lastSampleY: 0,
   lastProcY: 0,
@@ -150,6 +158,20 @@ let onCanvasTouchStart = null;
 let onCanvasTouchMove = null;
 let onCanvasTouchEnd = null;
 let unsubQuality = null;
+
+// Temporary texture-debug controls. Keep disabled by default and only active
+// when the admin terrain-debug toggle is also on.
+const TERRAIN_TEXTURE_DEBUG = {
+  enabled: false,
+  uvScaleMultiplier: 1.0,
+  // Set in the 0.1–0.2 range to force coarse repeats and visually verify
+  // that texture detail appears (null keeps normal centre-crop path).
+  forceRepeat: null,
+  tint: 0xffffff,
+  emissive: 0x000000,
+  emissiveIntensity: 0.0,
+  contrast: 1.0
+};
 
 // Return-to-lander signposting: throttle the "cargo waiting" comms blip
 // so we don't spam the same line every frame the player is wandering.
@@ -222,6 +244,7 @@ export const WalkMode = {
       _debugStatus.colorUrl = '';
       _debugStatus.colorExtentM = null;
       _debugStatus.colorUvScale = null;
+      _debugStatus.colorUvScaleApplied = null;
       _debugStatus.materialMode = 'grey-lambert';
       _debugStatus.meshYMin = null;
       _debugStatus.meshYMax = null;
@@ -1082,9 +1105,26 @@ async function loadColorTextureForBake(bake) {
   // but each output pixel represents real LROC photography rather than
   // upsampled noise.
   const uvScale = planeSide / (2 * colorHalfExtentWU);
-  const offset = (1 - uvScale) / 2;
+  const debugActive = TERRAIN_TEXTURE_DEBUG.enabled && getShowTerrainDebug();
+  const uvScaleApplied = THREE.MathUtils.clamp(
+    uvScale * (debugActive ? TERRAIN_TEXTURE_DEBUG.uvScaleMultiplier : 1),
+    1e-4, 1
+  );
+  const forcedRepeat = debugActive ? TERRAIN_TEXTURE_DEBUG.forceRepeat : null;
+  const repeatValue = (forcedRepeat != null)
+    ? THREE.MathUtils.clamp(forcedRepeat, 1e-4, 1)
+    : uvScaleApplied;
+  const offset = (1 - repeatValue) / 2;
   _debugStatus.colorExtentM = colorGroundExtentM;
   _debugStatus.colorUvScale = uvScale;
+  _debugStatus.colorUvScaleApplied = repeatValue;
+  _debugStatus.debugTextureTweaks = debugActive;
+  _debugStatus.debugUvScaleMultiplier = debugActive ? TERRAIN_TEXTURE_DEBUG.uvScaleMultiplier : 1;
+  _debugStatus.debugForceRepeat = debugActive ? forcedRepeat : null;
+  _debugStatus.debugTintHex = `#${(debugActive ? TERRAIN_TEXTURE_DEBUG.tint : 0xffffff).toString(16).padStart(6, '0')}`;
+  _debugStatus.debugEmissiveHex = `#${(debugActive ? TERRAIN_TEXTURE_DEBUG.emissive : 0x000000).toString(16).padStart(6, '0')}`;
+  _debugStatus.debugEmissiveIntensity = debugActive ? TERRAIN_TEXTURE_DEBUG.emissiveIntensity : 0;
+  _debugStatus.debugContrast = debugActive ? TERRAIN_TEXTURE_DEBUG.contrast : 1;
 
   new THREE.TextureLoader().load(
     pngUrl,
@@ -1099,7 +1139,7 @@ async function loadColorTextureForBake(bake) {
       tex.magFilter = THREE.LinearFilter;
       tex.minFilter = THREE.LinearMipmapLinearFilter;
       tex.generateMipmaps = true;
-      tex.repeat.set(uvScale, uvScale);
+      tex.repeat.set(repeatValue, repeatValue);
       tex.offset.set(offset, offset);
       tex.needsUpdate = true;
       _groundMat.map = tex;
@@ -1107,12 +1147,17 @@ async function loadColorTextureForBake(bake) {
       // texture; turn it off, white-tint so the texture shows
       // un-multiplied, and flag the material dirty.
       _groundMat.flatShading = false;
-      _groundMat.color.set(0xffffff);
+      _groundMat.color.set(debugActive ? TERRAIN_TEXTURE_DEBUG.tint : 0xffffff);
+      _groundMat.color.multiplyScalar(debugActive ? TERRAIN_TEXTURE_DEBUG.contrast : 1);
+      _groundMat.emissive.set(debugActive ? TERRAIN_TEXTURE_DEBUG.emissive : 0x000000);
+      _groundMat.emissiveIntensity = debugActive ? TERRAIN_TEXTURE_DEBUG.emissiveIntensity : 0;
+      _groundMat.combine = THREE.MultiplyOperation;
+      _groundMat.reflectivity = 0;
       _groundMat.needsUpdate = true;
       disposables.push({ texture: tex });
       _debugStatus.colorState = 'loaded';
       _debugStatus.materialMode = 'textured';
-      console.log(`✅ [WalkMode] colour texture applied: ${bake.site} (extent ${(colorGroundExtentM / 1000).toFixed(1)} km, uvScale ${uvScale.toFixed(3)})`);
+      console.log(`✅ [WalkMode] colour texture applied: ${bake.site} (extent ${(colorGroundExtentM / 1000).toFixed(1)} km, uvScale ${repeatValue.toFixed(3)})`);
     },
     undefined,
     () => {
@@ -1142,6 +1187,12 @@ function updateTerrainDebugOverlay() {
   const uvScaleStr = _debugStatus.colorUvScale == null
     ? '—'
     : _debugStatus.colorUvScale.toFixed(3);
+  const uvScaleAppliedStr = _debugStatus.colorUvScaleApplied == null
+    ? '—'
+    : _debugStatus.colorUvScaleApplied.toFixed(3);
+  const forceRepeatStr = _debugStatus.debugForceRepeat == null
+    ? 'off'
+    : _debugStatus.debugForceRepeat.toFixed(3);
   el.textContent =
     `level: ${GameState.level}\n` +
     `bake:  ${_debugStatus.bakeState}\n` +
@@ -1149,8 +1200,10 @@ function updateTerrainDebugOverlay() {
     `       range: ${fmt(_debugStatus.bakeMin)}..${fmt(_debugStatus.bakeMax)} m\n` +
     `color: ${_debugStatus.colorState}\n` +
     `       ${_debugStatus.colorUrl}\n` +
-    `       extent: ${extentKm}  uvScale: ${uvScaleStr}\n` +
+    `       extent: ${extentKm}  uvBase: ${uvScaleStr}  uvApplied: ${uvScaleAppliedStr}\n` +
     `mat:   ${_debugStatus.materialMode}\n` +
+    `dbg:   enabled=${_debugStatus.debugTextureTweaks}  uvMul=${_debugStatus.debugUvScaleMultiplier.toFixed(2)}  forceRepeat=${forceRepeatStr}\n` +
+    `       tint=${_debugStatus.debugTintHex}  emissive=${_debugStatus.debugEmissiveHex}  ei=${_debugStatus.debugEmissiveIntensity.toFixed(2)}  contrast=${_debugStatus.debugContrast.toFixed(2)}\n` +
     `mesh:  yRange=${fmt(_debugStatus.meshYMin)}..${fmt(_debugStatus.meshYMax)} wu  displaced=${_debugStatus.meshDisplaced}\n` +
     `pos:   x=${a.x.toFixed(1)} z=${a.z.toFixed(1)} y=${a.y.toFixed(2)}\n` +
     `samp:  src=${_debugStatus.lastSampleSource}\n` +
