@@ -64,8 +64,6 @@ let landerModel = null;
 let interactables = [];        // Phase-4 loot: [{ type, object3d, used, ... }]
 let disposables = [];
 let footprints = [];           // pooled fading prints behind the astronaut
-let craterDecals = [];         // persistent crater decal meshes on ground
-let landerBeaconMesh = null;   // persistent home beacon mesh
 let footprintCursor = 0;       // ring-buffer write index
 let lastFootprintPos = null;   // THREE.Vector3 — last spot we dropped a print
 
@@ -84,10 +82,6 @@ let _groundGeom = null;
 // colour texture can be swapped onto its `map` once it loads. Default is
 // the flat-grey lambert created in `buildGround()`.
 let _groundMat = null;
-// Central registry of world entities that should be terrain-attached.
-// Entries are either { obj3d, offsetY } or { provider } where provider is
-// a callback that performs one or more snap operations and returns count.
-let terrainAttachments = [];
 
 // Diagnostic state for the on-screen overlay (gated at the per-frame DOM
 // update by getShowTerrainDebug()). Always written so toggling the flag
@@ -101,15 +95,7 @@ const _debugStatus = {
   colorUrl: '',
   colorExtentM: null,            // metres of real moon covered by the colour bake
   colorUvScale: null,            // visible-plane / colour-bake UV ratio
-  colorUvScaleApplied: null,     // final UV scale after debug multiplier/force-repeat
   materialMode: 'grey-lambert',  // 'grey-lambert'|'textured'
-  debugTextureTweaks: false,
-  debugUvScaleMultiplier: 1,
-  debugForceRepeat: null,
-  debugTintHex: '#ffffff',
-  debugEmissiveHex: '#000000',
-  debugEmissiveIntensity: 0,
-  debugContrast: 1,
   lastSampleSource: '',          // 'bake'|'procedural'
   lastSampleY: 0,
   lastProcY: 0,
@@ -158,20 +144,6 @@ let onCanvasTouchStart = null;
 let onCanvasTouchMove = null;
 let onCanvasTouchEnd = null;
 let unsubQuality = null;
-
-// Temporary texture-debug controls. Keep disabled by default and only active
-// when the admin terrain-debug toggle is also on.
-const TERRAIN_TEXTURE_DEBUG = {
-  enabled: false,
-  uvScaleMultiplier: 1.0,
-  // Set in the 0.1–0.2 range to force coarse repeats and visually verify
-  // that texture detail appears (null keeps normal centre-crop path).
-  forceRepeat: null,
-  tint: 0xffffff,
-  emissive: 0x000000,
-  emissiveIntensity: 0.0,
-  contrast: 1.0
-};
 
 // Return-to-lander signposting: throttle the "cargo waiting" comms blip
 // so we don't spam the same line every frame the player is wandering.
@@ -244,7 +216,6 @@ export const WalkMode = {
       _debugStatus.colorUrl = '';
       _debugStatus.colorExtentM = null;
       _debugStatus.colorUvScale = null;
-      _debugStatus.colorUvScaleApplied = null;
       _debugStatus.materialMode = 'grey-lambert';
       _debugStatus.meshYMin = null;
       _debugStatus.meshYMax = null;
@@ -272,9 +243,6 @@ export const WalkMode = {
     });
     spawnInteractables();
     buildFootprintPool();
-    registerTerrainAttachmentProvider(resnapFootprintsToBakedTerrain);
-    registerTerrainAttachmentProvider(resnapCraterDecalsToBakedTerrain);
-    registerTerrainAttachmentProvider(resnapTrailMarkersToBakedTerrain);
     // Reset per-walk-session signposting state so reminders don't carry
     // over from the previous trip's timestamps.
     walkSessionElapsed = 0;
@@ -384,9 +352,6 @@ export const WalkMode = {
     _groundGeom = null;
     _groundMat = null;
     footprints = [];
-    craterDecals = [];
-    terrainAttachments = [];
-    landerBeaconMesh = null;
     footprintCursor = 0;
     lastFootprintPos = null;
     mouseOrbiting = false;
@@ -905,16 +870,6 @@ function groundHeight(x, z) {
   return baked !== null ? baked : procY;
 }
 
-function registerTerrainAttachment(obj3d, offsetY = 0) {
-  if (!obj3d) return;
-  terrainAttachments.push({ obj3d, offsetY });
-}
-
-function registerTerrainAttachmentProvider(provider) {
-  if (typeof provider !== 'function') return;
-  terrainAttachments.push({ provider });
-}
-
 /**
  * Re-displace the visible procedural ground plane using the just-loaded
  * baked heightmap. Walks the geometry's position attribute, sets each
@@ -923,7 +878,7 @@ function registerTerrainAttachmentProvider(provider) {
  */
 function redisplaceGroundMesh() {
   if (!_groundGeom) {
-    console.log('❌ [WalkMode] redisplaceGroundMesh: no _groundGeom');
+    console.log('ℹ️ [WalkMode] redisplaceGroundMesh skipped: ground mesh disabled (heightmap-only test)');
     return;
   }
   const pos = _groundGeom.attributes.position;
@@ -969,61 +924,33 @@ function redisplaceGroundMesh() {
  * already laid down stay where they are — tiny decals read as dust on the
  * surface even if a tenth of a unit off.
  */
-function setOnGround(obj3d, offsetY = 0) {
-  if (!obj3d) return false;
-  obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z) + offsetY;
-  return true;
-}
-
-function resnapFootprintsToBakedTerrain() {
-  let count = 0;
-  for (const fp of footprints) {
-    if (!fp?.mesh?.visible) continue;
-    if (setOnGround(fp.mesh, 0.06)) count++;
-  }
-  return count;
-}
-
-function resnapCraterDecalsToBakedTerrain() {
-  let count = 0;
-  for (const decal of craterDecals) {
-    if (setOnGround(decal, 0.06)) count++;
-  }
-  return count;
-}
-
-function resnapTrailMarkersToBakedTerrain() {
-  let count = 0;
-  for (const it of interactables) {
-    for (const marker of (it?.trailMarkers || [])) {
-      if (!marker) continue;
-      const yOffset = marker.geometry?.type === 'CylinderGeometry' ? 4 : 0.08;
-      if (setOnGround(marker, yOffset)) count++;
-    }
-  }
-  return count;
-}
-
 function resnapWorldToBakedTerrain() {
-  let attachedCount = 0;
-  for (const attachment of terrainAttachments) {
-    if (!attachment) continue;
-    if (typeof attachment.provider === 'function') {
-      attachedCount += (attachment.provider() | 0);
-      continue;
-    }
-    if (attachment.obj3d && setOnGround(attachment.obj3d, attachment.offsetY ?? 0)) {
-      attachedCount++;
-    }
+  const shift = (obj3d) => {
+    if (!obj3d) return;
+    obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z);
+  };
+  shift(landerModel);
+  shift(landerModel3D);
+  for (const it of interactables) {
+    if (it && it.object3d) shift(it.object3d);
   }
+}
 
-  console.log(
-    `ℹ️ [WalkMode] resnapWorldToBakedTerrain: ` +
-    `attachments=${attachedCount}`
-  );
+function snapObjectToGroundHeight(obj3d, offsetY = 0) {
+  if (!obj3d) return;
+  obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z) + offsetY;
 }
 
 function buildGround() {
+  // TEMP TEST (requested): WalkMode should use height sampling only and NOT
+  // render the procedural/generated walk-surface mesh.
+  // NOTE: The old generated mesh code is intentionally left commented below
+  // for quick restore once testing is complete.
+  _groundGeom = null;
+  _groundMat = null;
+  return;
+
+  /*
   // Visible procedural plane built up-front using the sin-sum. Once the
   // bake JSON arrives `redisplaceGroundMesh()` re-runs the displacement
   // with the new heights; any (x, z) outside the bake footprint stays on
@@ -1051,12 +978,21 @@ function buildGround() {
   // which blocks `redisplaceGroundMesh()` from re-lighting the surface
   // after the bake's heights are written. Smooth shading also reads
   // better with photo texture and the gentle relief (±24 wu) we have.
-  const mat = new THREE.MeshLambertMaterial({ color: 0x8c8c90 });
+  // TEMP TEST (requested): commented-out the old flat-grey procedural
+  // lunar surface material so we can verify whether terrain visibility issues
+  // are tied to that default presentation.
+  // const mat = new THREE.MeshLambertMaterial({ color: 0x8c8c90 });
+
+  // TEMP TEST (requested): keep the displaced heightmap mesh, but force a
+  // bright yellow base color so the terrain is unmistakably visible while
+  // debugging texture/placement issues.
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffff00 });
   const mesh = new THREE.Mesh(geom, mat);
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
   _groundGeom = geom;
   _groundMat = mat;
+  */
 }
 
 /**
@@ -1105,26 +1041,9 @@ async function loadColorTextureForBake(bake) {
   // but each output pixel represents real LROC photography rather than
   // upsampled noise.
   const uvScale = planeSide / (2 * colorHalfExtentWU);
-  const debugActive = TERRAIN_TEXTURE_DEBUG.enabled && getShowTerrainDebug();
-  const uvScaleApplied = THREE.MathUtils.clamp(
-    uvScale * (debugActive ? TERRAIN_TEXTURE_DEBUG.uvScaleMultiplier : 1),
-    1e-4, 1
-  );
-  const forcedRepeat = debugActive ? TERRAIN_TEXTURE_DEBUG.forceRepeat : null;
-  const repeatValue = (forcedRepeat != null)
-    ? THREE.MathUtils.clamp(forcedRepeat, 1e-4, 1)
-    : uvScaleApplied;
-  const offset = (1 - repeatValue) / 2;
+  const offset = (1 - uvScale) / 2;
   _debugStatus.colorExtentM = colorGroundExtentM;
   _debugStatus.colorUvScale = uvScale;
-  _debugStatus.colorUvScaleApplied = repeatValue;
-  _debugStatus.debugTextureTweaks = debugActive;
-  _debugStatus.debugUvScaleMultiplier = debugActive ? TERRAIN_TEXTURE_DEBUG.uvScaleMultiplier : 1;
-  _debugStatus.debugForceRepeat = debugActive ? forcedRepeat : null;
-  _debugStatus.debugTintHex = `#${(debugActive ? TERRAIN_TEXTURE_DEBUG.tint : 0xffffff).toString(16).padStart(6, '0')}`;
-  _debugStatus.debugEmissiveHex = `#${(debugActive ? TERRAIN_TEXTURE_DEBUG.emissive : 0x000000).toString(16).padStart(6, '0')}`;
-  _debugStatus.debugEmissiveIntensity = debugActive ? TERRAIN_TEXTURE_DEBUG.emissiveIntensity : 0;
-  _debugStatus.debugContrast = debugActive ? TERRAIN_TEXTURE_DEBUG.contrast : 1;
 
   new THREE.TextureLoader().load(
     pngUrl,
@@ -1139,7 +1058,7 @@ async function loadColorTextureForBake(bake) {
       tex.magFilter = THREE.LinearFilter;
       tex.minFilter = THREE.LinearMipmapLinearFilter;
       tex.generateMipmaps = true;
-      tex.repeat.set(repeatValue, repeatValue);
+      tex.repeat.set(uvScale, uvScale);
       tex.offset.set(offset, offset);
       tex.needsUpdate = true;
       _groundMat.map = tex;
@@ -1147,17 +1066,13 @@ async function loadColorTextureForBake(bake) {
       // texture; turn it off, white-tint so the texture shows
       // un-multiplied, and flag the material dirty.
       _groundMat.flatShading = false;
-      _groundMat.color.set(debugActive ? TERRAIN_TEXTURE_DEBUG.tint : 0xffffff);
-      _groundMat.color.multiplyScalar(debugActive ? TERRAIN_TEXTURE_DEBUG.contrast : 1);
-      _groundMat.emissive.set(debugActive ? TERRAIN_TEXTURE_DEBUG.emissive : 0x000000);
-      _groundMat.emissiveIntensity = debugActive ? TERRAIN_TEXTURE_DEBUG.emissiveIntensity : 0;
-      _groundMat.combine = THREE.MultiplyOperation;
-      _groundMat.reflectivity = 0;
+      // TEMP TEST (requested): keep yellow tint even after color texture bind.
+      _groundMat.color.set(0xffff00);
       _groundMat.needsUpdate = true;
       disposables.push({ texture: tex });
       _debugStatus.colorState = 'loaded';
       _debugStatus.materialMode = 'textured';
-      console.log(`✅ [WalkMode] colour texture applied: ${bake.site} (extent ${(colorGroundExtentM / 1000).toFixed(1)} km, uvScale ${repeatValue.toFixed(3)})`);
+      console.log(`✅ [WalkMode] colour texture applied: ${bake.site} (extent ${(colorGroundExtentM / 1000).toFixed(1)} km, uvScale ${uvScale.toFixed(3)})`);
     },
     undefined,
     () => {
@@ -1187,12 +1102,6 @@ function updateTerrainDebugOverlay() {
   const uvScaleStr = _debugStatus.colorUvScale == null
     ? '—'
     : _debugStatus.colorUvScale.toFixed(3);
-  const uvScaleAppliedStr = _debugStatus.colorUvScaleApplied == null
-    ? '—'
-    : _debugStatus.colorUvScaleApplied.toFixed(3);
-  const forceRepeatStr = _debugStatus.debugForceRepeat == null
-    ? 'off'
-    : _debugStatus.debugForceRepeat.toFixed(3);
   el.textContent =
     `level: ${GameState.level}\n` +
     `bake:  ${_debugStatus.bakeState}\n` +
@@ -1200,10 +1109,8 @@ function updateTerrainDebugOverlay() {
     `       range: ${fmt(_debugStatus.bakeMin)}..${fmt(_debugStatus.bakeMax)} m\n` +
     `color: ${_debugStatus.colorState}\n` +
     `       ${_debugStatus.colorUrl}\n` +
-    `       extent: ${extentKm}  uvBase: ${uvScaleStr}  uvApplied: ${uvScaleAppliedStr}\n` +
+    `       extent: ${extentKm}  uvScale: ${uvScaleStr}\n` +
     `mat:   ${_debugStatus.materialMode}\n` +
-    `dbg:   enabled=${_debugStatus.debugTextureTweaks}  uvMul=${_debugStatus.debugUvScaleMultiplier.toFixed(2)}  forceRepeat=${forceRepeatStr}\n` +
-    `       tint=${_debugStatus.debugTintHex}  emissive=${_debugStatus.debugEmissiveHex}  ei=${_debugStatus.debugEmissiveIntensity.toFixed(2)}  contrast=${_debugStatus.debugContrast.toFixed(2)}\n` +
     `mesh:  yRange=${fmt(_debugStatus.meshYMin)}..${fmt(_debugStatus.meshYMax)} wu  displaced=${_debugStatus.meshDisplaced}\n` +
     `pos:   x=${a.x.toFixed(1)} z=${a.z.toFixed(1)} y=${a.y.toFixed(2)}\n` +
     `samp:  src=${_debugStatus.lastSampleSource}\n` +
@@ -1267,8 +1174,7 @@ function dropFootprintIfMoved() {
   const px = astronaut.position.x + sideX;
   const pz = astronaut.position.z + sideZ;
 
-  fp.mesh.position.set(px, 0, pz);
-  setOnGround(fp.mesh, 0.06);
+  fp.mesh.position.set(px, groundHeight(px, pz) + 0.06, pz);
   fp.mesh.rotation.y = astronaut.rotation.y;
   fp.mat.opacity = FOOTPRINT_OPACITY;
   fp.mesh.visible = true;
@@ -1299,11 +1205,9 @@ function buildCraters() {
     const decal = new THREE.Mesh(decalGeom, craterMat);
     // Slight Y offset so the decal sits just above the ground without
     // z-fighting with the displaced plane.
-    decal.position.set(cx, 0, cz);
-    setOnGround(decal, 0.06);
+    decal.position.set(cx, groundHeight(cx, cz) + 0.06, cz);
     decal.rotation.y = Math.random() * Math.PI * 2;
     scene.add(decal);
-    craterDecals.push(decal);
     disposables.push({ geometry: decalGeom });
   }
 }
@@ -1487,9 +1391,7 @@ function buildParkedLander() {
   landerModel = new THREE.Sprite(mat);
   landerModel.scale.set(size, size, 1);
   const lx = 0, lz = 0;
-  landerModel.position.set(lx, 0, lz);
-  setOnGround(landerModel, size * 0.453);
-  registerTerrainAttachment(landerModel, size * 0.453);
+  landerModel.position.set(lx, groundHeight(lx, lz) + size * 0.453, lz);
   scene.add(landerModel);
   disposables.push({ material: mat });
 
@@ -1502,7 +1404,8 @@ function buildParkedLander() {
       // 9.4 m footpad span = APOLLO_LM_SIZE_WU. Was `LANDER_SCALE * 0.7`
       // (22.4 wu, ~50 % oversized vs astronaut).
       placeOnGround(model, lx, lz, groundHeight(lx, lz), APOLLO_LM_SIZE_WU, 'apolloLM');
-      registerTerrainAttachment(model);
+      // Ensure WalkMode 3D model root is snapped from sampled groundHeight.
+      snapObjectToGroundHeight(model);
       scene.add(model);
       // Hide the placeholder sprite. Keep landerModel as the proximity
       // anchor so existing distance checks (boarding, breadcrumb origin)
@@ -1534,10 +1437,7 @@ function buildLanderBeacon() {
     depthWrite: false
   });
   const mesh = new THREE.Mesh(geom, mat);
-  mesh.position.set(lx, 0, lz);
-  setOnGround(mesh, LANDER_BEACON_HEIGHT / 2);
-  registerTerrainAttachment(mesh, LANDER_BEACON_HEIGHT / 2);
-  landerBeaconMesh = mesh;
+  mesh.position.set(lx, groundHeight(lx, lz) + LANDER_BEACON_HEIGHT / 2, lz);
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
 }
@@ -1660,8 +1560,7 @@ function buildInteractable(type, x, z) {
   if (!spec) { console.warn(`Unknown interactable type: ${type}`); return null; }
 
   const group = new THREE.Group();
-  group.position.set(x, 0, z);
-  setOnGround(group);
+  group.position.set(x, groundHeight(x, z), z);
 
   let spin = 0;
   switch (type) {
@@ -1674,7 +1573,6 @@ function buildInteractable(type, x, z) {
   }
 
   scene.add(group);
-  registerTerrainAttachment(group);
   return { type, object3d: group, used: false, spin, trailMarkers: [] };
 }
 
@@ -1709,8 +1607,7 @@ function buildTrailMarkers(start, end, type) {
     const mx = start.x + dx * t;
     const mz = start.z + dz * t;
     const ring = new THREE.Mesh(ringGeom, ringMat);
-    ring.position.set(mx, 0, mz);
-    setOnGround(ring, 0.08);
+    ring.position.set(mx, groundHeight(mx, mz) + 0.08, mz);
     scene.add(ring);
     markers.push(ring);
   }
@@ -1723,8 +1620,7 @@ function buildTrailMarkers(start, end, type) {
     color, transparent: true, opacity: 0.55, depthWrite: false
   });
   const beacon = new THREE.Mesh(beaconGeom, beaconMat);
-  beacon.position.set(end.x, 0, end.z);
-  setOnGround(beacon, 4);
+  beacon.position.set(end.x, groundHeight(end.x, end.z) + 4, end.z);
   scene.add(beacon);
   markers.push(beacon);
   disposables.push({ geometry: beaconGeom, material: beaconMat });
@@ -1884,8 +1780,7 @@ function buildHealthPack(group, spec) {
  */
 function buildApolloSite(site, x, z) {
   const group = new THREE.Group();
-  group.position.set(x, 0, z);
-  setOnGround(group);
+  group.position.set(x, groundHeight(x, z), z);
 
   // Descent stage — a stubby octagonal block to represent the lander base
   // left behind at the site.
@@ -1955,7 +1850,6 @@ function buildApolloSite(site, x, z) {
   disposables.push({ geometry: stripGeom, material: stripMat });
 
   scene.add(group);
-  registerTerrainAttachment(group);
   return {
     type: 'apollo',
     object3d: group,
@@ -1974,8 +1868,7 @@ function buildApolloSite(site, x, z) {
  */
 function buildLandmark(spec, x, z) {
   const group = new THREE.Group();
-  group.position.set(x, 0, z);
-  setOnGround(group);
+  group.position.set(x, groundHeight(x, z), z);
 
   // Primitive placeholder: a chunky vertical capsule so the player sees
   // SOMETHING at the spot before the GLB lands. Different colors per
@@ -1987,7 +1880,6 @@ function buildLandmark(spec, x, z) {
   group.add(ph);
 
   scene.add(group);
-  registerTerrainAttachment(group);
 
   // Async upgrade to the GLB.
   const path = MODEL_PATHS[spec.model];
