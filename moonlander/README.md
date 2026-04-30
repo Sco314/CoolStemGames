@@ -223,7 +223,7 @@ returns it to baseline after each cycle), not climb monotonically.
   public-domain CGI Moon Kit by `scripts/bake-terrain.mjs`:
   https://svs.gsfc.nasa.gov/4720
   Heights from the LDEM 16 ppd uint16 mosaic; per-site colour tints from
-  the LROC color 4k sRGB mosaic. Both are public-domain works of the U.S.
+  the LROC color 16k sRGB mosaic. Both are public-domain works of the U.S.
   Government per 17 U.S.C. § 105.
 
   **Rigging note for the Mercury Spacesuit:** the GLB ships as a static

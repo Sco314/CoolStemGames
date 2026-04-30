@@ -464,6 +464,18 @@ export const LEVEL1_FIXED_LOOT = [
 // scale bump to 11.96 wu was dead code at runtime. Moved up.
 export const METERS_TO_WU = 3.2 / 2.008;            // ≈ 1.594
 
+// ---------- Baked-terrain footprint note ----------------------------
+// Color and height bakes use DIFFERENT crop sizes. Heights stay at
+// 1600 m for close-up walk-around relief; color is 16 km so the 16k
+// LROC source has enough pixel density at the visible plane's effective
+// sample rate (at 1600 m the source covers only ~2.4 px per side; at
+// 16 km it covers ~109 px per side ≈ 12,000 unique samples).
+//
+// Each color PNG ships with a sidecar JSON declaring its own
+// `groundExtentM` — the runtime (`WalkMode.loadColorTextureForBake`)
+// reads the sidecar and uses that, NOT the heightmap's `groundExtentM`,
+// to compute UV math. See `scripts/bake-terrain.mjs` for the bake side.
+
 // Apollo Lunar Module: 7.04 m tall, 9.4 m wide footpad-to-footpad. The
 // landing legs splay wider than the descent stage is tall, so 9.4 m is
 // the longest dimension and that's what placeOnGround anchors.
