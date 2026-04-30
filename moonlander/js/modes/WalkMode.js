@@ -878,7 +878,7 @@ function groundHeight(x, z) {
  */
 function redisplaceGroundMesh() {
   if (!_groundGeom) {
-    console.log('❌ [WalkMode] redisplaceGroundMesh: no _groundGeom');
+    console.log('ℹ️ [WalkMode] redisplaceGroundMesh skipped: ground mesh disabled (heightmap-only test)');
     return;
   }
   const pos = _groundGeom.attributes.position;
@@ -936,7 +936,21 @@ function resnapWorldToBakedTerrain() {
   }
 }
 
+function snapObjectToGroundHeight(obj3d, offsetY = 0) {
+  if (!obj3d) return;
+  obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z) + offsetY;
+}
+
 function buildGround() {
+  // TEMP TEST (requested): WalkMode should use height sampling only and NOT
+  // render the procedural/generated walk-surface mesh.
+  // NOTE: The old generated mesh code is intentionally left commented below
+  // for quick restore once testing is complete.
+  _groundGeom = null;
+  _groundMat = null;
+  return;
+
+  /*
   // Visible procedural plane built up-front using the sin-sum. Once the
   // bake JSON arrives `redisplaceGroundMesh()` re-runs the displacement
   // with the new heights; any (x, z) outside the bake footprint stays on
@@ -978,6 +992,7 @@ function buildGround() {
   disposables.push({ geometry: geom, material: mat });
   _groundGeom = geom;
   _groundMat = mat;
+  */
 }
 
 /**
@@ -1389,6 +1404,8 @@ function buildParkedLander() {
       // 9.4 m footpad span = APOLLO_LM_SIZE_WU. Was `LANDER_SCALE * 0.7`
       // (22.4 wu, ~50 % oversized vs astronaut).
       placeOnGround(model, lx, lz, groundHeight(lx, lz), APOLLO_LM_SIZE_WU, 'apolloLM');
+      // Ensure WalkMode 3D model root is snapped from sampled groundHeight.
+      snapObjectToGroundHeight(model);
       scene.add(model);
       // Hide the placeholder sprite. Keep landerModel as the proximity
       // anchor so existing distance checks (boarding, breadcrumb origin)
