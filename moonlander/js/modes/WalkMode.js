@@ -93,6 +93,8 @@ const _debugStatus = {
   bakeMin: null, bakeMax: null,
   colorState: 'idle',      // 'idle'|'fetching'|'loaded'|'failed'
   colorUrl: '',
+  colorExtentM: null,            // metres of real moon covered by the colour bake
+  colorUvScale: null,            // visible-plane / colour-bake UV ratio
   materialMode: 'grey-lambert',  // 'grey-lambert'|'textured'
   lastSampleSource: '',          // 'bake'|'procedural'
   lastSampleY: 0,
@@ -209,6 +211,8 @@ export const WalkMode = {
       _debugStatus.bakeMax = null;
       _debugStatus.colorState = 'idle';
       _debugStatus.colorUrl = '';
+      _debugStatus.colorExtentM = null;
+      _debugStatus.colorUvScale = null;
       _debugStatus.materialMode = 'grey-lambert';
     }
     loadBakeForLevel(GameState.level).then((b) => {
@@ -933,20 +937,50 @@ function buildGround() {
  * to the centre via `tex.repeat`/`tex.offset`. On failure the grey lambert
  * stays as-is.
  */
-function loadColorTextureForBake(bake) {
+async function loadColorTextureForBake(bake) {
   if (!bake || !_groundMat) return;
-  const url = `assets/baked_terrain/${bake.site}_color.png`;
-  const halfExtentWU = bakeFootprintWU(bake).halfExtentWU;
-  const planeSide = WALK_PLAY_RADIUS * 2.4;
-  // The visible plane is much smaller than the colour crop (planeSide ≈
-  // 768 wu vs. 2*halfExtentWU ≈ 2550 wu), so we sample only the central
-  // `uvScale` fraction of the texture.
-  const uvScale = planeSide / (2 * halfExtentWU);
-  const offset = (1 - uvScale) / 2;
+  const pngUrl  = `assets/baked_terrain/${bake.site}_color.png`;
+  const metaUrl = `assets/baked_terrain/${bake.site}_color.json`;
   _debugStatus.colorState = 'fetching';
-  _debugStatus.colorUrl = url;
+  _debugStatus.colorUrl = pngUrl;
+
+  // Fetch the sidecar metadata (groundExtentM) — colour bakes from
+  // mid-2026 onward use a 16 km crop while the heightmap stays at 1600 m,
+  // so we can't reuse `bake.groundExtentM` for the colour UV math. If
+  // the sidecar 404s (older bake) or fails to parse, fall back to the
+  // heightmap's extent so legacy assets still load with reasonable
+  // (but incorrect-by-10×) UVs.
+  let colorGroundExtentM = bake.groundExtentM;
+  try {
+    const metaRes = await fetch(metaUrl);
+    if (metaRes.ok) {
+      const meta = await metaRes.json();
+      if (meta && Number.isFinite(meta.groundExtentM)) {
+        colorGroundExtentM = meta.groundExtentM;
+      }
+    } else {
+      console.warn(`⚠️ [WalkMode] color sidecar ${metaUrl} → HTTP ${metaRes.status} — using heightmap extent`);
+    }
+  } catch (err) {
+    console.warn(`⚠️ [WalkMode] color sidecar fetch failed for ${bake.site}:`, err?.message || err);
+  }
+
+  if (!scene || !_groundMat) return;
+
+  const fp = bakeFootprintWU(bake);
+  const colorHalfExtentWU = (colorGroundExtentM / fp.metersPerWU) / 2;
+  const planeSide = WALK_PLAY_RADIUS * 2.4;
+  // Visible plane samples only the central `uvScale` fraction of the
+  // texture, biased to the centre. With 16 km extent this is ~3% — small,
+  // but each output pixel represents real LROC photography rather than
+  // upsampled noise.
+  const uvScale = planeSide / (2 * colorHalfExtentWU);
+  const offset = (1 - uvScale) / 2;
+  _debugStatus.colorExtentM = colorGroundExtentM;
+  _debugStatus.colorUvScale = uvScale;
+
   new THREE.TextureLoader().load(
-    url,
+    pngUrl,
     (tex) => {
       if (!scene || !_groundMat) {
         tex.dispose();
@@ -971,7 +1005,7 @@ function loadColorTextureForBake(bake) {
       disposables.push({ texture: tex });
       _debugStatus.colorState = 'loaded';
       _debugStatus.materialMode = 'textured';
-      console.log(`✅ [WalkMode] colour texture applied: ${bake.site}`);
+      console.log(`✅ [WalkMode] colour texture applied: ${bake.site} (extent ${(colorGroundExtentM / 1000).toFixed(1)} km, uvScale ${uvScale.toFixed(3)})`);
     },
     undefined,
     () => {
@@ -995,6 +1029,12 @@ function updateTerrainDebugOverlay() {
   el.style.display = 'block';
   const a = astronaut.position;
   const fmt = (v) => (v === null ? '—' : v.toFixed(1));
+  const extentKm = _debugStatus.colorExtentM == null
+    ? '—'
+    : `${(_debugStatus.colorExtentM / 1000).toFixed(0)}km`;
+  const uvScaleStr = _debugStatus.colorUvScale == null
+    ? '—'
+    : _debugStatus.colorUvScale.toFixed(3);
   el.textContent =
     `level: ${GameState.level}\n` +
     `bake:  ${_debugStatus.bakeState}\n` +
@@ -1002,6 +1042,7 @@ function updateTerrainDebugOverlay() {
     `       range: ${fmt(_debugStatus.bakeMin)}..${fmt(_debugStatus.bakeMax)} m\n` +
     `color: ${_debugStatus.colorState}\n` +
     `       ${_debugStatus.colorUrl}\n` +
+    `       extent: ${extentKm}  uvScale: ${uvScaleStr}\n` +
     `mat:   ${_debugStatus.materialMode}\n` +
     `pos:   x=${a.x.toFixed(1)} z=${a.z.toFixed(1)} y=${a.y.toFixed(2)}\n` +
     `samp:  src=${_debugStatus.lastSampleSource}\n` +
