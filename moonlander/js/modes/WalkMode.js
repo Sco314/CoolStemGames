@@ -893,6 +893,17 @@ function redisplaceGroundMesh() {
   }
   pos.needsUpdate = true;
   _groundGeom.computeVertexNormals();
+  // Mark the normals buffer dirty so the GPU uploads the recomputed
+  // normals. Without this, Three.js r160 keeps the stale normals from
+  // the initial procedural displacement and the surface lights as if
+  // it were still flat.
+  if (_groundGeom.attributes.normal) {
+    _groundGeom.attributes.normal.needsUpdate = true;
+  }
+  // Recompute the bounding sphere so frustum culling doesn't clip the
+  // displaced geometry based on the old flat envelope.
+  _groundGeom.computeBoundingSphere();
+  _groundGeom.computeBoundingBox();
   _debugStatus.meshYMin = yMin;
   _debugStatus.meshYMax = yMax;
   _debugStatus.meshDisplaced = true;
@@ -941,6 +952,14 @@ function buildGround() {
     pos.setY(i, groundHeight(x, z));
   }
   geom.computeVertexNormals();
+  // Mirror the redisplaceGroundMesh pattern even though it's less critical
+  // here (Three.js auto-uploads on first use of a fresh BufferGeometry).
+  // Consistency makes future modifications safe by default.
+  if (geom.attributes.normal) {
+    geom.attributes.normal.needsUpdate = true;
+  }
+  geom.computeBoundingSphere();
+  geom.computeBoundingBox();
   // Smooth-shaded: flatShading caches per-face normals at material init,
   // which blocks `redisplaceGroundMesh()` from re-lighting the surface
   // after the bake's heights are written. Smooth shading also reads
