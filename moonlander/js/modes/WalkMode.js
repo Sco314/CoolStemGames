@@ -84,6 +84,10 @@ let _groundGeom = null;
 // colour texture can be swapped onto its `map` once it loads. Default is
 // the flat-grey lambert created in `buildGround()`.
 let _groundMat = null;
+// Central registry of world entities that should be terrain-attached.
+// Entries are either { obj3d, offsetY } or { provider } where provider is
+// a callback that performs one or more snap operations and returns count.
+let terrainAttachments = [];
 
 // Diagnostic state for the on-screen overlay (gated at the per-frame DOM
 // update by getShowTerrainDebug()). Always written so toggling the flag
@@ -245,6 +249,9 @@ export const WalkMode = {
     });
     spawnInteractables();
     buildFootprintPool();
+    registerTerrainAttachmentProvider(resnapFootprintsToBakedTerrain);
+    registerTerrainAttachmentProvider(resnapCraterDecalsToBakedTerrain);
+    registerTerrainAttachmentProvider(resnapTrailMarkersToBakedTerrain);
     // Reset per-walk-session signposting state so reminders don't carry
     // over from the previous trip's timestamps.
     walkSessionElapsed = 0;
@@ -355,6 +362,7 @@ export const WalkMode = {
     _groundMat = null;
     footprints = [];
     craterDecals = [];
+    terrainAttachments = [];
     landerBeaconMesh = null;
     footprintCursor = 0;
     lastFootprintPos = null;
@@ -874,6 +882,16 @@ function groundHeight(x, z) {
   return baked !== null ? baked : procY;
 }
 
+function registerTerrainAttachment(obj3d, offsetY = 0) {
+  if (!obj3d) return;
+  terrainAttachments.push({ obj3d, offsetY });
+}
+
+function registerTerrainAttachmentProvider(provider) {
+  if (typeof provider !== 'function') return;
+  terrainAttachments.push({ provider });
+}
+
 /**
  * Re-displace the visible procedural ground plane using the just-loaded
  * baked heightmap. Walks the geometry's position attribute, sets each
@@ -928,9 +946,9 @@ function redisplaceGroundMesh() {
  * already laid down stay where they are — tiny decals read as dust on the
  * surface even if a tenth of a unit off.
  */
-function setGroundY(obj3d, yOffset = 0) {
+function setOnGround(obj3d, offsetY = 0) {
   if (!obj3d) return false;
-  obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z) + yOffset;
+  obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z) + offsetY;
   return true;
 }
 
@@ -938,7 +956,7 @@ function resnapFootprintsToBakedTerrain() {
   let count = 0;
   for (const fp of footprints) {
     if (!fp?.mesh?.visible) continue;
-    if (setGroundY(fp.mesh, 0.06)) count++;
+    if (setOnGround(fp.mesh, 0.06)) count++;
   }
   return count;
 }
@@ -946,7 +964,7 @@ function resnapFootprintsToBakedTerrain() {
 function resnapCraterDecalsToBakedTerrain() {
   let count = 0;
   for (const decal of craterDecals) {
-    if (setGroundY(decal, 0.06)) count++;
+    if (setOnGround(decal, 0.06)) count++;
   }
   return count;
 }
@@ -957,31 +975,28 @@ function resnapTrailMarkersToBakedTerrain() {
     for (const marker of (it?.trailMarkers || [])) {
       if (!marker) continue;
       const yOffset = marker.geometry?.type === 'CylinderGeometry' ? 4 : 0.08;
-      if (setGroundY(marker, yOffset)) count++;
+      if (setOnGround(marker, yOffset)) count++;
     }
   }
   return count;
 }
 
 function resnapWorldToBakedTerrain() {
-  const landerCount =
-    (setGroundY(landerModel, APOLLO_LM_SIZE_WU * 0.453) ? 1 : 0) +
-    (setGroundY(landerModel3D) ? 1 : 0) +
-    (setGroundY(landerBeaconMesh, LANDER_BEACON_HEIGHT / 2) ? 1 : 0);
-
-  let interactableCount = 0;
-  for (const it of interactables) {
-    if (it?.object3d && setGroundY(it.object3d)) interactableCount++;
+  let attachedCount = 0;
+  for (const attachment of terrainAttachments) {
+    if (!attachment) continue;
+    if (typeof attachment.provider === 'function') {
+      attachedCount += (attachment.provider() | 0);
+      continue;
+    }
+    if (attachment.obj3d && setOnGround(attachment.obj3d, attachment.offsetY ?? 0)) {
+      attachedCount++;
+    }
   }
-
-  const footprintCount = resnapFootprintsToBakedTerrain();
-  const craterCount = resnapCraterDecalsToBakedTerrain();
-  const trailMarkerCount = resnapTrailMarkersToBakedTerrain();
 
   console.log(
     `ℹ️ [WalkMode] resnapWorldToBakedTerrain: ` +
-    `lander=${landerCount}, interactables=${interactableCount}, ` +
-    `footprints=${footprintCount}, craters=${craterCount}, trails=${trailMarkerCount}`
+    `attachments=${attachedCount}`
   );
 }
 
@@ -1199,7 +1214,8 @@ function dropFootprintIfMoved() {
   const px = astronaut.position.x + sideX;
   const pz = astronaut.position.z + sideZ;
 
-  fp.mesh.position.set(px, groundHeight(px, pz) + 0.06, pz);
+  fp.mesh.position.set(px, 0, pz);
+  setOnGround(fp.mesh, 0.06);
   fp.mesh.rotation.y = astronaut.rotation.y;
   fp.mat.opacity = FOOTPRINT_OPACITY;
   fp.mesh.visible = true;
@@ -1230,7 +1246,8 @@ function buildCraters() {
     const decal = new THREE.Mesh(decalGeom, craterMat);
     // Slight Y offset so the decal sits just above the ground without
     // z-fighting with the displaced plane.
-    decal.position.set(cx, groundHeight(cx, cz) + 0.06, cz);
+    decal.position.set(cx, 0, cz);
+    setOnGround(decal, 0.06);
     decal.rotation.y = Math.random() * Math.PI * 2;
     scene.add(decal);
     craterDecals.push(decal);
@@ -1417,7 +1434,9 @@ function buildParkedLander() {
   landerModel = new THREE.Sprite(mat);
   landerModel.scale.set(size, size, 1);
   const lx = 0, lz = 0;
-  landerModel.position.set(lx, groundHeight(lx, lz) + size * 0.453, lz);
+  landerModel.position.set(lx, 0, lz);
+  setOnGround(landerModel, size * 0.453);
+  registerTerrainAttachment(landerModel, size * 0.453);
   scene.add(landerModel);
   disposables.push({ material: mat });
 
@@ -1430,6 +1449,7 @@ function buildParkedLander() {
       // 9.4 m footpad span = APOLLO_LM_SIZE_WU. Was `LANDER_SCALE * 0.7`
       // (22.4 wu, ~50 % oversized vs astronaut).
       placeOnGround(model, lx, lz, groundHeight(lx, lz), APOLLO_LM_SIZE_WU, 'apolloLM');
+      registerTerrainAttachment(model);
       scene.add(model);
       // Hide the placeholder sprite. Keep landerModel as the proximity
       // anchor so existing distance checks (boarding, breadcrumb origin)
@@ -1461,7 +1481,9 @@ function buildLanderBeacon() {
     depthWrite: false
   });
   const mesh = new THREE.Mesh(geom, mat);
-  mesh.position.set(lx, groundHeight(lx, lz) + LANDER_BEACON_HEIGHT / 2, lz);
+  mesh.position.set(lx, 0, lz);
+  setOnGround(mesh, LANDER_BEACON_HEIGHT / 2);
+  registerTerrainAttachment(mesh, LANDER_BEACON_HEIGHT / 2);
   landerBeaconMesh = mesh;
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
@@ -1585,7 +1607,8 @@ function buildInteractable(type, x, z) {
   if (!spec) { console.warn(`Unknown interactable type: ${type}`); return null; }
 
   const group = new THREE.Group();
-  group.position.set(x, groundHeight(x, z), z);
+  group.position.set(x, 0, z);
+  setOnGround(group);
 
   let spin = 0;
   switch (type) {
@@ -1598,6 +1621,7 @@ function buildInteractable(type, x, z) {
   }
 
   scene.add(group);
+  registerTerrainAttachment(group);
   return { type, object3d: group, used: false, spin, trailMarkers: [] };
 }
 
@@ -1632,7 +1656,8 @@ function buildTrailMarkers(start, end, type) {
     const mx = start.x + dx * t;
     const mz = start.z + dz * t;
     const ring = new THREE.Mesh(ringGeom, ringMat);
-    ring.position.set(mx, groundHeight(mx, mz) + 0.08, mz);
+    ring.position.set(mx, 0, mz);
+    setOnGround(ring, 0.08);
     scene.add(ring);
     markers.push(ring);
   }
@@ -1645,7 +1670,8 @@ function buildTrailMarkers(start, end, type) {
     color, transparent: true, opacity: 0.55, depthWrite: false
   });
   const beacon = new THREE.Mesh(beaconGeom, beaconMat);
-  beacon.position.set(end.x, groundHeight(end.x, end.z) + 4, end.z);
+  beacon.position.set(end.x, 0, end.z);
+  setOnGround(beacon, 4);
   scene.add(beacon);
   markers.push(beacon);
   disposables.push({ geometry: beaconGeom, material: beaconMat });
@@ -1805,7 +1831,8 @@ function buildHealthPack(group, spec) {
  */
 function buildApolloSite(site, x, z) {
   const group = new THREE.Group();
-  group.position.set(x, groundHeight(x, z), z);
+  group.position.set(x, 0, z);
+  setOnGround(group);
 
   // Descent stage — a stubby octagonal block to represent the lander base
   // left behind at the site.
@@ -1875,6 +1902,7 @@ function buildApolloSite(site, x, z) {
   disposables.push({ geometry: stripGeom, material: stripMat });
 
   scene.add(group);
+  registerTerrainAttachment(group);
   return {
     type: 'apollo',
     object3d: group,
@@ -1893,7 +1921,8 @@ function buildApolloSite(site, x, z) {
  */
 function buildLandmark(spec, x, z) {
   const group = new THREE.Group();
-  group.position.set(x, groundHeight(x, z), z);
+  group.position.set(x, 0, z);
+  setOnGround(group);
 
   // Primitive placeholder: a chunky vertical capsule so the player sees
   // SOMETHING at the spot before the GLB lands. Different colors per
@@ -1905,6 +1934,7 @@ function buildLandmark(spec, x, z) {
   group.add(ph);
 
   scene.add(group);
+  registerTerrainAttachment(group);
 
   // Async upgrade to the GLB.
   const path = MODEL_PATHS[spec.model];
