@@ -64,6 +64,8 @@ let landerModel = null;
 let interactables = [];        // Phase-4 loot: [{ type, object3d, used, ... }]
 let disposables = [];
 let footprints = [];           // pooled fading prints behind the astronaut
+let craterDecals = [];         // persistent crater decal meshes on ground
+let landerBeaconMesh = null;   // persistent home beacon mesh
 let footprintCursor = 0;       // ring-buffer write index
 let lastFootprintPos = null;   // THREE.Vector3 — last spot we dropped a print
 
@@ -352,6 +354,8 @@ export const WalkMode = {
     _groundGeom = null;
     _groundMat = null;
     footprints = [];
+    craterDecals = [];
+    landerBeaconMesh = null;
     footprintCursor = 0;
     lastFootprintPos = null;
     mouseOrbiting = false;
@@ -924,16 +928,61 @@ function redisplaceGroundMesh() {
  * already laid down stay where they are — tiny decals read as dust on the
  * surface even if a tenth of a unit off.
  */
-function resnapWorldToBakedTerrain() {
-  const shift = (obj3d) => {
-    if (!obj3d) return;
-    obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z);
-  };
-  shift(landerModel);
-  shift(landerModel3D);
-  for (const it of interactables) {
-    if (it && it.object3d) shift(it.object3d);
+function setGroundY(obj3d, yOffset = 0) {
+  if (!obj3d) return false;
+  obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z) + yOffset;
+  return true;
+}
+
+function resnapFootprintsToBakedTerrain() {
+  let count = 0;
+  for (const fp of footprints) {
+    if (!fp?.mesh?.visible) continue;
+    if (setGroundY(fp.mesh, 0.06)) count++;
   }
+  return count;
+}
+
+function resnapCraterDecalsToBakedTerrain() {
+  let count = 0;
+  for (const decal of craterDecals) {
+    if (setGroundY(decal, 0.06)) count++;
+  }
+  return count;
+}
+
+function resnapTrailMarkersToBakedTerrain() {
+  let count = 0;
+  for (const it of interactables) {
+    for (const marker of (it?.trailMarkers || [])) {
+      if (!marker) continue;
+      const yOffset = marker.geometry?.type === 'CylinderGeometry' ? 4 : 0.08;
+      if (setGroundY(marker, yOffset)) count++;
+    }
+  }
+  return count;
+}
+
+function resnapWorldToBakedTerrain() {
+  const landerCount =
+    (setGroundY(landerModel, APOLLO_LM_SIZE_WU * 0.453) ? 1 : 0) +
+    (setGroundY(landerModel3D) ? 1 : 0) +
+    (setGroundY(landerBeaconMesh, LANDER_BEACON_HEIGHT / 2) ? 1 : 0);
+
+  let interactableCount = 0;
+  for (const it of interactables) {
+    if (it?.object3d && setGroundY(it.object3d)) interactableCount++;
+  }
+
+  const footprintCount = resnapFootprintsToBakedTerrain();
+  const craterCount = resnapCraterDecalsToBakedTerrain();
+  const trailMarkerCount = resnapTrailMarkersToBakedTerrain();
+
+  console.log(
+    `ℹ️ [WalkMode] resnapWorldToBakedTerrain: ` +
+    `lander=${landerCount}, interactables=${interactableCount}, ` +
+    `footprints=${footprintCount}, craters=${craterCount}, trails=${trailMarkerCount}`
+  );
 }
 
 function buildGround() {
@@ -1184,6 +1233,7 @@ function buildCraters() {
     decal.position.set(cx, groundHeight(cx, cz) + 0.06, cz);
     decal.rotation.y = Math.random() * Math.PI * 2;
     scene.add(decal);
+    craterDecals.push(decal);
     disposables.push({ geometry: decalGeom });
   }
 }
@@ -1412,6 +1462,7 @@ function buildLanderBeacon() {
   });
   const mesh = new THREE.Mesh(geom, mat);
   mesh.position.set(lx, groundHeight(lx, lz) + LANDER_BEACON_HEIGHT / 2, lz);
+  landerBeaconMesh = mesh;
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
 }
