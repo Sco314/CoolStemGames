@@ -61,3 +61,38 @@ Reconstruct meters at runtime: `m = minM + (maxM - minM) * heights[i]`.
 ### Sites
 
 apollo-11, apollo-12, apollo-14, apollo-15, apollo-16, apollo-17.
+
+## bake-moon-globe-textures.mjs
+
+Bakes the whole-moon equirectangular textures consumed by the admin
+"Lunar Stationary Orbit" view (`moonlander/js/modes/OrbitMode.js`).
+Reuses the same LDEM and LROC GitHub-Releases assets as bake-terrain.
+
+### Outputs
+
+```
+moonlander/textures/moon/moon_color_2k.jpg     2048×1024 LROC color (~600-900 KB)
+moonlander/textures/moon/moon_normal_1k.png    1024×512  LDEM-derived normals (~1-2 MB)
+```
+
+### Run
+
+```
+cd scripts
+npm install
+node bake-moon-globe-textures.mjs            # both textures (default)
+node bake-moon-globe-textures.mjs --color    # color only
+node bake-moon-globe-textures.mjs --normal   # normals only
+```
+
+First run downloads `lroc_color_16bit_srgb_4k.tif` (~60 MB) and
+`ldem_16_uint.tif` (~32 MB) from this repo's Releases page and caches
+them next to the script. Re-runs reuse the cache.
+
+### Phase B note
+
+When stepping up to higher zoom levels, generate 4k color + 2k normal
+variants (rename to `moon_color_4k.jpg` / `moon_normal_2k.png`) and add
+LOD selection in OrbitMode based on `gl.getParameter(gl.MAX_TEXTURE_SIZE)`
+and the live zoom level. The bake math here is resolution-independent —
+just bump the four `*_OUT_*` constants.

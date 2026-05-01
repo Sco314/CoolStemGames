@@ -68,6 +68,7 @@ const overlay = {
   adminMenu:           document.getElementById('admin-menu'),
   adminTerrainDebug:   document.getElementById('admin-terrain-debug'),
   adminWalkJumps:      Array.from(document.querySelectorAll('.admin-walk-jump')),
+  btnAdminOrbit:       document.getElementById('btn-admin-orbit'),
   btnCloseAdmin:       document.getElementById('btn-close-admin'),
   muteBtn:          document.getElementById('mute-btn'),
   muteIcon:         document.querySelector('#mute-btn .mute-icon'),
@@ -136,6 +137,7 @@ let closeSettingsCb = () => {};
 // toggle, walk-mode level jump) are supplied by callers via showSettings().
 const ADMIN_PIN = '196911';   // dev shortcut, NOT a security boundary
 let walkJumpCb = null;        // (level:number) => void
+let orbitJumpCb = null;       // () => void
 
 // ---------- init ----------
 export function initHUD() {
@@ -216,6 +218,14 @@ function bindOverlayButtons() {
       walkJumpCb(level);
     });
   }
+
+  // Admin: jump to lunar stationary orbit view.
+  overlay.btnAdminOrbit?.addEventListener('click', () => {
+    if (!orbitJumpCb) return;
+    hideAdmin();
+    hideSettings();
+    orbitJumpCb();
+  });
 
   // Always-visible corner mute toggle. Click flips state, persists,
   // retunes every live Sound. The same path is exposed as toggleMute()
@@ -720,9 +730,10 @@ export function showGameOver({ score, level, landings, rank, onRestart, onMenu }
 }
 export function hideGameOver() { overlay.gameOver.hidden = true; }
 
-export function showSettings({ onClose, onWalkJump } = {}) {
+export function showSettings({ onClose, onWalkJump, onOrbitJump } = {}) {
   closeSettingsCb = onClose || (() => { hideSettings(); });
   walkJumpCb = onWalkJump || null;
+  orbitJumpCb = onOrbitJump || null;
   applySettings(GameState.settings);
   overlay.settings.hidden = false;
   requestAnimationFrame(() => overlay.btnCloseSettings.focus());

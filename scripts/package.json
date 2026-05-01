@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bake-terrain": "node bake-terrain.mjs"
+    "bake-terrain": "node bake-terrain.mjs",
+    "bake-moon-globe": "node bake-moon-globe-textures.mjs"
   },
   "devDependencies": {
     "geotiff": "^2.1.3",
+    "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0"
   }
 }
