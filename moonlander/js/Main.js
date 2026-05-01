@@ -38,6 +38,7 @@ import { LanderMode }     from './modes/LanderMode.js';
 import { WalkMode }       from './modes/WalkMode.js';
 import { TransitionMode } from './modes/TransitionMode.js';
 import { MainMenuMode }   from './modes/MainMenuMode.js';
+import { OrbitMode }      from './modes/OrbitMode.js';
 import { sampleFps }      from './Quality.js';
 import { preloadAssets }  from './Preload.js';
 import { initTouchControls } from './Touch.js';
@@ -205,7 +206,11 @@ function openMainMenu() {
       startRun();
     },
     onSettings: () => {
-      showSettings({ onClose: hideSettings, onWalkJump: enterWalkAtLevel });
+      showSettings({
+        onClose: hideSettings,
+        onWalkJump: enterWalkAtLevel,
+        onOrbitJump: enterOrbitMode,
+      });
     }
   });
 }
@@ -244,6 +249,21 @@ function enterWalkAtLevel(level) {
     });
     GameState.mode = MODE.WALK;
     notify('mode');
+  }, 50);
+}
+
+/**
+ * Admin-menu jump into the lunar-stationary-orbit view. Defers the swap
+ * a tick so the settings-overlay close event finishes cleanly, mirroring
+ * `enterWalkAtLevel`. No game-state side effects — this is purely a
+ * developer/admin viewer.
+ */
+function enterOrbitMode() {
+  console.log('🛠 ADMIN — enter lunar stationary orbit');
+  hideSettings();
+  hideMainMenu();
+  setTimeout(() => {
+    goToMode(OrbitMode, { onExit: openMainMenu });
   }, 50);
 }
 
@@ -321,7 +341,11 @@ function onGlobalKey(e) {
     if (isSettingsOpen()) {
       hideSettings();
     } else if (!transitioning) {
-      showSettings({ onClose: hideSettings, onWalkJump: enterWalkAtLevel });
+      showSettings({
+        onClose: hideSettings,
+        onWalkJump: enterWalkAtLevel,
+        onOrbitJump: enterOrbitMode,
+      });
     }
   }
 }
