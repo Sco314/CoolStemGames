@@ -63,6 +63,26 @@ import { LOW_END } from '../Device.js';
 const DISABLE_BAKED_TERRAIN = true;
 // === END BAKED TERRAIN KILL-SWITCH ===
 
+// ─── Lunar terrain material (debug-tunable) ───────────────────────────
+// Live-tweak via keyboard while in walk mode (see _onTerrainDebugKey).
+// Press shift+L to dump the current values as a copy-pasteable block.
+const TERRAIN_DEBUG_KEYS       = true;        // set false to ship; gates keybinds
+const TERRAIN_TEXTURE_SIZE     = 512;         // canvas px per side; build cost ~O(n²)
+const TERRAIN_TEXTURE_REPEAT   = 32;          // tile count across the whole ground plane
+const TERRAIN_NORMAL_SCALE     = 0.35;        // x & y of normalScale Vector2
+const TERRAIN_ROUGHNESS        = 0.95;
+const TERRAIN_BASE_COLOR       = 0x8c8c90;    // matches the previous Lambert grey
+const TERRAIN_NOISE_CONTRAST   = 0.55;        // 0 = flat grey, 1 = high tonal range
+const TERRAIN_SPECKLE_STRENGTH = 0.45;        // brightness amplitude of rare rock specks
+const TERRAIN_USE_LROC_OVERLAY = false;       // future broad-overlay toggle (off for now)
+
+// Lighting (debug-tunable; lower sun angle so normal map relief reads)
+const SUN_AZIMUTH_DEG    = 35;
+const SUN_ELEVATION_DEG  = 22;
+const SUN_INTENSITY      = 1.6;
+const AMBIENT_INTENSITY  = 0.45;
+const HEMI_INTENSITY     = 0.5;
+
 let scene = null;
 let camera = null;
 let canvasEl = null;
@@ -88,8 +108,14 @@ let _bakeHalfExtent = 0;
 let _groundGeom = null;
 // Reference to the ground plane's material, kept so the per-site LROC
 // colour texture can be swapped onto its `map` once it loads. Default is
-// the flat-grey lambert created in `buildGround()`.
+// the procedural regolith MeshStandardMaterial created in `buildGround()`.
 let _groundMat = null;
+
+// Module-level refs for live tuning via the terrain-debug keybinds.
+let _sun = null, _ambient = null, _hemi = null;
+let _terrainColorTex = null, _terrainNormalTex = null;
+let _terrainSettings = null;        // mutable copy of the constants above
+let _terrainKeyHandler = null;      // for cleanup on mode exit
 
 // Diagnostic state for the on-screen overlay (gated at the per-frame DOM
 // update by getShowTerrainDebug()). Always written so toggling the flag
@@ -103,7 +129,7 @@ const _debugStatus = {
   colorUrl: '',
   colorExtentM: null,            // metres of real moon covered by the colour bake
   colorUvScale: null,            // visible-plane / colour-bake UV ratio
-  materialMode: 'grey-lambert',  // 'grey-lambert'|'textured'
+  materialMode: 'procedural-pbr', // 'procedural-pbr'|'lroc-overlay'
   lastSampleSource: '',          // 'bake'|'procedural'
   lastSampleY: 0,
   lastProcY: 0,
@@ -199,6 +225,23 @@ export const WalkMode = {
 
     buildLighting();
     buildGround();
+    if (TERRAIN_DEBUG_KEYS) {
+      _terrainSettings = {
+        repeat:      TERRAIN_TEXTURE_REPEAT,
+        normalScale: TERRAIN_NORMAL_SCALE,
+        roughness:   TERRAIN_ROUGHNESS,
+        sunAz:       SUN_AZIMUTH_DEG,
+        sunEl:       SUN_ELEVATION_DEG,
+        sunI:        SUN_INTENSITY,
+        ambI:        AMBIENT_INTENSITY,
+      };
+      _terrainKeyHandler = (e) => _onTerrainDebugKey(e);
+      window.addEventListener('keydown', _terrainKeyHandler);
+      console.log(
+        '[terrain] debug keys active — [/] repeat, ;/\' normal, ,/. rough, ' +
+        '9/0 sun-az, o/p sun-el, -/= sun-i, j/l amb, L=dump'
+      );
+    }
     buildCraters();
     buildEarth();
     buildAstronaut();
@@ -224,7 +267,7 @@ export const WalkMode = {
       _debugStatus.colorUrl = '';
       _debugStatus.colorExtentM = null;
       _debugStatus.colorUvScale = null;
-      _debugStatus.materialMode = 'grey-lambert';
+      _debugStatus.materialMode = 'procedural-pbr';
       _debugStatus.meshYMin = null;
       _debugStatus.meshYMax = null;
       _debugStatus.meshDisplaced = false;
@@ -347,6 +390,12 @@ export const WalkMode = {
     setCarryDropHandler(null);
     hideMap();
 
+    if (_terrainKeyHandler) {
+      window.removeEventListener('keydown', _terrainKeyHandler);
+      _terrainKeyHandler = null;
+    }
+    _terrainSettings = null;
+
     for (const d of disposables) {
       if (d.geometry) d.geometry.dispose();
       if (d.material) {
@@ -373,6 +422,9 @@ export const WalkMode = {
     _bakeHalfExtent = 0;
     _groundGeom = null;
     _groundMat = null;
+    _terrainColorTex = null;
+    _terrainNormalTex = null;
+    _sun = null; _ambient = null; _hemi = null;
     footprints = [];
     footprintCursor = 0;
     lastFootprintPos = null;
@@ -858,13 +910,102 @@ function buildLighting() {
   // 3D-printable thickness block) read as solid black slashes against
   // the sky and look broken. Combined with a low directional sun for the
   // crisp "moon" shadow direction.
-  const hemi = new THREE.HemisphereLight(0xa0a8c0, 0x303038, 0.6);
-  scene.add(hemi);
-  const ambient = new THREE.AmbientLight(0x404060, 0.35);
-  scene.add(ambient);
-  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-  sun.position.set(50, 80, 30);
-  scene.add(sun);
+  _hemi = new THREE.HemisphereLight(0xa0a8c0, 0x303038, HEMI_INTENSITY);
+  scene.add(_hemi);
+  _ambient = new THREE.AmbientLight(0x404060, AMBIENT_INTENSITY);
+  scene.add(_ambient);
+  _sun = new THREE.DirectionalLight(0xffffff, SUN_INTENSITY);
+  _applySunAngle(SUN_AZIMUTH_DEG, SUN_ELEVATION_DEG);
+  scene.add(_sun);
+}
+
+function _applySunAngle(azDeg, elDeg) {
+  if (!_sun) return;
+  const r = 100;
+  const az = THREE.MathUtils.degToRad(azDeg);
+  const el = THREE.MathUtils.degToRad(elDeg);
+  _sun.position.set(
+    r * Math.cos(el) * Math.cos(az),
+    r * Math.sin(el),
+    r * Math.cos(el) * Math.sin(az),
+  );
+}
+
+// ─── Terrain debug keybindings ─────────────────────────────────────────
+// Keys avoid the existing walk bindings (WASD/arrows/E/Q/G/C/M/I/B/Space).
+//   [ ]  texture repeat   ÷1.25 / ×1.25
+//   ; '  normal scale     −0.05 / +0.05
+//   , .  roughness        −0.05 / +0.05
+//   9 0  sun azimuth      −5°   / +5°
+//   o p  sun elevation    −2°   / +2°
+//   - =  sun intensity    −0.1  / +0.1
+//   j l  ambient fill     −0.05 / +0.05
+//   L    print copy-pasteable constants block (shift+l)
+function _onTerrainDebugKey(e) {
+  if (!TERRAIN_DEBUG_KEYS || !_terrainSettings) return;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+
+  const s = _terrainSettings;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let handled = true;
+  switch (e.key) {
+    case '[': s.repeat = clamp(Math.round(s.repeat * 0.8),  1, 256); _applyRepeat(s.repeat); break;
+    case ']': s.repeat = clamp(Math.round(s.repeat * 1.25), 1, 256); _applyRepeat(s.repeat); break;
+    case ';': s.normalScale = clamp(s.normalScale - 0.05, 0, 2); _applyNormalScale(s.normalScale); break;
+    case "'": s.normalScale = clamp(s.normalScale + 0.05, 0, 2); _applyNormalScale(s.normalScale); break;
+    case ',': s.roughness = clamp(s.roughness - 0.05, 0, 1); _applyRoughness(s.roughness); break;
+    case '.': s.roughness = clamp(s.roughness + 0.05, 0, 1); _applyRoughness(s.roughness); break;
+    case '9': s.sunAz -= 5; _applySunAngle(s.sunAz, s.sunEl); break;
+    case '0': s.sunAz += 5; _applySunAngle(s.sunAz, s.sunEl); break;
+    case 'o': s.sunEl = clamp(s.sunEl - 2, 2, 85); _applySunAngle(s.sunAz, s.sunEl); break;
+    case 'p': s.sunEl = clamp(s.sunEl + 2, 2, 85); _applySunAngle(s.sunAz, s.sunEl); break;
+    case '-': s.sunI  = clamp(s.sunI - 0.1, 0, 4); if (_sun)     _sun.intensity     = s.sunI; break;
+    case '=': s.sunI  = clamp(s.sunI + 0.1, 0, 4); if (_sun)     _sun.intensity     = s.sunI; break;
+    case 'j': s.ambI  = clamp(s.ambI - 0.05, 0, 2); if (_ambient) _ambient.intensity = s.ambI; break;
+    case 'l': s.ambI  = clamp(s.ambI + 0.05, 0, 2); if (_ambient) _ambient.intensity = s.ambI; break;
+    case 'L': _logTerrainSettings(); break;
+    default: handled = false;
+  }
+  if (handled) {
+    e.preventDefault();
+    if (e.key !== 'L') _logTerrainStatus();
+  }
+}
+
+function _applyRepeat(n) {
+  if (_terrainColorTex)  _terrainColorTex.repeat.set(n, n);
+  if (_terrainNormalTex) _terrainNormalTex.repeat.set(n, n);
+}
+function _applyNormalScale(n) {
+  if (_groundMat && _groundMat.normalScale) _groundMat.normalScale.setScalar(n);
+}
+function _applyRoughness(r) {
+  if (_groundMat) { _groundMat.roughness = r; _groundMat.needsUpdate = true; }
+}
+
+function _logTerrainStatus() {
+  const s = _terrainSettings;
+  console.log(
+    `[terrain] repeat=${s.repeat} normal=${s.normalScale.toFixed(2)} ` +
+    `rough=${s.roughness.toFixed(2)} ` +
+    `sun(az=${s.sunAz.toFixed(0)},el=${s.sunEl.toFixed(0)},i=${s.sunI.toFixed(2)}) ` +
+    `amb=${s.ambI.toFixed(2)}`
+  );
+}
+
+function _logTerrainSettings() {
+  const s = _terrainSettings;
+  console.log(
+    '─── lunar terrain settings (paste into WalkMode.js constants) ───\n' +
+    `const TERRAIN_TEXTURE_REPEAT  = ${s.repeat.toFixed(0)};\n` +
+    `const TERRAIN_NORMAL_SCALE    = ${s.normalScale.toFixed(2)};\n` +
+    `const TERRAIN_ROUGHNESS       = ${s.roughness.toFixed(2)};\n` +
+    `const SUN_AZIMUTH_DEG         = ${s.sunAz.toFixed(0)};\n` +
+    `const SUN_ELEVATION_DEG       = ${s.sunEl.toFixed(0)};\n` +
+    `const SUN_INTENSITY           = ${s.sunI.toFixed(2)};\n` +
+    `const AMBIENT_INTENSITY       = ${s.ambI.toFixed(2)};\n`
+  );
 }
 
 /** Deterministic sin-sum heightmap. The shape of the procedural plane that
@@ -965,6 +1106,98 @@ function snapObjectToGroundHeight(obj3d, offsetY = 0) {
   obj3d.position.y = groundHeight(obj3d.position.x, obj3d.position.z) + offsetY;
 }
 
+// ─── Procedural lunar regolith texture builders ────────────────────────
+// Cheap deterministic hash → value-noise → shared scalar field → derived
+// colour + normal CanvasTextures. All driven by the TERRAIN_* constants so
+// the same height field produces matching colour & relief.
+function _hashRand(x, y, seed) {
+  const h = Math.sin(x * 12.9898 + y * 78.233 + seed * 17.137) * 43758.5453;
+  return h - Math.floor(h);
+}
+
+function _valueNoise(x, y, cellSize, seed) {
+  const xs = x / cellSize, ys = y / cellSize;
+  const xi = Math.floor(xs), yi = Math.floor(ys);
+  const xf = xs - xi, yf = ys - yi;
+  const sx = xf * xf * (3 - 2 * xf);
+  const sy = yf * yf * (3 - 2 * yf);
+  const a = _hashRand(xi,     yi,     seed);
+  const b = _hashRand(xi + 1, yi,     seed);
+  const c = _hashRand(xi,     yi + 1, seed);
+  const d = _hashRand(xi + 1, yi + 1, seed);
+  return a * (1 - sx) * (1 - sy)
+       + b *      sx  * (1 - sy)
+       + c * (1 - sx) *      sy
+       + d *      sx  *      sy;
+}
+
+function _buildRegolithHeightField(size, contrast, speckleStrength) {
+  const f = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let h = 0;
+      h += _valueNoise(x, y, 64, 1) * 0.55;        // low-freq mottled patches
+      h += _valueNoise(x, y, 16, 2) * 0.25;        // mid-freq
+      h += _valueNoise(x, y,  4, 3) * 0.15;        // fine grain
+      h += _hashRand(x, y, 7)       * 0.05;        // pure dust
+      if (_hashRand(x, y, 13) < 0.005) {
+        h += (_hashRand(x, y, 19) - 0.5) * speckleStrength;
+      }
+      f[y * size + x] = 0.5 + (h - 0.5) * contrast;
+    }
+  }
+  return f;
+}
+
+function _buildRegolithColorTexture(field, size, baseColorHex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const base = new THREE.Color(baseColorHex);
+  for (let i = 0; i < field.length; i++) {
+    const v = field[i] + 0.5;                      // bias so mid = ~1.0
+    const j = i * 4;
+    img.data[j    ] = Math.max(0, Math.min(255, base.r * 255 * v));
+    img.data[j + 1] = Math.max(0, Math.min(255, base.g * 255 * v));
+    img.data[j + 2] = Math.max(0, Math.min(255, base.b * 255 * v));
+    img.data[j + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function _buildRegolithNormalTexture(field, size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const STR = 6.0;                                 // pre-encode strength
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const xl = (x - 1 + size) % size, xr = (x + 1) % size;
+      const yu = (y - 1 + size) % size, yd = (y + 1) % size;
+      const dx = (field[y * size + xr] - field[y * size + xl]) * STR;
+      const dy = (field[yd * size + x] - field[yu * size + x]) * STR;
+      const j = (y * size + x) * 4;
+      img.data[j    ] = Math.max(0, Math.min(255, ( dx * 0.5 + 0.5) * 255));
+      img.data[j + 1] = Math.max(0, Math.min(255, (-dy * 0.5 + 0.5) * 255));
+      img.data[j + 2] = 255;
+      img.data[j + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  // Normal maps must live in linear space — leave colorSpace at the default.
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 function buildGround() {
   // Visible procedural plane built up-front using groundHeight(x, z).
   // Heights come from whatever source groundHeight() currently uses — under
@@ -987,13 +1220,29 @@ function buildGround() {
   }
   geom.computeBoundingSphere();
   geom.computeBoundingBox();
-  // Smooth-shaded neutral grey — reads as bare regolith before the LROC
-  // colour PNG binds, then modulates the texture as a no-op once it does
-  // (loadColorTextureForBake sets material color to white on success).
-  const mat = new THREE.MeshLambertMaterial({ color: 0x8c8c90 });
+  // Procedural lunar regolith: a single hash-based scalar field drives both
+  // the colour map (mottled grey + speckles) and a Sobel-derived normal
+  // map, applied with RepeatWrapping so the tile density across the visible
+  // plane is independent of canvas resolution.
+  const field = _buildRegolithHeightField(
+    TERRAIN_TEXTURE_SIZE, TERRAIN_NOISE_CONTRAST, TERRAIN_SPECKLE_STRENGTH
+  );
+  _terrainColorTex  = _buildRegolithColorTexture(field, TERRAIN_TEXTURE_SIZE, TERRAIN_BASE_COLOR);
+  _terrainNormalTex = _buildRegolithNormalTexture(field, TERRAIN_TEXTURE_SIZE);
+  _terrainColorTex.repeat.set(TERRAIN_TEXTURE_REPEAT, TERRAIN_TEXTURE_REPEAT);
+  _terrainNormalTex.repeat.set(TERRAIN_TEXTURE_REPEAT, TERRAIN_TEXTURE_REPEAT);
+  const mat = new THREE.MeshStandardMaterial({
+    color:       TERRAIN_BASE_COLOR,
+    map:         _terrainColorTex,
+    normalMap:   _terrainNormalTex,
+    normalScale: new THREE.Vector2(TERRAIN_NORMAL_SCALE, TERRAIN_NORMAL_SCALE),
+    roughness:   TERRAIN_ROUGHNESS,
+    metalness:   0.0,
+  });
   const mesh = new THREE.Mesh(geom, mat);
   scene.add(mesh);
-  disposables.push({ geometry: geom, material: mat });
+  disposables.push({ geometry: geom, material: mat, texture: _terrainColorTex });
+  disposables.push({ texture: _terrainNormalTex });
   _groundGeom = geom;
   _groundMat = mat;
 }
@@ -1010,6 +1259,9 @@ function buildGround() {
  * grey lambert stays as-is.
  */
 async function loadColorTextureForBake(bake) {
+  // Gated off while we iterate on the procedural regolith material — flip
+  // TERRAIN_USE_LROC_OVERLAY to true to re-enable the broad-overlay path.
+  if (!TERRAIN_USE_LROC_OVERLAY) return;
   if (!bake || !_groundMat) return;
   const pngUrl  = `assets/baked_terrain/${bake.site}_color.png`;
   const metaUrl = `assets/baked_terrain/${bake.site}_color.json`;
@@ -1079,7 +1331,7 @@ async function loadColorTextureForBake(bake) {
       _groundMat.needsUpdate = true;
       disposables.push({ texture: tex });
       _debugStatus.colorState = 'loaded';
-      _debugStatus.materialMode = 'textured';
+      _debugStatus.materialMode = 'lroc-overlay';
       const imgW = tex.image && tex.image.width;
       const imgH = tex.image && tex.image.height;
       console.log(
