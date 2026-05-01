@@ -234,6 +234,13 @@ export const WalkMode = {
     if (DISABLE_BAKED_TERRAIN) {
       _debugStatus.bakeState = 'disabled (kill-switch)';
       console.log('⏸️ [WalkMode] baked terrain disabled by DISABLE_BAKED_TERRAIN flag — procedural only');
+      // Heightmap fetch is gated off, but the LROC colour PNG is independent
+      // — bind it directly using the sidecar's own 16 km extent so the
+      // procedural ground mesh shows real lunar photography.
+      const colorSite = apolloSiteForLevel(GameState.level);
+      if (colorSite) {
+        loadColorTextureForBake({ site: colorSite.id, groundExtentM: 16000 });
+      }
     } else {
     loadBakeForLevel(GameState.level).then((b) => {
       if (!scene) return;  // mode exited before fetch resolved
@@ -959,19 +966,11 @@ function snapObjectToGroundHeight(obj3d, offsetY = 0) {
 }
 
 function buildGround() {
-  // TEMP TEST (requested): WalkMode should use height sampling only and NOT
-  // render the procedural/generated walk-surface mesh.
-  // NOTE: The old generated mesh code is intentionally left commented below
-  // for quick restore once testing is complete.
-  _groundGeom = null;
-  _groundMat = null;
-  return;
-
-  /*
-  // Visible procedural plane built up-front using the sin-sum. Once the
-  // bake JSON arrives `redisplaceGroundMesh()` re-runs the displacement
-  // with the new heights; any (x, z) outside the bake footprint stays on
-  // the procedural sin-sum so the play area can extend past coverage.
+  // Visible procedural plane built up-front using groundHeight(x, z).
+  // Heights come from whatever source groundHeight() currently uses — under
+  // the DISABLE_BAKED_TERRAIN kill-switch that's the procedural sin-sum, so
+  // the mesh hugs the same surface the astronaut, breadcrumbs, beacons,
+  // footprints, craters, and interactables sit on.
   const size = WALK_PLAY_RADIUS * 2.4;
   const segs = 128;
   const geom = new THREE.PlaneGeometry(size, size, segs, segs);
@@ -983,33 +982,20 @@ function buildGround() {
     pos.setY(i, groundHeight(x, z));
   }
   geom.computeVertexNormals();
-  // Mirror the redisplaceGroundMesh pattern even though it's less critical
-  // here (Three.js auto-uploads on first use of a fresh BufferGeometry).
-  // Consistency makes future modifications safe by default.
   if (geom.attributes.normal) {
     geom.attributes.normal.needsUpdate = true;
   }
   geom.computeBoundingSphere();
   geom.computeBoundingBox();
-  // Smooth-shaded: flatShading caches per-face normals at material init,
-  // which blocks `redisplaceGroundMesh()` from re-lighting the surface
-  // after the bake's heights are written. Smooth shading also reads
-  // better with photo texture and the gentle relief (±24 wu) we have.
-  // TEMP TEST (requested): commented-out the old flat-grey procedural
-  // lunar surface material so we can verify whether terrain visibility issues
-  // are tied to that default presentation.
-  // const mat = new THREE.MeshLambertMaterial({ color: 0x8c8c90 });
-
-  // TEMP TEST (requested): keep the displaced heightmap mesh, but force a
-  // bright yellow base color so the terrain is unmistakably visible while
-  // debugging texture/placement issues.
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+  // Smooth-shaded neutral grey — reads as bare regolith before the LROC
+  // colour PNG binds, then modulates the texture as a no-op once it does
+  // (loadColorTextureForBake sets material color to white on success).
+  const mat = new THREE.MeshLambertMaterial({ color: 0x8c8c90 });
   const mesh = new THREE.Mesh(geom, mat);
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat });
   _groundGeom = geom;
   _groundMat = mat;
-  */
 }
 
 /**
@@ -1083,8 +1069,7 @@ async function loadColorTextureForBake(bake) {
       // texture; turn it off, white-tint so the texture shows
       // un-multiplied, and flag the material dirty.
       _groundMat.flatShading = false;
-      // TEMP TEST (requested): keep yellow tint even after color texture bind.
-      _groundMat.color.set(0xffff00);
+      _groundMat.color.set(0xffffff);
       _groundMat.needsUpdate = true;
       disposables.push({ texture: tex });
       _debugStatus.colorState = 'loaded';
