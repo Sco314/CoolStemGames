@@ -796,7 +796,9 @@ function unbindMouse() {
     if (onCanvasTouchEnd)    canvasEl.removeEventListener('touchcancel', onCanvasTouchEnd);
   }
   mouseOrbiting = false;
-  onMouseMove = onPointerLockChange = onCanvasClick = null;
+  // `onPointerLockChange` is not a live handler in the current drag-orbit
+  // control scheme; keep teardown assignments to declared handler refs only.
+  onMouseMove = onCanvasClick = null;
   onCanvasTouchStart = onCanvasTouchMove = onCanvasTouchEnd = null;
   touchActiveId = null;
 }
