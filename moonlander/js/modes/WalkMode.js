@@ -1000,11 +1000,14 @@ function buildGround() {
 
 /**
  * Fetch the per-site LROC colour PNG and apply it as the ground material's
- * `map`. The PNG covers `bake.groundExtentM` of real Moon (much larger than
- * the visible plane), so the visible plane samples just the central
- * `WALK_PLAY_RADIUS * 2.4 / halfExtentWU` fraction of the texture, biased
- * to the centre via `tex.repeat`/`tex.offset`. On failure the grey lambert
- * stays as-is.
+ * `map`. The PNG covers `bake.groundExtentM` (16 km) of real Moon — much
+ * larger than the visible play plane — so a strict geospatial crop ends up
+ * sampling ~3% of a 256×256 image (~8 px) across the whole surface and
+ * blurs into uniform grey. For now we stretch the full PNG across the
+ * visible plane (uvScale=1, offset=0) so lunar photo detail is actually
+ * visible; the geospatially-correct values are still computed and logged
+ * for future use when per-site high-res crops are baked. On failure the
+ * grey lambert stays as-is.
  */
 async function loadColorTextureForBake(bake) {
   if (!bake || !_groundMat) return;
@@ -1039,12 +1042,15 @@ async function loadColorTextureForBake(bake) {
   const fp = bakeFootprintWU(bake);
   const colorHalfExtentWU = (colorGroundExtentM / fp.metersPerWU) / 2;
   const planeSide = WALK_PLAY_RADIUS * 2.4;
-  // Visible plane samples only the central `uvScale` fraction of the
-  // texture, biased to the centre. With 16 km extent this is ~3% — small,
-  // but each output pixel represents real LROC photography rather than
-  // upsampled noise.
-  const uvScale = planeSide / (2 * colorHalfExtentWU);
-  const offset = (1 - uvScale) / 2;
+  // The geospatially-correct UV crop would sample only the visible plane's
+  // fraction of the 16 km LROC PNG (~3% of a 256×256 image ≈ 8 px stretched
+  // across the whole walk surface — blurs to flat grey). For now stretch the
+  // full PNG across the visible ground so players can actually see lunar
+  // photo detail. Long-term fix: bake a per-site crop matching the play area.
+  const correctUvScale = planeSide / (2 * colorHalfExtentWU);
+  const correctOffset = (1 - correctUvScale) / 2;
+  const uvScale = 1;
+  const offset = 0;
   _debugStatus.colorExtentM = colorGroundExtentM;
   _debugStatus.colorUvScale = uvScale;
 
@@ -1074,7 +1080,17 @@ async function loadColorTextureForBake(bake) {
       disposables.push({ texture: tex });
       _debugStatus.colorState = 'loaded';
       _debugStatus.materialMode = 'textured';
-      console.log(`✅ [WalkMode] colour texture applied: ${bake.site} (extent ${(colorGroundExtentM / 1000).toFixed(1)} km, uvScale ${uvScale.toFixed(3)})`);
+      const imgW = tex.image && tex.image.width;
+      const imgH = tex.image && tex.image.height;
+      console.log(
+        `✅ [WalkMode] colour texture applied: ${bake.site}\n` +
+        `   path: ${pngUrl}\n` +
+        `   image: ${imgW}×${imgH} px\n` +
+        `   colorGroundExtentM: ${colorGroundExtentM} m\n` +
+        `   planeSide: ${planeSide.toFixed(2)} wu\n` +
+        `   uvScale: ${uvScale} (geospatially-correct would be ${correctUvScale.toFixed(3)})\n` +
+        `   offset: ${offset} (geospatially-correct would be ${correctOffset.toFixed(3)})`
+      );
     },
     undefined,
     () => {
