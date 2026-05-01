@@ -1347,27 +1347,31 @@ function buildAstronaut() {
 
   scene.add(astronaut);
 
+  // Hide the procedural humanoid by default so the brief "simple character"
+  // flash before the Mercury Spacesuit GLB resolves is invisible instead of
+  // visibly placeholder. Meshes stay in the scene graph (just invisible) so
+  // the .catch() below can flip them back if the GLB load fails.
+  astronaut.children.forEach(child => { child.visible = false; });
+  astronautProceduralVisible = false;
+
   // Async upgrade to the NASA Mercury Spacesuit GLB. Static mesh — no
   // skeleton — so updateWalkAnim() drives a procedural bob + sway in
-  // place of limb swings. Fallback path keeps the procedural humanoid.
+  // place of limb swings. Fallback path reveals the procedural humanoid.
   loadModel(MODEL_PATHS.spacesuit)
     .then(model => {
       if (!astronaut) return;             // mode already exited
       placeOnGround(model, 0, 0, 0, SPACESUIT_SIZE_WU, 'spacesuit');
       astronaut.add(model);
       astronautModel = model;
-      // Hide every procedural mesh under the astronaut group (helmet,
-      // torso, limbs, feet) without removing them — keeps disposables
-      // intact and lets us flip back if needed.
-      astronaut.traverse(child => {
-        if (child === astronaut || child === model) return;
-        if (model.getObjectById(child.id)) return;  // descendant of new model
-        if (child.isMesh || child.isGroup) child.visible = false;
-      });
-      astronautProceduralVisible = false;
+      // Procedural meshes are already hidden (see above); nothing to flip.
       console.log('[WalkMode] Mercury Spacesuit GLB active');
     })
-    .catch(() => { /* procedural humanoid keeps the role */ });
+    .catch(() => {
+      // GLB failed — reveal the procedural humanoid as visible fallback.
+      if (!astronaut) return;
+      astronaut.children.forEach(child => { child.visible = true; });
+      astronautProceduralVisible = true;
+    });
 }
 
 function updateWalkAnim(dt, moving) {
