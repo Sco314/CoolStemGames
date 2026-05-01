@@ -55,6 +55,14 @@ import { Alien } from './walk/Alien.js';
 import { ALIEN_MIN_LEVEL, ALIEN_SPAWN_CHANCE } from '../Constants.js';
 import { LOW_END } from '../Device.js';
 
+// === BAKED TERRAIN KILL-SWITCH ===
+// Set to true to disable baked terrain loading and force procedural-only
+// ground sampling (everything snaps to the sin-sum surface). Set back to
+// false to restore baked Apollo-site terrain. Single source of truth — flip
+// this one constant to revert.
+const DISABLE_BAKED_TERRAIN = true;
+// === END BAKED TERRAIN KILL-SWITCH ===
+
 let scene = null;
 let camera = null;
 let canvasEl = null;
@@ -221,6 +229,12 @@ export const WalkMode = {
       _debugStatus.meshYMax = null;
       _debugStatus.meshDisplaced = false;
     }
+    // === BAKED TERRAIN KILL-SWITCH (gated block) ===
+    // To re-enable: flip DISABLE_BAKED_TERRAIN to false at top of file.
+    if (DISABLE_BAKED_TERRAIN) {
+      _debugStatus.bakeState = 'disabled (kill-switch)';
+      console.log('⏸️ [WalkMode] baked terrain disabled by DISABLE_BAKED_TERRAIN flag — procedural only');
+    } else {
     loadBakeForLevel(GameState.level).then((b) => {
       if (!scene) return;  // mode exited before fetch resolved
       _bake = b;
@@ -241,6 +255,7 @@ export const WalkMode = {
         console.warn('⚠️ [WalkMode] no baked terrain for this level — procedural sin-sum only');
       }
     });
+    } // === END BAKED TERRAIN KILL-SWITCH ===
     spawnInteractables();
     buildFootprintPool();
     // Reset per-walk-session signposting state so reminders don't carry
