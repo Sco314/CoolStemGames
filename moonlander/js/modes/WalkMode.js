@@ -996,16 +996,23 @@ function _logTerrainStatus() {
 
 function _logTerrainSettings() {
   const s = _terrainSettings;
-  console.log(
-    '─── lunar terrain settings (paste into WalkMode.js constants) ───\n' +
+  const text =
     `const TERRAIN_TEXTURE_REPEAT  = ${s.repeat.toFixed(0)};\n` +
     `const TERRAIN_NORMAL_SCALE    = ${s.normalScale.toFixed(2)};\n` +
     `const TERRAIN_ROUGHNESS       = ${s.roughness.toFixed(2)};\n` +
     `const SUN_AZIMUTH_DEG         = ${s.sunAz.toFixed(0)};\n` +
     `const SUN_ELEVATION_DEG       = ${s.sunEl.toFixed(0)};\n` +
     `const SUN_INTENSITY           = ${s.sunI.toFixed(2)};\n` +
-    `const AMBIENT_INTENSITY       = ${s.ambI.toFixed(2)};\n`
-  );
+    `const AMBIENT_INTENSITY       = ${s.ambI.toFixed(2)};\n`;
+  console.log('─── lunar terrain settings (paste into WalkMode.js constants) ───\n' + text);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => console.log('[terrain] ✔ copied to clipboard'),
+      (err) => console.warn('[terrain] clipboard copy failed:', err),
+    );
+  } else {
+    console.warn('[terrain] navigator.clipboard unavailable — copy from console');
+  }
 }
 
 /** Deterministic sin-sum heightmap. The shape of the procedural plane that
