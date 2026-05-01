@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content">
   <title>Space Racer</title>
 
+  <!-- Defensive cache directives. The HTTP-layer no-store header in
+       _headers is authoritative; these are belt-and-suspenders for
+       environments where the header gets stripped or ignored (some
+       proxies, school filters). Keeps F5 honest without manual cache
+       clearing during dev iteration. -->
+  <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
+  <meta http-equiv="Pragma"        content="no-cache">
+  <meta http-equiv="Expires"       content="0">
+
   <!-- Retro pixel-font pair (Rev 2 #17). VT323 is a terminal-cell monospace
        that reads as well as Courier at body sizes; Press Start 2P is the
        classic chunky pixel face, used only for headings + the wordmark

@@ -35,3 +35,14 @@
   Cache-Control: no-cache
 /moonlander/*
   Cache-Control: no-cache
+
+# moonlander HTML + JS — stricter than the rule above so code edits
+# land on F5 without hand-clearing the browser cache. Listed AFTER the
+# /moonlander/* rule because Cloudflare Pages applies _headers in file
+# order and the later matching value wins. Other moonlander assets
+# (textures, GLBs, fonts) keep the broader no-cache rule above, which
+# revalidates via ETag (304 when unchanged → small bandwidth cost).
+/moonlander/index.html
+  Cache-Control: no-store, must-revalidate
+/moonlander/js/*
+  Cache-Control: no-store, must-revalidate
