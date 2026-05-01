@@ -42,6 +42,28 @@ import { sampleFps }      from './Quality.js';
 import { preloadAssets }  from './Preload.js';
 import { initTouchControls } from './Touch.js';
 
+// ─── ?fresh=1 — nuclear reset for dev iteration ─────────────────────
+// Append `?fresh=1` to the URL and reload to wipe every moonlander.*
+// localStorage key (save data, dev flags, tutorial-seen). The flag is
+// stripped from the URL via replaceState after wiping so subsequent F5s
+// behave normally. Runs at module-eval time, before loadSave() so the
+// wipe lands before GameState reads from localStorage.
+{
+  const _u = new URL(window.location.href);
+  if (_u.searchParams.has('fresh')) {
+    let n = 0;
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith('moonlander.')) {
+        localStorage.removeItem(k);
+        n++;
+      }
+    }
+    _u.searchParams.delete('fresh');
+    window.history.replaceState({}, '', _u.toString());
+    console.log(`[fresh] wiped ${n} moonlander.* localStorage keys`);
+  }
+}
+
 let renderer, canvas;
 let currentMode = null;
 let lastFrameTime = performance.now();
