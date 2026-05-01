@@ -84,6 +84,12 @@ function init() {
   // --- renderer ---
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // ACES Filmic + sRGB output — gives MeshStandardMaterial proper highlight
+  // roll-off and saturation; soft net-positive on Lambert materials too. Live
+  // exposure / mode tuning lives in WalkMode's terrain-debug keybinds.
+  renderer.outputColorSpace    = THREE.SRGBColorSpace;
+  renderer.toneMapping         = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
   canvas = renderer.domElement;
   document.body.appendChild(canvas);
 
