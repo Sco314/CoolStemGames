@@ -395,9 +395,35 @@
   <div id="terrain-keys" style="display:none;
        position:fixed; top:8px; left:8px; z-index:9999;
        padding:8px 10px; background:rgba(0,0,0,0.78); color:#9fe;
-       font:11px/1.35 ui-monospace, Menlo, Consolas, monospace;
-       white-space:pre; pointer-events:none; border:1px solid #2a4;
-       max-width:380px;"></div>
+       font:12px/1.35 ui-monospace, Menlo, Consolas, monospace;
+       pointer-events:auto; border:1px solid #2a4;
+       max-width:430px; -webkit-tap-highlight-color: transparent;"></div>
+  <style>
+    /* Terrain-debug legend: tap-target rows. Same look on desktop, but
+       each "key" is a real button on touch devices so mobile devs get
+       the same iteration loop as keyboard. */
+    #terrain-keys .trow {
+      display: flex; align-items: center; gap: 6px;
+      line-height: 1.4; margin: 2px 0;
+    }
+    #terrain-keys .trow.header {
+      border-bottom: 1px dashed #2a4;
+      padding-bottom: 4px; margin-bottom: 6px; gap: 0;
+    }
+    #terrain-keys .kbtn {
+      display: inline-block;
+      min-width: 28px; text-align: center;
+      padding: 6px 8px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 3px; cursor: pointer;
+      user-select: none; -webkit-user-select: none;
+    }
+    #terrain-keys .kbtn:hover  { background: rgba(159,238,255,0.18); }
+    #terrain-keys .kbtn:active { background: rgba(159,238,255,0.36); }
+    #terrain-keys .kspacer { display: inline-block; min-width: 40px; }
+    #terrain-keys .lbl     { flex: 1; padding-left: 4px; }
+    #terrain-keys .val     { min-width: 88px; text-align: right; padding-right: 4px; }
+  </style>
 
   <script type="module" src="js/Main.js"></script>
 </body>

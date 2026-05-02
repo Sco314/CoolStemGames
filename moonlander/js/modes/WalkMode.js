@@ -68,19 +68,19 @@ const DISABLE_BAKED_TERRAIN = true;
 // Press shift+L to dump the current values as a copy-pasteable block.
 const TERRAIN_DEBUG_KEYS       = true;        // set false to ship; gates keybinds
 const TERRAIN_TEXTURE_SIZE     = 512;         // canvas px per side; build cost ~O(n²)
-const TERRAIN_TEXTURE_REPEAT   = 32;          // tile count across the whole ground plane
-const TERRAIN_NORMAL_SCALE     = 0.35;        // x & y of normalScale Vector2
-const TERRAIN_ROUGHNESS        = 0.95;
+const TERRAIN_TEXTURE_REPEAT   = 6;           // tile count across the whole ground plane
+const TERRAIN_NORMAL_SCALE     = 2.00;        // x & y of normalScale Vector2
+const TERRAIN_ROUGHNESS        = 0.75;
 const TERRAIN_BASE_COLOR       = 0x8c8c90;    // matches the previous Lambert grey
 const TERRAIN_NOISE_CONTRAST   = 0.55;        // 0 = flat grey, 1 = high tonal range
 const TERRAIN_SPECKLE_STRENGTH = 0.45;        // brightness amplitude of rare rock specks
 const TERRAIN_USE_LROC_OVERLAY = false;       // future broad-overlay toggle (off for now)
 
 // Lighting (debug-tunable; lower sun angle so normal map relief reads)
-const SUN_AZIMUTH_DEG    = 35;
-const SUN_ELEVATION_DEG  = 22;
-const SUN_INTENSITY      = 1.6;
-const AMBIENT_INTENSITY  = 0.45;
+const SUN_AZIMUTH_DEG    = 125;
+const SUN_ELEVATION_DEG  = 18;
+const SUN_INTENSITY      = 4.0;
+const AMBIENT_INTENSITY  = 0.80;
 const HEMI_INTENSITY     = 0.5;
 
 // Fog (debug-tunable). Bigger far distance kills the "spotlight" feel —
@@ -144,6 +144,7 @@ let _renderer = null;               // shared renderer ref for tone-map tweaks
 let _terrainColorTex = null, _terrainNormalTex = null;
 let _terrainSettings = null;        // mutable copy of the constants above
 let _terrainKeyHandler = null;      // for cleanup on mode exit
+let _terrainClickHandler = null;    // legend tap targets — mobile / desktop
 
 // Diagnostic state for the on-screen overlay (gated at the per-frame DOM
 // update by getShowTerrainDebug()). Always written so toggling the flag
@@ -273,6 +274,9 @@ export const WalkMode = {
       };
       _terrainKeyHandler = (e) => _onTerrainDebugKey(e);
       window.addEventListener('keydown', _terrainKeyHandler);
+      _terrainClickHandler = (e) => _onTerrainKeysClick(e);
+      const _kel = document.getElementById('terrain-keys');
+      if (_kel) _kel.addEventListener('click', _terrainClickHandler);
       _renderTerrainKeysLegend();
       console.log(
         '[terrain] debug keys active — [/] repeat, ;/\' normal, ,/. rough, ' +
@@ -433,6 +437,11 @@ export const WalkMode = {
     if (_terrainKeyHandler) {
       window.removeEventListener('keydown', _terrainKeyHandler);
       _terrainKeyHandler = null;
+    }
+    if (_terrainClickHandler) {
+      const _kel = document.getElementById('terrain-keys');
+      if (_kel) _kel.removeEventListener('click', _terrainClickHandler);
+      _terrainClickHandler = null;
     }
     _terrainSettings = null;
 
@@ -1060,6 +1069,12 @@ function _applyToneMapping(idx) {
   if (_groundMat) _groundMat.needsUpdate = true;
 }
 
+// Tiny HTML-escape so user-visible values can't ever break the markup.
+function _escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function _renderTerrainKeysLegend() {
   const el = document.getElementById('terrain-keys');
   if (!el) return;
@@ -1067,24 +1082,55 @@ function _renderTerrainKeysLegend() {
   if (!s || !getShowTerrainDebug()) { el.style.display = 'none'; return; }
   const tone = TONE_MAPPING_MODES[s.toneIdx][0];
   const sunc = SUN_COLOR_PRESETS[s.sunColorIdx][0];
-  const pad  = (v) => String(v).padStart(8);
+
+  // Each `kbtn` is data-key="X" so a tap dispatches the same internal
+  // function the keyboard handler calls — keyboard and tap are equivalent.
+  const pair = (kd, ku, label, value) =>
+    `<div class="trow">` +
+      `<span class="kbtn" data-key="${_escHtml(kd)}">${_escHtml(kd)}</span>` +
+      `<span class="kbtn" data-key="${_escHtml(ku)}">${_escHtml(ku)}</span>` +
+      `<span class="lbl">${label}</span>` +
+      `<span class="val">${_escHtml(value)}</span>` +
+    `</div>`;
+  const single = (k, label, value) =>
+    `<div class="trow">` +
+      `<span class="kbtn" data-key="${_escHtml(k)}">${_escHtml(k)}</span>` +
+      `<span class="kspacer"></span>` +
+      `<span class="lbl">${label}</span>` +
+      `<span class="val">${_escHtml(value)}</span>` +
+    `</div>`;
+
   el.style.display = 'block';
-  el.textContent =
-    'TERRAIN DEBUG KEYS              (shift+L copies block)\n' +
-    `[  ]  TERRAIN_TEXTURE_REPEAT      ${pad(s.repeat)}\n` +
-    `;  '  TERRAIN_NORMAL_SCALE        ${pad(s.normalScale.toFixed(2))}\n` +
-    `,  .  TERRAIN_ROUGHNESS           ${pad(s.roughness.toFixed(2))}\n` +
-    `9  0  SUN_AZIMUTH_DEG             ${pad(s.sunAz.toFixed(0))}\n` +
-    `o  p  SUN_ELEVATION_DEG           ${pad(s.sunEl.toFixed(0))}\n` +
-    `-  =  SUN_INTENSITY               ${pad(s.sunI.toFixed(2))}\n` +
-    `j  l  AMBIENT_INTENSITY           ${pad(s.ambI.toFixed(2))}\n` +
-    `1  2  FOG_NEAR                    ${pad(s.fogNear)}\n` +
-    `3  4  FOG_FAR                     ${pad(s.fogFar)}\n` +
-    `5  6  HEMI_INTENSITY              ${pad(s.hemiI.toFixed(2))}\n` +
-    `7  8  TONE_EXPOSURE               ${pad(s.exposure.toFixed(2))}\n` +
-    `f     fog                         ${pad(s.fogOn ? 'on' : 'off')}\n` +
-    `t     toneMapping                 ${pad(tone)}\n` +
-    `r     sunColor                    ${pad(sunc)}\n`;
+  el.innerHTML =
+    `<div class="trow header">` +
+      `<span class="lbl">TERRAIN DEBUG KEYS</span>` +
+      `<span class="val">(tap or key)</span>` +
+    `</div>` +
+    pair('[', ']',  'TERRAIN_TEXTURE_REPEAT', s.repeat) +
+    pair(';', "'",  'TERRAIN_NORMAL_SCALE',   s.normalScale.toFixed(2)) +
+    pair(',', '.',  'TERRAIN_ROUGHNESS',      s.roughness.toFixed(2)) +
+    pair('9', '0',  'SUN_AZIMUTH_DEG',        s.sunAz.toFixed(0)) +
+    pair('o', 'p',  'SUN_ELEVATION_DEG',      s.sunEl.toFixed(0)) +
+    pair('-', '=',  'SUN_INTENSITY',          s.sunI.toFixed(2)) +
+    pair('j', 'l',  'AMBIENT_INTENSITY',      s.ambI.toFixed(2)) +
+    pair('1', '2',  'FOG_NEAR',               s.fogNear) +
+    pair('3', '4',  'FOG_FAR',                s.fogFar) +
+    pair('5', '6',  'HEMI_INTENSITY',         s.hemiI.toFixed(2)) +
+    pair('7', '8',  'TONE_EXPOSURE',          s.exposure.toFixed(2)) +
+    single('f',     'fog',                    s.fogOn ? 'on' : 'off') +
+    single('t',     'toneMapping',            tone) +
+    single('r',     'sunColor',               sunc) +
+    single('L',     'copy to clipboard',      '');
+}
+
+function _onTerrainKeysClick(e) {
+  const k = e.target && e.target.dataset && e.target.dataset.key;
+  if (!k) return;
+  e.preventDefault();
+  e.stopPropagation();
+  // Synthesize a key event and reuse the existing dispatch — zero
+  // duplication, every tap is exactly equivalent to a keypress.
+  _onTerrainDebugKey({ key: k, preventDefault: () => {} });
 }
 
 function _logTerrainStatus() {
