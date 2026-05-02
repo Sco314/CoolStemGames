@@ -83,6 +83,33 @@ const SUN_INTENSITY      = 1.6;
 const AMBIENT_INTENSITY  = 0.45;
 const HEMI_INTENSITY     = 0.5;
 
+// Fog (debug-tunable). Bigger far distance kills the "spotlight" feel —
+// distant ground stays lit instead of fading into fog colour around the
+// camera. Was 320 originally; 1200 fills the visible horizon at WALK_PLAY_RADIUS.
+const FOG_NEAR = 60;
+const FOG_FAR  = 1200;
+
+// Tone mapping (renderer-global; ACES Filmic gives the procedural PBR ground
+// proper highlight roll-off and saturation). Live exposure tuning via 7/8.
+const TONE_EXPOSURE = 1.0;
+const TONE_MAPPING_MODES = [
+  ['None',     'NoToneMapping'],
+  ['Linear',   'LinearToneMapping'],
+  ['Reinhard', 'ReinhardToneMapping'],
+  ['Cineon',   'CineonToneMapping'],
+  ['ACESFilm', 'ACESFilmicToneMapping'],
+];
+const TONE_MAPPING_DEFAULT_INDEX = 4;     // ACESFilm
+
+// Sun colour presets — lunar reality is essentially neutral with a faint
+// warm cast (no atmosphere to scatter blue out). Keeping it grounded.
+const SUN_COLOR_PRESETS = [
+  ['neutral', 0xffffff],
+  ['warm',    0xfff2c8],
+  ['cool',    0xc8d8ff],
+];
+const SUN_COLOR_DEFAULT_INDEX = 0;
+
 let scene = null;
 let camera = null;
 let canvasEl = null;
@@ -113,6 +140,7 @@ let _groundMat = null;
 
 // Module-level refs for live tuning via the terrain-debug keybinds.
 let _sun = null, _ambient = null, _hemi = null;
+let _renderer = null;               // shared renderer ref for tone-map tweaks
 let _terrainColorTex = null, _terrainNormalTex = null;
 let _terrainSettings = null;        // mutable copy of the constants above
 let _terrainKeyHandler = null;      // for cleanup on mode exit
@@ -202,6 +230,7 @@ export const WalkMode = {
     console.log('▶ WalkMode.enter');
     onReturnToLanderCallback = callbacks.onReturnToLander || (() => {});
     canvasEl = context.canvas;
+    _renderer = context.renderer || null;
 
     scene = new THREE.Scene();
     // Batch 5 #20: starfield panorama as scene.background. LOW_END skips
@@ -214,10 +243,10 @@ export const WalkMode = {
     }
     // Fog is cosmetic but adds a depth-cue shader cost; the adaptive quality
     // controller toggles it off when FPS tanks.
-    if (getQuality() !== 'low') scene.fog = new THREE.Fog(0x0a0a1a, 60, 320);
+    if (getQuality() !== 'low') scene.fog = new THREE.Fog(0x0a0a1a, FOG_NEAR, FOG_FAR);
     unsubQuality = onQualityChange(q => {
       if (!scene) return;
-      scene.fog = (q === 'low') ? null : new THREE.Fog(0x0a0a1a, 60, 320);
+      scene.fog = (q === 'low') ? null : new THREE.Fog(0x0a0a1a, FOG_NEAR, FOG_FAR);
     });
 
     const aspect = window.innerWidth / window.innerHeight;
@@ -234,12 +263,21 @@ export const WalkMode = {
         sunEl:       SUN_ELEVATION_DEG,
         sunI:        SUN_INTENSITY,
         ambI:        AMBIENT_INTENSITY,
+        fogNear:     FOG_NEAR,
+        fogFar:      FOG_FAR,
+        hemiI:       HEMI_INTENSITY,
+        exposure:    TONE_EXPOSURE,
+        fogOn:       true,
+        toneIdx:     TONE_MAPPING_DEFAULT_INDEX,
+        sunColorIdx: SUN_COLOR_DEFAULT_INDEX,
       };
       _terrainKeyHandler = (e) => _onTerrainDebugKey(e);
       window.addEventListener('keydown', _terrainKeyHandler);
+      _renderTerrainKeysLegend();
       console.log(
         '[terrain] debug keys active — [/] repeat, ;/\' normal, ,/. rough, ' +
-        '9/0 sun-az, o/p sun-el, -/= sun-i, j/l amb, L=dump'
+        '9/0 sun-az, o/p sun-el, -/= sun-i, j/l amb, 1/2 fog-near, ' +
+        '3/4 fog-far, 5/6 hemi, 7/8 exposure, f fog, t tone, r sun-color, L=dump'
       );
     }
     buildCraters();
@@ -377,6 +415,8 @@ export const WalkMode = {
     // (Cheap when the flag is off — the element is already display:none.)
     const _dbg = document.getElementById('terrain-debug');
     if (_dbg) _dbg.style.display = 'none';
+    const _keys = document.getElementById('terrain-keys');
+    if (_keys) _keys.style.display = 'none';
     unbindMouse();
     if (unsubQuality) { unsubQuality(); unsubQuality = null; }
     if (document.pointerLockElement) document.exitPointerLock();
@@ -425,6 +465,7 @@ export const WalkMode = {
     _terrainColorTex = null;
     _terrainNormalTex = null;
     _sun = null; _ambient = null; _hemi = null;
+    _renderer = null;
     footprints = [];
     footprintCursor = 0;
     lastFootprintPos = null;
@@ -964,12 +1005,25 @@ function _onTerrainDebugKey(e) {
     case '=': s.sunI  = clamp(s.sunI + 0.1, 0, 4); if (_sun)     _sun.intensity     = s.sunI; break;
     case 'j': s.ambI  = clamp(s.ambI - 0.05, 0, 2); if (_ambient) _ambient.intensity = s.ambI; break;
     case 'l': s.ambI  = clamp(s.ambI + 0.05, 0, 2); if (_ambient) _ambient.intensity = s.ambI; break;
+    case '1': s.fogNear = clamp(s.fogNear - 20,   0,  500); _applyFog(s); break;
+    case '2': s.fogNear = clamp(s.fogNear + 20,   0,  500); _applyFog(s); break;
+    case '3': s.fogFar  = clamp(s.fogFar  - 50,  50, 4000); _applyFog(s); break;
+    case '4': s.fogFar  = clamp(s.fogFar  + 50,  50, 4000); _applyFog(s); break;
+    case '5': s.hemiI    = clamp(s.hemiI    - 0.05, 0, 2); if (_hemi) _hemi.intensity = s.hemiI; break;
+    case '6': s.hemiI    = clamp(s.hemiI    + 0.05, 0, 2); if (_hemi) _hemi.intensity = s.hemiI; break;
+    case '7': s.exposure = clamp(s.exposure - 0.1,  0, 4); _applyExposure(s.exposure); break;
+    case '8': s.exposure = clamp(s.exposure + 0.1,  0, 4); _applyExposure(s.exposure); break;
+    case 'f': s.fogOn = !s.fogOn; _applyFog(s); break;
+    case 't': s.toneIdx = (s.toneIdx + 1) % TONE_MAPPING_MODES.length; _applyToneMapping(s.toneIdx); break;
+    case 'r': s.sunColorIdx = (s.sunColorIdx + 1) % SUN_COLOR_PRESETS.length;
+              if (_sun) _sun.color.setHex(SUN_COLOR_PRESETS[s.sunColorIdx][1]); break;
     case 'L': _logTerrainSettings(); break;
     default: handled = false;
   }
   if (handled) {
     e.preventDefault();
     if (e.key !== 'L') _logTerrainStatus();
+    _renderTerrainKeysLegend();
   }
 }
 
@@ -983,6 +1037,55 @@ function _applyNormalScale(n) {
 function _applyRoughness(r) {
   if (_groundMat) { _groundMat.roughness = r; _groundMat.needsUpdate = true; }
 }
+function _applyFog(s) {
+  if (!scene) return;
+  scene.fog = s.fogOn ? new THREE.Fog(0x0a0a1a, s.fogNear, s.fogFar) : null;
+}
+function _applyExposure(v) {
+  if (_renderer) _renderer.toneMappingExposure = v;
+}
+function _applyToneMapping(idx) {
+  if (!_renderer) return;
+  const map = [
+    THREE.NoToneMapping,
+    THREE.LinearToneMapping,
+    THREE.ReinhardToneMapping,
+    THREE.CineonToneMapping,
+    THREE.ACESFilmicToneMapping,
+  ];
+  _renderer.toneMapping = map[idx] ?? THREE.ACESFilmicToneMapping;
+  // Force already-compiled materials to re-link their shader programs so
+  // the tone-mapping define gets picked up. Only the ground material is
+  // tone-mapping-sensitive here (PBR); Lambert is unaffected.
+  if (_groundMat) _groundMat.needsUpdate = true;
+}
+
+function _renderTerrainKeysLegend() {
+  const el = document.getElementById('terrain-keys');
+  if (!el) return;
+  const s = _terrainSettings;
+  if (!s || !getShowTerrainDebug()) { el.style.display = 'none'; return; }
+  const tone = TONE_MAPPING_MODES[s.toneIdx][0];
+  const sunc = SUN_COLOR_PRESETS[s.sunColorIdx][0];
+  const pad  = (v) => String(v).padStart(8);
+  el.style.display = 'block';
+  el.textContent =
+    'TERRAIN DEBUG KEYS              (shift+L copies block)\n' +
+    `[  ]  TERRAIN_TEXTURE_REPEAT      ${pad(s.repeat)}\n` +
+    `;  '  TERRAIN_NORMAL_SCALE        ${pad(s.normalScale.toFixed(2))}\n` +
+    `,  .  TERRAIN_ROUGHNESS           ${pad(s.roughness.toFixed(2))}\n` +
+    `9  0  SUN_AZIMUTH_DEG             ${pad(s.sunAz.toFixed(0))}\n` +
+    `o  p  SUN_ELEVATION_DEG           ${pad(s.sunEl.toFixed(0))}\n` +
+    `-  =  SUN_INTENSITY               ${pad(s.sunI.toFixed(2))}\n` +
+    `j  l  AMBIENT_INTENSITY           ${pad(s.ambI.toFixed(2))}\n` +
+    `1  2  FOG_NEAR                    ${pad(s.fogNear)}\n` +
+    `3  4  FOG_FAR                     ${pad(s.fogFar)}\n` +
+    `5  6  HEMI_INTENSITY              ${pad(s.hemiI.toFixed(2))}\n` +
+    `7  8  TONE_EXPOSURE               ${pad(s.exposure.toFixed(2))}\n` +
+    `f     fog                         ${pad(s.fogOn ? 'on' : 'off')}\n` +
+    `t     toneMapping                 ${pad(tone)}\n` +
+    `r     sunColor                    ${pad(sunc)}\n`;
+}
 
 function _logTerrainStatus() {
   const s = _terrainSettings;
@@ -990,7 +1093,10 @@ function _logTerrainStatus() {
     `[terrain] repeat=${s.repeat} normal=${s.normalScale.toFixed(2)} ` +
     `rough=${s.roughness.toFixed(2)} ` +
     `sun(az=${s.sunAz.toFixed(0)},el=${s.sunEl.toFixed(0)},i=${s.sunI.toFixed(2)}) ` +
-    `amb=${s.ambI.toFixed(2)}`
+    `amb=${s.ambI.toFixed(2)} hemi=${s.hemiI.toFixed(2)} ` +
+    `fog(${s.fogOn ? `${s.fogNear}..${s.fogFar}` : 'off'}) ` +
+    `tone=${TONE_MAPPING_MODES[s.toneIdx][0]}@${s.exposure.toFixed(2)} ` +
+    `sun-color=${SUN_COLOR_PRESETS[s.sunColorIdx][0]}`
   );
 }
 
@@ -1003,7 +1109,13 @@ function _logTerrainSettings() {
     `const SUN_AZIMUTH_DEG         = ${s.sunAz.toFixed(0)};\n` +
     `const SUN_ELEVATION_DEG       = ${s.sunEl.toFixed(0)};\n` +
     `const SUN_INTENSITY           = ${s.sunI.toFixed(2)};\n` +
-    `const AMBIENT_INTENSITY       = ${s.ambI.toFixed(2)};\n`;
+    `const AMBIENT_INTENSITY       = ${s.ambI.toFixed(2)};\n` +
+    `const HEMI_INTENSITY          = ${s.hemiI.toFixed(2)};\n` +
+    `const FOG_NEAR                = ${s.fogNear.toFixed(0)};\n` +
+    `const FOG_FAR                 = ${s.fogFar.toFixed(0)};\n` +
+    `const TONE_EXPOSURE           = ${s.exposure.toFixed(2)};\n` +
+    `// fogOn=${s.fogOn}  toneMapping=${TONE_MAPPING_MODES[s.toneIdx][0]}` +
+    `  sunColor=${SUN_COLOR_PRESETS[s.sunColorIdx][0]}\n`;
   console.log('─── lunar terrain settings (paste into WalkMode.js constants) ───\n' + text);
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(
