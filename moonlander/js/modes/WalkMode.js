@@ -71,17 +71,54 @@ const TERRAIN_TEXTURE_SIZE     = 512;         // canvas px per side; build cost 
 const TERRAIN_TEXTURE_REPEAT   = 29;          // tile count across the whole ground plane
 const TERRAIN_NORMAL_SCALE     = 1.45;        // x & y of normalScale Vector2
 const TERRAIN_ROUGHNESS        = 0.70;
-const TERRAIN_BASE_COLOR       = 0x8c8c90;    // matches the previous Lambert grey
+const TERRAIN_BASE_COLOR       = 0x9a948c;    // warm beige — closer to Apollo regolith than cool grey
 const TERRAIN_NOISE_CONTRAST   = 0.55;        // 0 = flat grey, 1 = high tonal range
 const TERRAIN_SPECKLE_STRENGTH = 0.45;        // brightness amplitude of rare rock specks
 const TERRAIN_USE_LROC_OVERLAY = false;       // future broad-overlay toggle (off for now)
+
+// Regolith colour presets (cycled by `n`). First entry is the default.
+const REGOLITH_PRESETS = [
+  ['warm-beige',     0x9a948c],   // Apollo-photo realistic
+  ['neutral-grey',   0x8c8c90],   // original look
+  ['mare-dark',      0x6e6c6a],   // basaltic mare regions
+  ['highland-light', 0xb6b2a8],   // lighter feldspathic highlands
+];
+const REGOLITH_DEFAULT_INDEX = 0;
 
 // Lighting (debug-tunable; lower sun angle so normal map relief reads)
 const SUN_AZIMUTH_DEG    = 175;
 const SUN_ELEVATION_DEG  = 22;
 const SUN_INTENSITY      = 4.00;
+const SUN_INTENSITY_MAX  = 8.00;     // upper clamp for the - / = keys
 const AMBIENT_INTENSITY  = 0.45;
-const HEMI_INTENSITY     = 1.10;
+const HEMI_INTENSITY     = 0.15;     // very low — moon has no atmosphere; this stands in for earthshine
+
+// Hemi sky/ground colour presets (cycled by `y`). First entry is the default.
+const HEMI_PRESETS = [
+  ['earthshine', 0x6080a0, 0x202028],   // faint blue from Earth, dark ground bounce
+  ['neutral',    0xa0a8c0, 0x303038],   // old default
+  ['off',        0x000000, 0x000000],   // pure sun, no ambient sky tint
+];
+const HEMI_DEFAULT_INDEX = 0;
+
+// Earthshine: a very faint blue directional light from Earth's direction.
+// Mimics the secondary illumination Apollo astronauts saw on the lunar
+// near-side during local night. Earth in scene sits at (-220, 180, -260).
+const EARTHSHINE_COLOR     = 0x6080a0;
+const EARTHSHINE_INTENSITY = 0.15;
+const EARTHSHINE_DEFAULT_ON = true;
+
+// Hard shadows. Real lunar shadows have razor-sharp edges (no atmosphere
+// to scatter). PCFSoftShadowMap softens the very edge slightly to hide
+// pixel stair-stepping at this map size; PCF is a reasonable cost on
+// mobile. Toggleable at runtime via `h`.
+const SHADOWS_DEFAULT_ON = true;
+const SHADOW_MAP_SIZE    = 2048;     // 2K is a good mobile/desktop balance
+
+// Starfield brightness multiplier — applied via scene.backgroundIntensity
+// (added in three r158, available since r160 used here). Cuts the
+// blown-out look the high-exposure Cineon tonemap gives the panorama.
+const STARFIELD_BRIGHTNESS = 0.5;
 
 // Fog (debug-tunable). Bigger far distance kills the "spotlight" feel —
 // distant ground stays lit instead of fading into fog colour around the
@@ -141,6 +178,7 @@ let _groundMat = null;
 
 // Module-level refs for live tuning via the terrain-debug keybinds.
 let _sun = null, _ambient = null, _hemi = null;
+let _earthLight = null;             // second DirectionalLight from Earth's direction
 let _renderer = null;               // shared renderer ref for tone-map tweaks
 let _terrainColorTex = null, _terrainNormalTex = null;
 let _terrainSettings = null;        // mutable copy of the constants above
@@ -148,6 +186,7 @@ let _terrainKeyHandler = null;      // for cleanup on mode exit
 let _terrainClickHandler = null;    // legend tap targets — mobile / desktop
 let _savedToneMapping = null;       // previous renderer.toneMapping — restored on exit
 let _savedExposure = null;          // previous renderer.toneMappingExposure — restored on exit
+let _savedShadowMapEnabled = null;  // previous renderer.shadowMap.enabled — restored on exit
 
 // Diagnostic state for the on-screen overlay (gated at the per-frame DOM
 // update by getShowTerrainDebug()). Always written so toggling the flag
@@ -235,6 +274,18 @@ export const WalkMode = {
     onReturnToLanderCallback = callbacks.onReturnToLander || (() => {});
     canvasEl = context.canvas;
     _renderer = context.renderer || null;
+    // Save renderer state we override here so non-walk modes (lander,
+    // menu) get their original setup back on exit. Tone-mapping +
+    // exposure are pushed in the TERRAIN_DEBUG_KEYS block once
+    // _terrainSettings exists; shadow-map enabled has to be set before
+    // buildLighting() so _sun.castShadow takes effect.
+    if (_renderer) {
+      _savedToneMapping      = _renderer.toneMapping;
+      _savedExposure         = _renderer.toneMappingExposure;
+      _savedShadowMapEnabled = _renderer.shadowMap.enabled;
+      _renderer.shadowMap.enabled = SHADOWS_DEFAULT_ON;
+      _renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+    }
 
     scene = new THREE.Scene();
     // Batch 5 #20: starfield panorama as scene.background. LOW_END skips
@@ -244,6 +295,7 @@ export const WalkMode = {
       scene.background = new THREE.Color(0x0a0a1a);
     } else {
       scene.background = getSharedTexture('textures/starfield.png');
+      scene.backgroundIntensity = STARFIELD_BRIGHTNESS;
     }
     // Fog is cosmetic but adds a depth-cue shader cost; the adaptive quality
     // controller toggles it off when FPS tanks.
@@ -277,17 +329,17 @@ export const WalkMode = {
         exposure:    TONE_EXPOSURE,
         fogOn:       FOG_DEFAULT_ON,
         toneIdx:     TONE_MAPPING_DEFAULT_INDEX,
-        sunColorIdx: SUN_COLOR_DEFAULT_INDEX,
+        sunColorIdx:  SUN_COLOR_DEFAULT_INDEX,
+        shadowsOn:    SHADOWS_DEFAULT_ON,
+        regolithIdx:  REGOLITH_DEFAULT_INDEX,
+        hemiIdx:      HEMI_DEFAULT_INDEX,
+        earthshineOn: EARTHSHINE_DEFAULT_ON,
       };
       // Push the baked tone-mapping + exposure to the renderer so the
       // initial frame matches the constants, not whatever Main.js set.
       // Save the previous values first so exit() can restore them — lander
       // and main-menu modes use a different tone-mapping setup that we
       // don't want to clobber permanently.
-      if (_renderer) {
-        _savedToneMapping = _renderer.toneMapping;
-        _savedExposure    = _renderer.toneMappingExposure;
-      }
       _applyToneMapping(_terrainSettings.toneIdx);
       _applyExposure(_terrainSettings.exposure);
       _terrainKeyHandler = (e) => _onTerrainDebugKey(e);
@@ -299,7 +351,8 @@ export const WalkMode = {
       console.log(
         '[terrain] debug keys active — [/] repeat, ;/\' normal, ,/. rough, ' +
         '9/0 sun-az, o/p sun-el, -/= sun-i, j/l amb, 1/2 fog-near, ' +
-        '3/4 fog-far, 5/6 hemi, 7/8 exposure, f fog, t tone, r sun-color, L=dump'
+        '3/4 fog-far, 5/6 hemi-i, 7/8 exposure, f fog, t tone, r sun-color, ' +
+        'h shadows, n regolith, y hemi-color, v earthshine, L=dump'
       );
     }
     buildCraters();
@@ -309,6 +362,12 @@ export const WalkMode = {
     // Tall yellow pillar over the parked lander so the player can find
     // home from anywhere in the play area. Always on (not gated on cargo).
     buildLanderBeacon();
+    // Walk the scene tree once and turn on castShadow for every non-ground
+    // Mesh built so far (astronaut, lander, beacon, etc.). The ground plane
+    // already had receiveShadow set in buildGround. Async-loaded models
+    // (GLB lander, GLB astronaut) are caught by the delayed retraverse below.
+    _applyShadowsToScene();
+    setTimeout(_applyShadowsToScene, 1500);
     // Rebuild the objectives list from career + this level's Apollo briefs
     // BEFORE spawning loot, so the HUD can show the full list immediately.
     setObjectivesForLevel(GameState.level);
@@ -491,16 +550,18 @@ export const WalkMode = {
     _groundMat = null;
     _terrainColorTex = null;
     _terrainNormalTex = null;
-    _sun = null; _ambient = null; _hemi = null;
-    // Restore the renderer's tone-mapping so non-walk modes (lander, menu)
-    // see the values they were configured with in Main.js, not WalkMode's
-    // Cineon-2.8 override.
+    _sun = null; _ambient = null; _hemi = null; _earthLight = null;
+    // Restore the renderer's tone-mapping + shadow setup so non-walk modes
+    // (lander, menu) get back the configuration Main.js wired, not
+    // WalkMode's Cineon-2.8 + shadow-map override.
     if (_renderer && _savedToneMapping !== null) {
       _renderer.toneMapping         = _savedToneMapping;
       _renderer.toneMappingExposure = _savedExposure;
+      _renderer.shadowMap.enabled   = _savedShadowMapEnabled;
     }
-    _savedToneMapping = null;
-    _savedExposure    = null;
+    _savedToneMapping      = null;
+    _savedExposure         = null;
+    _savedShadowMapEnabled = null;
     _renderer = null;
     footprints = [];
     footprintCursor = 0;
@@ -981,19 +1042,44 @@ function updateChaseCamera() {
 // ---------- world build ----------
 
 function buildLighting() {
-  // Hemisphere light gives the lunar slab a sky-tinted top → ground-tinted
-  // underside gradient instead of pure black on faces that point away
-  // from the sun. Without it, the NASA terrain's vertical side walls (the
-  // 3D-printable thickness block) read as solid black slashes against
-  // the sky and look broken. Combined with a low directional sun for the
-  // crisp "moon" shadow direction.
-  _hemi = new THREE.HemisphereLight(0xa0a8c0, 0x303038, HEMI_INTENSITY);
+  // Hemisphere light: tiny + Earth-blue by default (HEMI_PRESETS[0]) so it
+  // stands in for earthshine, the only real fill light on the lunar surface.
+  // Cycle through neutral / off via `y` for stylised looks.
+  const [, hemiSky, hemiGround] = HEMI_PRESETS[HEMI_DEFAULT_INDEX];
+  _hemi = new THREE.HemisphereLight(hemiSky, hemiGround, HEMI_INTENSITY);
   scene.add(_hemi);
+
   _ambient = new THREE.AmbientLight(0x404060, AMBIENT_INTENSITY);
   scene.add(_ambient);
+
   _sun = new THREE.DirectionalLight(0xffffff, SUN_INTENSITY);
   _applySunAngle(SUN_AZIMUTH_DEG, SUN_ELEVATION_DEG);
+  // Hard shadows. Frustum sized to the walk play area — too tight wastes
+  // resolution, too loose dilutes shadow texels across pixels and looks
+  // soft / blocky. WALK_PLAY_RADIUS * 1.4 covers a margin past the visible
+  // ring. Bias keeps lit-side faces from shadow-acneing on themselves.
+  _sun.castShadow = SHADOWS_DEFAULT_ON;
+  _sun.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+  const sd = WALK_PLAY_RADIUS * 1.4;
+  _sun.shadow.camera.left   = -sd;
+  _sun.shadow.camera.right  =  sd;
+  _sun.shadow.camera.top    =  sd;
+  _sun.shadow.camera.bottom = -sd;
+  _sun.shadow.camera.near   = 1;
+  _sun.shadow.camera.far    = 400;
+  _sun.shadow.bias          = -0.0005;
   scene.add(_sun);
+
+  // Earthshine: a second very faint directional light from Earth's
+  // direction, blue-tinted. Real Apollo astronauts saw this "ash-grey"
+  // illumination on shadowed lunar terrain. Earth sits at (-220, 180, -260)
+  // in our scene — point a directional light from there.
+  _earthLight = new THREE.DirectionalLight(
+    EARTHSHINE_COLOR,
+    EARTHSHINE_DEFAULT_ON ? EARTHSHINE_INTENSITY : 0
+  );
+  _earthLight.position.set(-220, 180, -260);
+  scene.add(_earthLight);
 }
 
 function _applySunAngle(azDeg, elDeg) {
@@ -1037,8 +1123,8 @@ function _onTerrainDebugKey(e) {
     case '0': s.sunAz += 5; _applySunAngle(s.sunAz, s.sunEl); break;
     case 'o': s.sunEl = clamp(s.sunEl - 2, 2, 85); _applySunAngle(s.sunAz, s.sunEl); break;
     case 'p': s.sunEl = clamp(s.sunEl + 2, 2, 85); _applySunAngle(s.sunAz, s.sunEl); break;
-    case '-': s.sunI  = clamp(s.sunI - 0.1, 0, 4); if (_sun)     _sun.intensity     = s.sunI; break;
-    case '=': s.sunI  = clamp(s.sunI + 0.1, 0, 4); if (_sun)     _sun.intensity     = s.sunI; break;
+    case '-': s.sunI  = clamp(s.sunI - 0.1, 0, SUN_INTENSITY_MAX); if (_sun)     _sun.intensity     = s.sunI; break;
+    case '=': s.sunI  = clamp(s.sunI + 0.1, 0, SUN_INTENSITY_MAX); if (_sun)     _sun.intensity     = s.sunI; break;
     case 'j': s.ambI  = clamp(s.ambI - 0.05, 0, 2); if (_ambient) _ambient.intensity = s.ambI; break;
     case 'l': s.ambI  = clamp(s.ambI + 0.05, 0, 2); if (_ambient) _ambient.intensity = s.ambI; break;
     case '1': s.fogNear = clamp(s.fogNear - 20,   0,  500); _applyFog(s); break;
@@ -1053,6 +1139,14 @@ function _onTerrainDebugKey(e) {
     case 't': s.toneIdx = (s.toneIdx + 1) % TONE_MAPPING_MODES.length; _applyToneMapping(s.toneIdx); break;
     case 'r': s.sunColorIdx = (s.sunColorIdx + 1) % SUN_COLOR_PRESETS.length;
               if (_sun) _sun.color.setHex(SUN_COLOR_PRESETS[s.sunColorIdx][1]); break;
+    case 'h': s.shadowsOn = !s.shadowsOn;
+              if (_sun) _sun.castShadow = s.shadowsOn; break;
+    case 'n': s.regolithIdx = (s.regolithIdx + 1) % REGOLITH_PRESETS.length;
+              _applyRegolithPreset(s.regolithIdx); break;
+    case 'y': s.hemiIdx = (s.hemiIdx + 1) % HEMI_PRESETS.length;
+              _applyHemiPreset(s.hemiIdx); break;
+    case 'v': s.earthshineOn = !s.earthshineOn;
+              if (_earthLight) _earthLight.intensity = s.earthshineOn ? EARTHSHINE_INTENSITY : 0; break;
     case 'L': _logTerrainSettings(); break;
     default: handled = false;
   }
@@ -1096,6 +1190,47 @@ function _applyToneMapping(idx) {
   if (_groundMat) _groundMat.needsUpdate = true;
 }
 
+// Walk the scene tree and turn on castShadow for every non-ground Mesh.
+// Called at end of enter() for sync builds and once on a 1.5 s timeout to
+// catch async GLB loads (lander / astronaut / NASA terrain). Cheap to run
+// repeatedly — just sets a boolean on each node.
+function _applyShadowsToScene() {
+  if (!scene) return;
+  scene.traverse((obj) => {
+    if (!obj.isMesh) return;
+    // Ground itself only receives; everything else casts.
+    if (obj.geometry === _groundGeom) {
+      obj.receiveShadow = true;
+    } else {
+      obj.castShadow = true;
+    }
+  });
+}
+
+function _applyHemiPreset(idx) {
+  if (!_hemi) return;
+  const [, sky, ground] = HEMI_PRESETS[idx] || HEMI_PRESETS[0];
+  _hemi.color.setHex(sky);
+  _hemi.groundColor.setHex(ground);
+}
+
+function _applyRegolithPreset(idx) {
+  const [, hex] = REGOLITH_PRESETS[idx] || REGOLITH_PRESETS[0];
+  // Rebuilding the colour texture from the same height field reuses the
+  // bumps/speckles but recolours them. ~50 ms cost, fine for iteration.
+  if (!_groundMat) return;
+  const field = _buildRegolithHeightField(
+    TERRAIN_TEXTURE_SIZE, TERRAIN_NOISE_CONTRAST, TERRAIN_SPECKLE_STRENGTH
+  );
+  const newColorTex = _buildRegolithColorTexture(field, TERRAIN_TEXTURE_SIZE, hex);
+  newColorTex.repeat.copy(_terrainColorTex.repeat);
+  if (_terrainColorTex) _terrainColorTex.dispose();
+  _terrainColorTex = newColorTex;
+  _groundMat.color.setHex(hex);
+  _groundMat.map = newColorTex;
+  _groundMat.needsUpdate = true;
+}
+
 // Tiny HTML-escape so user-visible values can't ever break the markup.
 function _escHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
@@ -1109,6 +1244,8 @@ function _renderTerrainKeysLegend() {
   if (!s || !getShowTerrainDebug()) { el.style.display = 'none'; return; }
   const tone = TONE_MAPPING_MODES[s.toneIdx][0];
   const sunc = SUN_COLOR_PRESETS[s.sunColorIdx][0];
+  const rego = REGOLITH_PRESETS[s.regolithIdx][0];
+  const hemiName = HEMI_PRESETS[s.hemiIdx][0];
 
   // Each `kbtn` is data-key="X" so a tap dispatches the same internal
   // function the keyboard handler calls — keyboard and tap are equivalent.
@@ -1147,6 +1284,10 @@ function _renderTerrainKeysLegend() {
     single('f',     'fog',                    s.fogOn ? 'on' : 'off') +
     single('t',     'toneMapping',            tone) +
     single('r',     'sunColor',               sunc) +
+    single('h',     'shadows',                s.shadowsOn ? 'on' : 'off') +
+    single('n',     'regolith',               rego) +
+    single('y',     'hemi',                   hemiName) +
+    single('v',     'earthshine',             s.earthshineOn ? 'on' : 'off') +
     single('L',     'copy to clipboard',      '');
 }
 
@@ -1188,7 +1329,11 @@ function _logTerrainSettings() {
     `const FOG_FAR                 = ${s.fogFar.toFixed(0)};\n` +
     `const TONE_EXPOSURE           = ${s.exposure.toFixed(2)};\n` +
     `// fogOn=${s.fogOn}  toneMapping=${TONE_MAPPING_MODES[s.toneIdx][0]}` +
-    `  sunColor=${SUN_COLOR_PRESETS[s.sunColorIdx][0]}\n`;
+    `  sunColor=${SUN_COLOR_PRESETS[s.sunColorIdx][0]}\n` +
+    `// shadows=${s.shadowsOn ? 'on' : 'off'}` +
+    `  regolith=${REGOLITH_PRESETS[s.regolithIdx][0]}` +
+    `  hemi=${HEMI_PRESETS[s.hemiIdx][0]}` +
+    `  earthshine=${s.earthshineOn ? 'on' : 'off'}\n`;
   console.log('─── lunar terrain settings (paste into WalkMode.js constants) ───\n' + text);
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(
@@ -1359,7 +1504,8 @@ function _buildRegolithColorTexture(field, size, baseColorHex) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = 4;
+  tex.anisotropy = (_renderer && _renderer.capabilities)
+    ? _renderer.capabilities.getMaxAnisotropy() : 4;
   return tex;
 }
 
@@ -1386,7 +1532,8 @@ function _buildRegolithNormalTexture(field, size) {
   const tex = new THREE.CanvasTexture(canvas);
   // Normal maps must live in linear space — leave colorSpace at the default.
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = 4;
+  tex.anisotropy = (_renderer && _renderer.capabilities)
+    ? _renderer.capabilities.getMaxAnisotropy() : 4;
   return tex;
 }
 
@@ -1432,6 +1579,7 @@ function buildGround() {
     metalness:   0.0,
   });
   const mesh = new THREE.Mesh(geom, mat);
+  mesh.receiveShadow = true;
   scene.add(mesh);
   disposables.push({ geometry: geom, material: mat, texture: _terrainColorTex });
   disposables.push({ texture: _terrainNormalTex });
