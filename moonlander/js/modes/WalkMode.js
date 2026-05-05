@@ -69,12 +69,18 @@ const DISABLE_BAKED_TERRAIN = true;
 const TERRAIN_DEBUG_KEYS       = true;        // set false to ship; gates keybinds
 const TERRAIN_TEXTURE_SIZE     = 512;         // canvas px per side; build cost ~O(n²)
 const TERRAIN_TEXTURE_REPEAT   = 29;          // tile count across the whole ground plane
-const TERRAIN_NORMAL_SCALE     = 1.45;        // x & y of normalScale Vector2
-const TERRAIN_ROUGHNESS        = 0.70;
+const TERRAIN_NORMAL_SCALE     = 2.00;        // x & y of normalScale Vector2
+const TERRAIN_ROUGHNESS        = 0.80;
 const TERRAIN_BASE_COLOR       = 0x9a948c;    // warm beige — closer to Apollo regolith than cool grey
 const TERRAIN_NOISE_CONTRAST   = 0.55;        // 0 = flat grey, 1 = high tonal range
 const TERRAIN_SPECKLE_STRENGTH = 0.45;        // brightness amplitude of rare rock specks
 const TERRAIN_USE_LROC_OVERLAY = false;       // future broad-overlay toggle (off for now)
+
+// World-content gates. The procedural crater decals and the per-interactable
+// breadcrumb trails (rings + destination beacons) are baked off — flip the
+// flag to bring them back without touching any other code.
+const BUILD_CRATERS     = false;
+const BUILD_BREADCRUMBS = false;
 
 // Regolith colour presets (cycled by `n`). First entry is the default.
 const REGOLITH_PRESETS = [
@@ -83,15 +89,15 @@ const REGOLITH_PRESETS = [
   ['mare-dark',      0x6e6c6a],   // basaltic mare regions
   ['highland-light', 0xb6b2a8],   // lighter feldspathic highlands
 ];
-const REGOLITH_DEFAULT_INDEX = 0;
+const REGOLITH_DEFAULT_INDEX = 2;     // mare-dark — picked from production iteration
 
 // Lighting (debug-tunable; lower sun angle so normal map relief reads)
-const SUN_AZIMUTH_DEG    = 175;
-const SUN_ELEVATION_DEG  = 22;
-const SUN_INTENSITY      = 4.00;
+const SUN_AZIMUTH_DEG    = 60;
+const SUN_ELEVATION_DEG  = 32;
+const SUN_INTENSITY      = 4.40;
 const SUN_INTENSITY_MAX  = 8.00;     // upper clamp for the - / = keys
-const AMBIENT_INTENSITY  = 0.45;
-const HEMI_INTENSITY     = 0.15;     // very low — moon has no atmosphere; this stands in for earthshine
+const AMBIENT_INTENSITY  = 2.00;     // high — fills the shadowed regolith so shadows read soft
+const HEMI_INTENSITY     = 0.15;
 
 // Hemi sky/ground colour presets (cycled by `y`). First entry is the default.
 const HEMI_PRESETS = [
@@ -99,13 +105,14 @@ const HEMI_PRESETS = [
   ['neutral',    0xa0a8c0, 0x303038],   // old default
   ['off',        0x000000, 0x000000],   // pure sun, no ambient sky tint
 ];
-const HEMI_DEFAULT_INDEX = 0;
+const HEMI_DEFAULT_INDEX = 1;     // neutral — picked from production iteration
 
 // Earthshine: a very faint blue directional light from Earth's direction.
 // Mimics the secondary illumination Apollo astronauts saw on the lunar
 // near-side during local night. Earth in scene sits at (-220, 180, -260).
 const EARTHSHINE_COLOR     = 0x6080a0;
-const EARTHSHINE_INTENSITY = 0.15;
+const EARTHSHINE_INTENSITY = 0.40;     // bumped from 0.15 — extra fill keeps shadows soft
+const EARTHSHINE_INTENSITY_MAX = 2.0;  // clamp for z / x keys
 const EARTHSHINE_DEFAULT_ON = true;
 
 // Hard shadows. Real lunar shadows have razor-sharp edges (no atmosphere
@@ -123,7 +130,7 @@ const STARFIELD_BRIGHTNESS = 0.5;
 // Fog (debug-tunable). Bigger far distance kills the "spotlight" feel —
 // distant ground stays lit instead of fading into fog colour around the
 // camera. Was 320 originally; 1200 fills the visible horizon at WALK_PLAY_RADIUS.
-const FOG_NEAR = 500;
+const FOG_NEAR = 0;
 const FOG_FAR  = 1000;
 const FOG_DEFAULT_ON = false;        // baked: fog is OFF by default — no atmosphere on the moon
 
@@ -334,6 +341,7 @@ export const WalkMode = {
         regolithIdx:  REGOLITH_DEFAULT_INDEX,
         hemiIdx:      HEMI_DEFAULT_INDEX,
         earthshineOn: EARTHSHINE_DEFAULT_ON,
+        earthshineI:  EARTHSHINE_INTENSITY,
       };
       // Push the baked tone-mapping + exposure to the renderer so the
       // initial frame matches the constants, not whatever Main.js set.
@@ -352,10 +360,10 @@ export const WalkMode = {
         '[terrain] debug keys active — [/] repeat, ;/\' normal, ,/. rough, ' +
         '9/0 sun-az, o/p sun-el, -/= sun-i, j/l amb, 1/2 fog-near, ' +
         '3/4 fog-far, 5/6 hemi-i, 7/8 exposure, f fog, t tone, r sun-color, ' +
-        'h shadows, n regolith, y hemi-color, v earthshine, L=dump'
+        'h shadows, n regolith, y hemi-color, v earthshine, z/x earth-i, L=dump'
       );
     }
-    buildCraters();
+    if (BUILD_CRATERS) buildCraters();
     buildEarth();
     buildAstronaut();
     buildParkedLander();
@@ -1146,7 +1154,11 @@ function _onTerrainDebugKey(e) {
     case 'y': s.hemiIdx = (s.hemiIdx + 1) % HEMI_PRESETS.length;
               _applyHemiPreset(s.hemiIdx); break;
     case 'v': s.earthshineOn = !s.earthshineOn;
-              if (_earthLight) _earthLight.intensity = s.earthshineOn ? EARTHSHINE_INTENSITY : 0; break;
+              if (_earthLight) _earthLight.intensity = s.earthshineOn ? s.earthshineI : 0; break;
+    case 'z': s.earthshineI = clamp(s.earthshineI - 0.05, 0, EARTHSHINE_INTENSITY_MAX);
+              if (_earthLight && s.earthshineOn) _earthLight.intensity = s.earthshineI; break;
+    case 'x': s.earthshineI = clamp(s.earthshineI + 0.05, 0, EARTHSHINE_INTENSITY_MAX);
+              if (_earthLight && s.earthshineOn) _earthLight.intensity = s.earthshineI; break;
     case 'L': _logTerrainSettings(); break;
     default: handled = false;
   }
@@ -1288,6 +1300,7 @@ function _renderTerrainKeysLegend() {
     single('n',     'regolith',               rego) +
     single('y',     'hemi',                   hemiName) +
     single('v',     'earthshine',             s.earthshineOn ? 'on' : 'off') +
+    pair('z', 'x',  'EARTHSHINE_INTENSITY',   s.earthshineI.toFixed(2)) +
     single('L',     'copy to clipboard',      '');
 }
 
@@ -1310,7 +1323,8 @@ function _logTerrainStatus() {
     `amb=${s.ambI.toFixed(2)} hemi=${s.hemiI.toFixed(2)} ` +
     `fog(${s.fogOn ? `${s.fogNear}..${s.fogFar}` : 'off'}) ` +
     `tone=${TONE_MAPPING_MODES[s.toneIdx][0]}@${s.exposure.toFixed(2)} ` +
-    `sun-color=${SUN_COLOR_PRESETS[s.sunColorIdx][0]}`
+    `sun-color=${SUN_COLOR_PRESETS[s.sunColorIdx][0]} ` +
+    `earthshine=${s.earthshineOn ? s.earthshineI.toFixed(2) : 'off'}`
   );
 }
 
@@ -1328,6 +1342,7 @@ function _logTerrainSettings() {
     `const FOG_NEAR                = ${s.fogNear.toFixed(0)};\n` +
     `const FOG_FAR                 = ${s.fogFar.toFixed(0)};\n` +
     `const TONE_EXPOSURE           = ${s.exposure.toFixed(2)};\n` +
+    `const EARTHSHINE_INTENSITY    = ${s.earthshineI.toFixed(2)};\n` +
     `// fogOn=${s.fogOn}  toneMapping=${TONE_MAPPING_MODES[s.toneIdx][0]}` +
     `  sunColor=${SUN_COLOR_PRESETS[s.sunColorIdx][0]}\n` +
     `// shadows=${s.shadowsOn ? 'on' : 'off'}` +
@@ -2197,6 +2212,7 @@ function buildInteractable(type, x, z) {
  * hide them when the interactable is consumed.
  */
 function buildTrailMarkers(start, end, type) {
+  if (!BUILD_BREADCRUMBS) return [];        // gated off — keeps callers happy
   const dx = end.x - start.x;
   const dz = end.z - start.z;
   const dist = Math.hypot(dx, dz);
