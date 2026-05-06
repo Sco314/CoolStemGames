@@ -68,8 +68,8 @@ const DISABLE_BAKED_TERRAIN = true;
 // Press shift+L to dump the current values as a copy-pasteable block.
 const TERRAIN_DEBUG_KEYS       = true;        // set false to ship; gates keybinds
 const TERRAIN_TEXTURE_SIZE     = 512;         // canvas px per side; build cost ~O(n²)
-const TERRAIN_TEXTURE_REPEAT   = 29;          // tile count across the whole ground plane
-const TERRAIN_NORMAL_SCALE     = 2.00;        // x & y of normalScale Vector2
+const TERRAIN_TEXTURE_REPEAT   = 36;          // tile count across the whole ground plane
+const TERRAIN_NORMAL_SCALE     = 1.80;        // x & y of normalScale Vector2
 const TERRAIN_ROUGHNESS        = 0.80;
 const TERRAIN_BASE_COLOR       = 0x9a948c;    // warm beige — closer to Apollo regolith than cool grey
 const TERRAIN_NOISE_CONTRAST   = 0.55;        // 0 = flat grey, 1 = high tonal range
@@ -89,15 +89,15 @@ const REGOLITH_PRESETS = [
   ['mare-dark',      0x6e6c6a],   // basaltic mare regions
   ['highland-light', 0xb6b2a8],   // lighter feldspathic highlands
 ];
-const REGOLITH_DEFAULT_INDEX = 2;     // mare-dark — picked from production iteration
+const REGOLITH_DEFAULT_INDEX = 1;     // neutral-grey — picked from production iteration
 
 // Lighting (debug-tunable; lower sun angle so normal map relief reads)
-const SUN_AZIMUTH_DEG    = 60;
-const SUN_ELEVATION_DEG  = 32;
+const SUN_AZIMUTH_DEG    = 50;
+const SUN_ELEVATION_DEG  = 42;
 const SUN_INTENSITY      = 4.40;
 const SUN_INTENSITY_MAX  = 8.00;     // upper clamp for the - / = keys
 const AMBIENT_INTENSITY  = 2.00;     // high — fills the shadowed regolith so shadows read soft
-const HEMI_INTENSITY     = 0.15;
+const HEMI_INTENSITY     = 0.00;     // off — earthshine carries the cool fill
 
 // Hemi sky/ground colour presets (cycled by `y`). First entry is the default.
 const HEMI_PRESETS = [
@@ -111,7 +111,7 @@ const HEMI_DEFAULT_INDEX = 1;     // neutral — picked from production iteratio
 // Mimics the secondary illumination Apollo astronauts saw on the lunar
 // near-side during local night. Earth in scene sits at (-220, 180, -260).
 const EARTHSHINE_COLOR     = 0x6080a0;
-const EARTHSHINE_INTENSITY = 0.40;     // bumped from 0.15 — extra fill keeps shadows soft
+const EARTHSHINE_INTENSITY = 1.65;     // production-iterated value — strong fill on shadowed faces
 const EARTHSHINE_INTENSITY_MAX = 2.0;  // clamp for z / x keys
 const EARTHSHINE_DEFAULT_ON = true;
 
@@ -130,13 +130,13 @@ const STARFIELD_BRIGHTNESS = 0.5;
 // Fog (debug-tunable). Bigger far distance kills the "spotlight" feel —
 // distant ground stays lit instead of fading into fog colour around the
 // camera. Was 320 originally; 1200 fills the visible horizon at WALK_PLAY_RADIUS.
-const FOG_NEAR = 0;
-const FOG_FAR  = 1000;
+const FOG_NEAR = 100;
+const FOG_FAR  = 4000;
 const FOG_DEFAULT_ON = false;        // baked: fog is OFF by default — no atmosphere on the moon
 
 // Tone mapping (renderer-global; ACES Filmic gives the procedural PBR ground
 // proper highlight roll-off and saturation). Live exposure tuning via 7/8.
-const TONE_EXPOSURE = 2.80;
+const TONE_EXPOSURE = 3.50;
 const TONE_MAPPING_MODES = [
   ['None',     'NoToneMapping'],
   ['Linear',   'LinearToneMapping'],
