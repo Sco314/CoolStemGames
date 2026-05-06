@@ -54,6 +54,18 @@ const KM_TO_WU = 1000 / METERS_PER_WU;
 const MOON_RADIUS_KM = 1737.4;
 const MOON_RADIUS_WU = MOON_RADIUS_KM * KM_TO_WU;
 
+// True scale for the companion bodies. The Sun lives ~1 AU from the
+// Earth-Moon system; Earth ~384,400 km from the Moon (libration brings
+// it ~363k–405k km). At our orbit altitude these subtend Earth ≈ 1.9°
+// and Sun ≈ 0.53° — both visible discs with relative sizes that match
+// what you'd see standing on the Moon. Far clip is extended below to
+// accommodate the Sun's true distance.
+const SUN_RADIUS_KM   = 696340;
+const EARTH_RADIUS_KM = 6371;
+const SUN_RADIUS_WU   = SUN_RADIUS_KM   * KM_TO_WU;
+const EARTH_RADIUS_WU = EARTH_RADIUS_KM * KM_TO_WU;
+const KM_PER_AU       = 149597870.7;
+
 const INITIAL_ALTITUDE_KM = 6545;
 const MIN_ALTITUDE_KM     = 200;
 const MAX_ALTITUDE_KM     = 100000;
@@ -103,6 +115,8 @@ const state = {
 let scene = null;
 let camera = null;
 let moonMesh = null;
+let sunMesh = null;
+let earthSprite = null;
 let sunLight = null;
 let ambientLight = null;
 let colorTex = null;
@@ -114,6 +128,7 @@ let activePointers = null;       // Map<pointerId, {x, y}>
 let lastPinchDist = 0;           // px distance between two pointers, last frame
 let disposables = [];
 let backBtn = null;
+let resetBtn = null;
 let almanacEl = null;
 let onExitCb = null;
 
@@ -132,13 +147,20 @@ export const OrbitMode = {
       scene.background = new THREE.Color(0x000308);
     }
 
+    // Far clip pushed out to ~3 AU so the Sun (at 1 AU from the moon)
+    // sits comfortably inside the frustum no matter where the user
+    // orbits. Float32 precision degrades at coordinates this large
+    // (~15 km absolute resolution at 1 AU), but the Sun's apparent
+    // disc is 696,000 km wide so any positional jitter is sub-pixel.
     camera = new THREE.PerspectiveCamera(
       FOV_DEG, 1,
       KM_TO_WU * 10,
-      KM_TO_WU * 1_000_000
+      KM_TO_WU * KM_PER_AU * 3,
     );
 
     buildMoon();
+    buildSun();
+    buildEarth();
     buildLights();
 
     GameState.mode = MODE.MENU;
@@ -146,6 +168,7 @@ export const OrbitMode = {
 
     attachInputListeners();
     buildBackButton();
+    buildResetButton();
     buildAlmanacOverlay();
 
     // Kick off the lazy load. When it resolves we'll snap the camera
@@ -170,6 +193,7 @@ export const OrbitMode = {
     console.log('◀ OrbitMode.exit');
     detachInputListeners();
     destroyBackButton();
+    destroyResetButton();
     destroyAlmanacOverlay();
     onExitCb = null;
     for (const d of disposables) {
@@ -182,6 +206,8 @@ export const OrbitMode = {
     scene = null;
     camera = null;
     moonMesh = null;
+    sunMesh = null;
+    earthSprite = null;
     sunLight = null;
     ambientLight = null;
     colorTex = null;
@@ -281,6 +307,42 @@ function buildLights() {
   scene.add(ambientLight);
 }
 
+function buildSun() {
+  // Self-luminous sphere (MeshBasicMaterial — ignores scene lights). The
+  // ~696,000 km radius is rendered at true scale; at 1 AU it subtends
+  // ~0.53° from the moon, the same apparent size you'd see standing
+  // there. We do NOT make the directional light's position track the
+  // sun mesh; the light stays at small selenographic-scale coords to
+  // avoid Float32 precision artifacts when computing shadow / view
+  // matrices. Light direction matches the sun's direction either way.
+  const geom = new THREE.SphereGeometry(SUN_RADIUS_WU, 32, 24);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xfff4d6 });
+  sunMesh = new THREE.Mesh(geom, mat);
+  scene.add(sunMesh);
+  disposables.push({ geometry: geom, material: mat });
+}
+
+function buildEarth() {
+  // The repo's existing earth.png is a transparent-corner round icon —
+  // designed for billboarding, not equirectangular sphere wrapping. So
+  // we use it on a Sprite, which is camera-facing and gets the texture
+  // shape "for free." Sprite scale is its world-space size; setting it
+  // to 2 × Earth radius makes the apparent angular size correct.
+  const tex = getSharedTexture('textures/earth.png');
+  if (tex) tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({
+    map: tex || null,
+    color: tex ? 0xffffff : 0x4a7fbf,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,            // sprites with alpha shouldn't fight z-buffer
+  });
+  earthSprite = new THREE.Sprite(mat);
+  earthSprite.scale.set(EARTH_RADIUS_WU * 2, EARTH_RADIUS_WU * 2, 1);
+  scene.add(earthSprite);
+  disposables.push({ material: mat });   // SpriteMaterial; geometry is shared
+}
+
 function placeCamera() {
   if (!camera) return;
   const dist = MOON_RADIUS_WU + state.altitudeWU;
@@ -367,6 +429,16 @@ function recomputeOrientation(date, opts = {}) {
     state.pitchRad = Math.asin(Math.max(-1, Math.min(1, result.earthDir.y)));
     state.yawRad   = Math.atan2(result.earthDir.x, result.earthDir.z);
   }
+  // Place the Sun and Earth at their true distances. Both move slowly
+  // enough relative to the camera that a per-second update is invisible.
+  if (sunMesh && isNum(result.sunDistKm)) {
+    const d = result.sunDistKm * KM_TO_WU;
+    sunMesh.position.set(result.sunDir.x * d, result.sunDir.y * d, result.sunDir.z * d);
+  }
+  if (earthSprite && isNum(result.earthDistKm)) {
+    const d = result.earthDistKm * KM_TO_WU;
+    earthSprite.position.set(result.earthDir.x * d, result.earthDir.y * d, result.earthDir.z * d);
+  }
   // Fold computed values into the almanac, leaving any Dial-A-Moon
   // override fields intact.
   const prev = state.almanac || {};
@@ -380,6 +452,7 @@ function recomputeOrientation(date, opts = {}) {
     distanceKm: result.distanceKm ?? prev.distanceKm,
     diamDeg: result.diamDeg ?? prev.diamDeg,
     phaseName: result.phaseName ?? prev.phaseName,
+    sunDistKm: result.sunDistKm ?? prev.sunDistKm,
   };
   renderAlmanac();
 }
@@ -393,8 +466,12 @@ function recomputeOrientation(date, opts = {}) {
 function orientationFromAstronomyEngine(date) {
   const sun = AE.GeoVector(AE.Body.Sun, date, false);
   const moon = AE.GeoVector(AE.Body.Moon, date, false);
-  const sunDirEQJ = new THREE.Vector3(sun.x - moon.x, sun.y - moon.y, sun.z - moon.z).normalize();
-  const earthDirEQJ = new THREE.Vector3(-moon.x, -moon.y, -moon.z).normalize();
+  const sunFromMoonAU = new THREE.Vector3(sun.x - moon.x, sun.y - moon.y, sun.z - moon.z);
+  const earthFromMoonAU = new THREE.Vector3(-moon.x, -moon.y, -moon.z);
+  const sunDistKm   = sunFromMoonAU.length() * KM_PER_AU;
+  const earthDistKm = earthFromMoonAU.length() * KM_PER_AU;
+  const sunDirEQJ   = sunFromMoonAU.clone().normalize();
+  const earthDirEQJ = earthFromMoonAU.clone().normalize();
 
   // IAU passive transform EQJ → body-fixed (X=PM, Y=90°E, Z=pole):
   //   T = R_z(W) · R_x(π/2 − δ₀) · R_z(π/2 + α₀)
@@ -424,6 +501,8 @@ function orientationFromAstronomyEngine(date) {
   const phase = AE.MoonPhase(date);                       // 0..360
   return {
     sunDir, earthDir,
+    sunDistKm,
+    earthDistKm: lib.dist_km,    // canonical Moon→Earth distance from Libration()
     phaseAngleDeg: ill.phase_angle,
     illumPct: ill.phase_fraction * 100,
     distanceKm: lib.dist_km,
@@ -456,10 +535,11 @@ function orientationFromMeeus(date) {
   return {
     sunDir: new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta)),
     earthDir: new THREE.Vector3(0, 0, 1),
-    phaseAngleDeg: 180 - phaseLon,                    // approximate
+    sunDistKm: KM_PER_AU,            // 1 AU annual mean — Earth's eccentricity ignored
+    earthDistKm: 384400,             // mean Earth-Moon distance — orbital eccentricity ignored
+    phaseAngleDeg: 180 - phaseLon,
     illumPct: illum * 100,
     phaseName: namePhase(phaseLon),
-    // distance + diameter not available in the fallback; HUD shows "—"
   };
 }
 
@@ -568,13 +648,17 @@ function renderAlmanac() {
   }
   const fmtPct = isNum(a.illumPct) ? `${a.illumPct.toFixed(1)}%` : '—';
   const fmtKm = isNum(a.distanceKm) ? `${Math.round(a.distanceKm).toLocaleString('en-US')} km` : '—';
+  const fmtSunKm = isNum(a.sunDistKm)
+    ? `${(a.sunDistKm / 1e6).toFixed(2)} M km (${(a.sunDistKm / KM_PER_AU).toFixed(4)} AU)`
+    : '—';
   const fmtDiam = isNum(a.diamDeg) ? `${(a.diamDeg * 60).toFixed(1)}′ (${a.diamDeg.toFixed(4)}°)` : '—';
   const fmtLatLon = (p) => p ? `${Math.abs(p.lat).toFixed(2)}°${p.lat >= 0 ? 'N' : 'S'} · ${Math.abs(p.lon).toFixed(2)}°${p.lon >= 0 ? 'E' : 'W'}` : '—';
   const phaseRow = `<b style="color:#9fe">${a.phaseName || ''}</b>${isNum(a.illumPct) ? ` · ${fmtPct} illuminated` : ''}`;
   almanacEl.innerHTML =
     `<div style="font-weight:bold;color:#9fe;letter-spacing:0.06em;margin-bottom:6px">LUNAR ALMANAC</div>` +
     `<div>${phaseRow}</div>` +
-    `<div style="margin-top:4px"><span style="opacity:0.6">DISTANCE  </span>${fmtKm}</div>` +
+    `<div style="margin-top:4px"><span style="opacity:0.6">EARTH DIST</span> ${fmtKm}</div>` +
+    `<div><span style="opacity:0.6">SUN DIST  </span>${fmtSunKm}</div>` +
     `<div><span style="opacity:0.6">APPARENT Ø</span> ${fmtDiam}</div>` +
     `<div><span style="opacity:0.6">SUB-EARTH </span>${fmtLatLon(a.subEarth)}<span style="opacity:0.5"> (libration)</span></div>` +
     `<div><span style="opacity:0.6">SUB-SOLAR </span>${fmtLatLon(a.subSolar)}<span style="opacity:0.5"> (sun overhead)</span></div>` +
@@ -722,4 +806,34 @@ function buildBackButton() {
 function destroyBackButton() {
   if (backBtn?.parentNode) backBtn.parentNode.removeChild(backBtn);
   backBtn = null;
+}
+
+function buildResetButton() {
+  // Snap-back to the canonical Earth-observer view: clears
+  // userControlsCamera so the live sub-Earth point reclaims the angles,
+  // then forces an orientation recompute with alignCamera. After this,
+  // libration tracking resumes — the next per-second tick will keep
+  // refining as the moon's wobble continues.
+  resetBtn = document.createElement('button');
+  resetBtn.type = 'button';
+  resetBtn.textContent = '⌖ RESET VIEW';
+  resetBtn.setAttribute('aria-label', 'Reset to default Earth-observer view');
+  resetBtn.style.cssText =
+    'position:fixed;top:14px;left:160px;z-index:50;padding:8px 14px;' +
+    'background:rgba(0,0,0,0.65);color:#cfd;border:1px solid #4a6;' +
+    'border-radius:4px;font:13px ui-monospace,Menlo,Consolas,monospace;' +
+    'cursor:pointer;';
+  resetBtn.addEventListener('click', () => {
+    state.userControlsCamera = false;
+    state.altitudeWU = INITIAL_ALTITUDE_KM * KM_TO_WU;
+    recomputeOrientation(new Date(), { snap: true, alignCamera: true });
+    placeCamera();
+    applyLight();
+  });
+  document.body.appendChild(resetBtn);
+}
+
+function destroyResetButton() {
+  if (resetBtn?.parentNode) resetBtn.parentNode.removeChild(resetBtn);
+  resetBtn = null;
 }
