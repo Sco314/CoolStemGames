@@ -96,3 +96,34 @@ variants (rename to `moon_color_4k.jpg` / `moon_normal_2k.png`) and add
 LOD selection in OrbitMode based on `gl.getParameter(gl.MAX_TEXTURE_SIZE)`
 and the live zoom level. The bake math here is resolution-independent —
 just bump the four `*_OUT_*` constants.
+
+## bake-starfield.mjs
+
+Bakes `moonlander/assets/starfield.json` — the bright-star catalog
+rendered in OrbitMode's 3D sky. Sourced from the public-domain Yale
+Bright Star Catalog (BSC5) via brettonw/YaleBrightStarCatalog on
+GitHub. Output is ~5,000 stars to apparent magnitude 6.0 in compact
+JSON (~150 KB).
+
+### Output schema
+
+```
+[
+  [ra_deg, dec_deg, mag, color_temp_k_or_null],   // brightest first
+  ...
+]
+```
+
+RA / Dec in decimal degrees, J2000 equatorial. Stars are rotated into
+the moon's selenographic frame at runtime using the same IAU EQJ→body-
+fixed transform OrbitMode applies to the Sun and Earth — so the sky is
+real-time accurate, not a frozen snapshot.
+
+### Run
+
+```
+cd scripts
+node bake-starfield.mjs
+```
+
+No deps beyond Node's built-in `fetch`. ~1 second run.

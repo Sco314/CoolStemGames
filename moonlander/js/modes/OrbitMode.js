@@ -83,6 +83,12 @@ const PITCH_MAX_RAD    = 85 * Math.PI / 180;
 
 const MOON_COLOR_URL  = 'textures/moon/moon_color_2k.jpg';
 const MOON_NORMAL_URL = 'textures/moon/moon_normal_1k.png';
+const STARFIELD_URL   = 'assets/starfield.json';
+
+// Stars are placed at this radius in scene WU (just inside the camera
+// far clip of 3 AU). Three magnitude buckets render at three sizes so
+// brightness reads correctly without per-vertex shader uniforms.
+const STAR_DISTANCE_AU = 2.8;
 
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
@@ -91,6 +97,13 @@ const RAD2DEG = 180 / Math.PI;
 // `null` means not-yet-attempted; `false` means tried-and-failed.
 let AE = null;
 let aePromise = null;
+
+// EQJ → selenographic-scene rotation matrix from the latest astronomy-
+// engine ephemeris. Applied to every starfield Points object so the
+// catalog vertex buffer (built once in EQJ) renders in the correct
+// scene orientation. `null` when astronomy-engine hasn't loaded yet —
+// stars stay hidden during that window.
+let sceneToEQJMatrix = null;
 
 const state = {
   altitudeWU: INITIAL_ALTITUDE_KM * KM_TO_WU,
@@ -121,6 +134,7 @@ let sunLight = null;
 let ambientLight = null;
 let colorTex = null;
 let normalTex = null;
+let starfields = [];      // array of THREE.Points, one per magnitude bucket
 let canvasRef = null;
 let wheelHandler = null;
 let pointerHandlers = null;
@@ -139,13 +153,12 @@ export const OrbitMode = {
     onExitCb = typeof opts.onExit === 'function' ? opts.onExit : null;
 
     scene = new THREE.Scene();
-    const starfield = getSharedTexture('textures/starfield.png');
-    if (starfield) {
-      starfield.colorSpace = THREE.SRGBColorSpace;
-      scene.background = starfield;
-    } else {
-      scene.background = new THREE.Color(0x000308);
-    }
+    // Deep-space black (a hint of blue for atmospheric haze, even though
+    // the moon has no atmosphere — pure 0x000000 reads as "broken" to
+    // most viewers). Real stars from the BSC5 catalog are drawn in front
+    // of this in buildStarfield(), and they rotate with the scene's
+    // EQJ→selenographic transform so the sky tracks real-time geometry.
+    scene.background = new THREE.Color(0x000208);
 
     // Far clip pushed out to ~3 AU so the Sun (at 1 AU from the moon)
     // sits comfortably inside the frustum no matter where the user
@@ -162,6 +175,9 @@ export const OrbitMode = {
     buildSun();
     buildEarth();
     buildLights();
+    // Stars are a fire-and-forget async fetch — they appear when ready
+    // and are invisible until the first orientation matrix is applied.
+    buildStarfield();
 
     GameState.mode = MODE.MENU;
     notify('mode');
@@ -203,6 +219,8 @@ export const OrbitMode = {
     colorTex?.dispose();
     normalTex?.dispose();
     disposables = [];
+    starfields = [];
+    sceneToEQJMatrix = null;
     scene = null;
     camera = null;
     moonMesh = null;
@@ -322,6 +340,80 @@ function buildSun() {
   disposables.push({ geometry: geom, material: mat });
 }
 
+/**
+ * Build the bright-star starfield from the baked BSC5 JSON. Each star's
+ * (RA, Dec) is converted to a unit vector in J2000 equatorial (EQJ) and
+ * scaled to STAR_DISTANCE_AU. The resulting Points objects sit in EQJ
+ * orientation in the scene; per-second updates apply an EQJ→selenographic
+ * rotation matrix to all of them at once, so the sky stays real-time
+ * accurate as the moon's pole drifts (and as the user orbits, since the
+ * camera moves but the stars don't, which is correct).
+ *
+ * Three magnitude buckets render at three sizes — Three.js PointsMaterial
+ * has a single uniform size, so we use multiple Points objects rather
+ * than a custom shader. Cheap and avoids per-star uniforms.
+ */
+async function buildStarfield() {
+  let stars;
+  try {
+    const res = await fetch(STARFIELD_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    stars = await res.json();
+  } catch (err) {
+    console.warn('[OrbitMode] starfield.json failed to load — sky will be empty:', err?.message || err);
+    return;
+  }
+  if (!Array.isArray(stars) || !stars.length) return;
+  // Race: enter() may have completed and exit() been called while this
+  // fetch was in-flight. Bail if the scene has already been torn down.
+  if (!scene) return;
+
+  const distance = STAR_DISTANCE_AU * KM_PER_AU * KM_TO_WU;
+
+  // Magnitude buckets. Sized so the brightest stars are clearly visible
+  // (Sirius, Canopus, Vega, etc.) and naked-eye-faint stars are pinprick
+  // backdrops. sizeAttenuation:false locks each bucket's pixel size
+  // regardless of camera distance — astronomically correct for sources
+  // at infinity.
+  const buckets = [
+    { range: [-Infinity, 1.5], size: 3.5, color: 0xffffff },
+    { range: [1.5, 3.5],       size: 2.0, color: 0xfafaff },
+    { range: [3.5, 6.0],       size: 1.0, color: 0xddddee },
+  ];
+  for (const b of buckets) {
+    const positions = [];
+    for (const [ra, dec, mag] of stars) {
+      if (mag < b.range[0] || mag >= b.range[1]) continue;
+      const raR = ra * DEG2RAD;
+      const decR = dec * DEG2RAD;
+      const cd = Math.cos(decR);
+      // EQJ unit vector: +Z = celestial north pole, +X = vernal equinox.
+      const x = cd * Math.cos(raR);
+      const y = cd * Math.sin(raR);
+      const z = Math.sin(decR);
+      positions.push(x * distance, y * distance, z * distance);
+    }
+    if (!positions.length) continue;
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      color: b.color,
+      size: b.size,
+      sizeAttenuation: false,
+      transparent: true,
+      depthWrite: false,            // stars never occlude each other
+    });
+    const points = new THREE.Points(geom, mat);
+    points.matrixAutoUpdate = false;          // we manage `matrix` directly
+    points.visible = !!sceneToEQJMatrix;      // stay hidden until the first valid matrix lands
+    if (sceneToEQJMatrix) points.matrix.copy(sceneToEQJMatrix);
+    scene.add(points);
+    starfields.push(points);
+    disposables.push({ geometry: geom, material: mat });
+  }
+  console.log(`[OrbitMode] starfield: ${stars.length} stars in ${starfields.length} buckets`);
+}
+
 function buildEarth() {
   // The repo's existing earth.png is a transparent-corner round icon —
   // designed for billboarding, not equirectangular sphere wrapping. So
@@ -439,6 +531,18 @@ function recomputeOrientation(date, opts = {}) {
     const d = result.earthDistKm * KM_TO_WU;
     earthSprite.position.set(result.earthDir.x * d, result.earthDir.y * d, result.earthDir.z * d);
   }
+  // Apply the EQJ→selenographic rotation to every star Points object.
+  // The rotation matrix only exists when astronomy-engine has loaded
+  // (Meeus fallback doesn't compute moon-pole orientation), so the
+  // starfield stays hidden in the fallback window.
+  if (result.eqjToSceneMatrix) {
+    sceneToEQJMatrix = result.eqjToSceneMatrix;
+    for (const points of starfields) {
+      points.matrix.copy(sceneToEQJMatrix);
+      points.matrixWorldNeedsUpdate = true;
+      points.visible = true;
+    }
+  }
   // Fold computed values into the almanac, leaving any Dial-A-Moon
   // override fields intact.
   const prev = state.almanac || {};
@@ -488,19 +592,27 @@ function orientationFromAstronomyEngine(date) {
   const m3 = new THREE.Matrix4().makeRotationZ(-W);
   const T = new THREE.Matrix4().multiplyMatrices(m3, m2).multiply(m1);
 
-  const sunBody = sunDirEQJ.clone().applyMatrix4(T);     // body: X=PM, Y=90E, Z=pole
-  const earthBody = earthDirEQJ.clone().applyMatrix4(T);
+  // Permutation body-fixed → scene: scene(X,Y,Z) = body(Y,Z,X). I.e.
+  // scene east = body 90°E, scene up = body pole, scene out = body PM.
+  // Composing P·T into a single Matrix4 gives the EQJ→scene rotation
+  // we apply to the starfield Points buffer (computed once in EQJ).
+  const P = new THREE.Matrix4().set(
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    1, 0, 0, 0,
+    0, 0, 0, 1,
+  );
+  const eqjToScene = new THREE.Matrix4().multiplyMatrices(P, T);
 
-  // Permute body-fixed → scene: scene(X,Y,Z) = body(Y,Z,X). I.e. scene
-  // east = body 90°E, scene up = body pole, scene out = body PM.
-  const sunDir = new THREE.Vector3(sunBody.y, sunBody.z, sunBody.x).normalize();
-  const earthDir = new THREE.Vector3(earthBody.y, earthBody.z, earthBody.x).normalize();
+  const sunDir = sunDirEQJ.clone().applyMatrix4(eqjToScene).normalize();
+  const earthDir = earthDirEQJ.clone().applyMatrix4(eqjToScene).normalize();
 
   const ill = AE.Illumination(AE.Body.Moon, date);
   const lib = AE.Libration(date);
   const phase = AE.MoonPhase(date);                       // 0..360
   return {
     sunDir, earthDir,
+    eqjToSceneMatrix: eqjToScene,
     sunDistKm,
     earthDistKm: lib.dist_km,    // canonical Moon→Earth distance from Libration()
     phaseAngleDeg: ill.phase_angle,
