@@ -1,8 +1,7 @@
-// modes/OrbitMode.js — v0.2.0
-// Admin-only "Lunar Stationary Orbit" view. Parks the camera ~6,545 km off
-// the lunar surface and renders a textured moon sphere lit by the live
-// Sun→Moon vector, so the visible phase, libration, and pole orientation
-// match today's actual lunar geometry.
+// modes/OrbitMode.js — v0.3.0
+// Admin-only "Lunar Stationary Orbit" view. The moon is stationary at
+// scene origin; the camera orbits around it. Lit by the live Sun→Moon
+// vector (astronomy-engine), so the visible phase tracks today's geometry.
 //
 // World-unit convention is shared with BakedTerrain.js: 1 WU = 0.6275 m.
 // The scene frame is selenographic by construction:
@@ -13,12 +12,19 @@
 // The moon mesh is rotated -π/2 about Y so its equirectangular texture
 // (lon=0 at u=0.5) maps to selenographic in the same frame.
 //
-// Camera and light are positioned per the live ephemeris:
-//   - Camera at (R + altitude) * selenoToCart(elat, elon) — moves with
-//     libration so the visible-face wobble is real.
-//   - DirectionalLight at scaled selenoToCart(slat, slon) — sub-solar
-//     point in selenographic coordinates.
-// Both are recomputed once per second (the apparent sun moves ~0.5°/hour).
+// Camera control (v0.3.0):
+//   - Mouse drag / single-finger touch  → orbit (yaw + pitch)
+//   - Mouse wheel / two-finger pinch    → zoom (altitude)
+//   - On enter, yaw/pitch initialize to the live sub-Earth point so the
+//     opening view matches what an Earth observer sees today (libration
+//     and all). Once the user drags, the camera is fully theirs — the
+//     library-computed sub-Earth direction stops moving the camera and
+//     only feeds the HUD almanac readout.
+//
+// Sun lighting is camera-independent — a DirectionalLight pointed at
+// the live sub-solar selenographic point (recomputed once/sec). When
+// the user orbits to the far side, they see an unlit hemisphere; when
+// over the near-side terminator they see today's phase shadow line.
 //
 // Texture sourcing (built by scripts/bake-moon-globe-textures.mjs):
 //   - moonlander/textures/moon/moon_color_2k.jpg  (LROC WAC color)
@@ -55,6 +61,14 @@ const MAX_ALTITUDE_KM     = 100000;
 const FOV_DEG = 30;
 const ZOOM_PER_WHEEL_NOTCH = 1.12;
 
+// Drag-to-orbit tuning. 0.005 rad/px ≈ 0.286°/px — a horizontal sweep of
+// ~1250 px gives a full 360° rotation, which feels natural across mouse
+// and touch without losing precision near the poles. Pitch clamped at
+// ±85° avoids gimbal lock at the singularity where the camera looks
+// straight down the +Y axis (lookAt becomes ambiguous with up=+Y).
+const ORBIT_RAD_PER_PX = 0.005;
+const PITCH_MAX_RAD    = 85 * Math.PI / 180;
+
 const MOON_COLOR_URL  = 'textures/moon/moon_color_2k.jpg';
 const MOON_NORMAL_URL = 'textures/moon/moon_normal_1k.png';
 
@@ -68,11 +82,18 @@ let aePromise = null;
 
 const state = {
   altitudeWU: INITIAL_ALTITUDE_KM * KM_TO_WU,
+  // Camera orbit angles (selenographic): yawRad measured from +Z toward
+  // +X (east), pitchRad from equator toward +Y (north). Initialized to
+  // (0,0) — straight at the prime meridian — and updated on enter() to
+  // the live sub-Earth point once astronomy-engine resolves. After the
+  // first user drag, `userControlsCamera` flips and library updates no
+  // longer overwrite the angles.
+  yawRad: 0,
+  pitchRad: 0,
+  userControlsCamera: false,
   lastOrientationRecompute: 0,
-  // Smoothed direction vectors so the per-second recompute step doesn't
-  // produce a visible jolt at deep zoom.
-  earthDir: new THREE.Vector3(0, 0, 1),
-  earthDirTarget: new THREE.Vector3(0, 0, 1),
+  // Sun direction (selenographic) is still smoothed across the
+  // once-per-second recompute boundary so deep-zoom views don't jolt.
   sunDir: new THREE.Vector3(1, 0, 0),
   sunDirTarget: new THREE.Vector3(1, 0, 0),
   // Latest almanac snapshot for the HUD readout.
@@ -88,8 +109,9 @@ let colorTex = null;
 let normalTex = null;
 let canvasRef = null;
 let wheelHandler = null;
-let pinchTouches = null;
-let touchHandlers = null;
+let pointerHandlers = null;
+let activePointers = null;       // Map<pointerId, {x, y}>
+let lastPinchDist = 0;           // px distance between two pointers, last frame
 let disposables = [];
 let backBtn = null;
 let almanacEl = null;
@@ -122,16 +144,23 @@ export const OrbitMode = {
     GameState.mode = MODE.MENU;
     notify('mode');
 
-    attachZoomListeners();
+    attachInputListeners();
     buildBackButton();
     buildAlmanacOverlay();
 
-    // Kick off the lazy load. Once it lands the next per-second tick
-    // upgrades from the Meeus-formula fallback to library-grade values.
-    ensureAstronomyEngine();
-    // Compute orientation immediately so the first render frame already
-    // shows the correct phase + libration (don't wait for tick #1).
-    recomputeOrientation(new Date(), { snap: true });
+    // Kick off the lazy load. When it resolves we'll snap the camera
+    // angles to the canonical sub-Earth view if the user hasn't grabbed
+    // control yet.
+    ensureAstronomyEngine().then(() => {
+      if (!state.userControlsCamera) {
+        recomputeOrientation(new Date(), { snap: true, alignCamera: true });
+      }
+    });
+    // Compute orientation immediately so lighting + almanac are correct
+    // on frame 0. With the Meeus fallback the camera defaults to (0,0,
+    // 0,0) — the canonical zero-libration view; once astronomy-engine
+    // lands a few hundred ms later, the .then() above corrects the angles.
+    recomputeOrientation(new Date(), { snap: true, alignCamera: true });
     placeCamera();
     applyLight();
     fetchDialAMoon();   // fire-and-forget; populates HUD on success
@@ -139,7 +168,7 @@ export const OrbitMode = {
 
   exit() {
     console.log('◀ OrbitMode.exit');
-    detachZoomListeners();
+    detachInputListeners();
     destroyBackButton();
     destroyAlmanacOverlay();
     onExitCb = null;
@@ -159,18 +188,24 @@ export const OrbitMode = {
     normalTex = null;
     canvasRef = null;
     state.almanac = null;
+    // Reset orbit / pointer state so a re-enter starts at the canonical
+    // libration-corrected view rather than wherever the previous session
+    // left off.
+    state.yawRad = 0;
+    state.pitchRad = 0;
+    state.userControlsCamera = false;
   },
 
   update(dt) {
     state.lastOrientationRecompute += dt;
     if (state.lastOrientationRecompute >= 1.0) {
       state.lastOrientationRecompute = 0;
-      recomputeOrientation(new Date(), { snap: false });
+      // The HUD needs the up-to-date sub-Earth point for the libration
+      // readout; the camera doesn't follow it once the user has grabbed
+      // control.
+      recomputeOrientation(new Date(), { snap: false, alignCamera: false });
     }
-    // Slow lerp toward target keeps the per-second recompute invisible.
-    const k = Math.min(1, dt * 0.3);
-    state.earthDir.lerp(state.earthDirTarget, k).normalize();
-    state.sunDir.lerp(state.sunDirTarget, k).normalize();
+    state.sunDir.lerp(state.sunDirTarget, Math.min(1, dt * 0.3)).normalize();
     placeCamera();
     applyLight();
   },
@@ -249,11 +284,11 @@ function buildLights() {
 function placeCamera() {
   if (!camera) return;
   const dist = MOON_RADIUS_WU + state.altitudeWU;
-  camera.position.set(
-    state.earthDir.x * dist,
-    state.earthDir.y * dist,
-    state.earthDir.z * dist,
-  );
+  // (yaw, pitch) → cartesian on a sphere. yaw=0,pitch=0 places the
+  // camera on +Z (canonical sub-Earth view).
+  const cp = Math.cos(state.pitchRad), sp = Math.sin(state.pitchRad);
+  const cy = Math.cos(state.yawRad),   sy = Math.sin(state.yawRad);
+  camera.position.set(cp * sy * dist, sp * dist, cp * cy * dist);
   camera.up.set(0, 1, 0);          // selenographic north
   camera.lookAt(0, 0, 0);
 }
@@ -314,20 +349,23 @@ function ensureAstronomyEngine() {
 }
 
 /**
- * Recompute camera/light directions and the almanac snapshot from the
- * given date. Falls back to a low-precision in-house formula if
- * astronomy-engine isn't loaded yet (or failed to load).
+ * Recompute light direction and almanac from the given date. Optionally
+ * also aligns the camera angles to the live sub-Earth point — used on
+ * enter() (and again when astronomy-engine resolves) so the opening view
+ * matches what a real Earth observer sees today. Once the user drags,
+ * `state.userControlsCamera` flips and this function stops touching the
+ * angles regardless of `alignCamera`.
  *
- * `opts.snap`: if true, copy targets straight to current vectors (no
- * lerp) — used on enter() so the first frame is correct.
+ * `opts.snap`        — if true, copy sun-dir target straight to current (no lerp)
+ * `opts.alignCamera` — if true and !userControlsCamera, snap yaw/pitch to sub-Earth
  */
 function recomputeOrientation(date, opts = {}) {
   const result = AE ? orientationFromAstronomyEngine(date) : orientationFromMeeus(date);
-  state.earthDirTarget.copy(result.earthDir);
   state.sunDirTarget.copy(result.sunDir);
-  if (opts.snap) {
-    state.earthDir.copy(result.earthDir);
-    state.sunDir.copy(result.sunDir);
+  if (opts.snap) state.sunDir.copy(result.sunDir);
+  if (opts.alignCamera && !state.userControlsCamera) {
+    state.pitchRad = Math.asin(Math.max(-1, Math.min(1, result.earthDir.y)));
+    state.yawRad   = Math.atan2(result.earthDir.x, result.earthDir.z);
   }
   // Fold computed values into the almanac, leaving any Dial-A-Moon
   // override fields intact.
@@ -543,10 +581,17 @@ function renderAlmanac() {
     `<div style="margin-top:6px;opacity:0.5;font-size:10.5px">SOURCE · ${a.source || '—'}</div>`;
 }
 
-// ---- zoom / input -------------------------------------------------------
+// ---- zoom / orbit input -------------------------------------------------
+//
+// Pointer Events API unifies mouse + touch + pen behind one code path.
+// One pointer = drag-to-orbit; two pointers = pinch-to-zoom. The mouse
+// wheel also zooms (kept for desktop ergonomics). `touch-action: none`
+// on the canvas suppresses the browser's default pinch-zoom + scroll so
+// our handlers see every gesture cleanly.
 
-function attachZoomListeners() {
+function attachInputListeners() {
   if (!canvasRef) return;
+
   wheelHandler = (e) => {
     e.preventDefault();
     const factor = (e.deltaY > 0) ? ZOOM_PER_WHEEL_NOTCH : 1 / ZOOM_PER_WHEEL_NOTCH;
@@ -554,55 +599,100 @@ function attachZoomListeners() {
   };
   canvasRef.addEventListener('wheel', wheelHandler, { passive: false });
 
-  touchHandlers = {
-    start: (e) => {
-      if (e.touches.length === 2) {
-        const [a, b] = [e.touches[0], e.touches[1]];
-        pinchTouches = {
-          id1: a.identifier, id2: b.identifier,
-          lastDist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
-        };
+  activePointers = new Map();
+  lastPinchDist = 0;
+
+  pointerHandlers = {
+    down: (e) => {
+      // Ignore non-primary mouse buttons; let context menus & browser
+      // gestures keep their normal meaning. Touch and pen always primary.
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (typeof canvasRef.setPointerCapture === 'function') {
+        try { canvasRef.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
       }
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 1) {
+        canvasRef.style.cursor = 'grabbing';
+      }
+      if (activePointers.size === 2) {
+        const [a, b] = [...activePointers.values()];
+        lastPinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      }
+      e.preventDefault();
     },
     move: (e) => {
-      if (!pinchTouches || e.touches.length < 2) return;
-      e.preventDefault();
-      const a = findTouch(e.touches, pinchTouches.id1);
-      const b = findTouch(e.touches, pinchTouches.id2);
-      if (!a || !b) return;
-      const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-      if (pinchTouches.lastDist > 0) {
-        const factor = pinchTouches.lastDist / d;
-        setAltitudeKm((state.altitudeWU / KM_TO_WU) * factor);
+      const prev = activePointers.get(e.pointerId);
+      if (!prev) return;
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activePointers.size === 1) {
+        // Single-pointer drag → orbit yaw/pitch.
+        // Sign convention chosen so the moon under the cursor moves with
+        // the cursor: dragging right swings the camera left around the
+        // moon, which makes the moon visually slide right.
+        state.yawRad   -= dx * ORBIT_RAD_PER_PX;
+        state.pitchRad += dy * ORBIT_RAD_PER_PX;
+        state.pitchRad = Math.max(-PITCH_MAX_RAD, Math.min(PITCH_MAX_RAD, state.pitchRad));
+        // First user input "claims" the camera — library libration
+        // updates stop nudging it after this point.
+        state.userControlsCamera = true;
+        placeCamera();
+      } else if (activePointers.size >= 2) {
+        // Two-pointer pinch → zoom.
+        const [a, b] = [...activePointers.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (lastPinchDist > 0 && d > 0) {
+          const factor = lastPinchDist / d;
+          setAltitudeKm((state.altitudeWU / KM_TO_WU) * factor);
+        }
+        lastPinchDist = d;
       }
-      pinchTouches.lastDist = d;
+      e.preventDefault();
     },
-    end: () => { pinchTouches = null; },
+    up: (e) => {
+      activePointers.delete(e.pointerId);
+      if (typeof canvasRef.releasePointerCapture === 'function') {
+        try { canvasRef.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      }
+      if (activePointers.size < 2) lastPinchDist = 0;
+      if (activePointers.size === 0) canvasRef.style.cursor = 'grab';
+    },
   };
-  canvasRef.addEventListener('touchstart',  touchHandlers.start, { passive: true });
-  canvasRef.addEventListener('touchmove',   touchHandlers.move,  { passive: false });
-  canvasRef.addEventListener('touchend',    touchHandlers.end,   { passive: true });
-  canvasRef.addEventListener('touchcancel', touchHandlers.end,   { passive: true });
+
+  canvasRef.style.touchAction = 'none';
+  canvasRef.style.cursor = 'grab';
+  canvasRef.addEventListener('pointerdown',   pointerHandlers.down);
+  canvasRef.addEventListener('pointermove',   pointerHandlers.move);
+  canvasRef.addEventListener('pointerup',     pointerHandlers.up);
+  canvasRef.addEventListener('pointercancel', pointerHandlers.up);
+  canvasRef.addEventListener('pointerleave',  pointerHandlers.up);
+  // Block the browser's default right-click menu while in this mode —
+  // future work may want middle-drag for pan, etc.
+  canvasRef.addEventListener('contextmenu', preventContextMenu);
 }
 
-function detachZoomListeners() {
-  if (canvasRef && wheelHandler) canvasRef.removeEventListener('wheel', wheelHandler);
-  if (canvasRef && touchHandlers) {
-    canvasRef.removeEventListener('touchstart',  touchHandlers.start);
-    canvasRef.removeEventListener('touchmove',   touchHandlers.move);
-    canvasRef.removeEventListener('touchend',    touchHandlers.end);
-    canvasRef.removeEventListener('touchcancel', touchHandlers.end);
+function preventContextMenu(e) { e.preventDefault(); }
+
+function detachInputListeners() {
+  if (canvasRef && wheelHandler) {
+    canvasRef.removeEventListener('wheel', wheelHandler);
+  }
+  if (canvasRef && pointerHandlers) {
+    canvasRef.removeEventListener('pointerdown',   pointerHandlers.down);
+    canvasRef.removeEventListener('pointermove',   pointerHandlers.move);
+    canvasRef.removeEventListener('pointerup',     pointerHandlers.up);
+    canvasRef.removeEventListener('pointercancel', pointerHandlers.up);
+    canvasRef.removeEventListener('pointerleave',  pointerHandlers.up);
+    canvasRef.removeEventListener('contextmenu', preventContextMenu);
+    canvasRef.style.touchAction = '';
+    canvasRef.style.cursor = '';
   }
   wheelHandler = null;
-  touchHandlers = null;
-  pinchTouches = null;
-}
-
-function findTouch(touches, id) {
-  for (let i = 0; i < touches.length; i++) {
-    if (touches[i].identifier === id) return touches[i];
-  }
-  return null;
+  pointerHandlers = null;
+  activePointers = null;
+  lastPinchDist = 0;
 }
 
 function setAltitudeKm(km) {
