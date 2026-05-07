@@ -90,6 +90,20 @@ const STARFIELD_URL   = 'assets/starfield.json';
 // brightness reads correctly without per-vertex shader uniforms.
 const STAR_DISTANCE_AU = 2.8;
 
+// Texture / pole calibration. The LROC mosaic + Three.js SphereGeometry
+// default UV mapping pin the texture's prime meridian to a particular
+// world axis, but the actual selenographic 0,0 may be off by small
+// angles depending on the source bake. These three are the *baked-in
+// defaults* — set to whatever values you dial in via the in-mode
+// CALIBRATE panel and then commit. The panel's localStorage override
+// shadows these at runtime so iteration doesn't need a code change.
+const CALIBRATION_DEFAULTS = {
+  textureLonOffsetDeg: 0,    // additional Y rotation of moon mesh (+ shifts texture east)
+  textureLatOffsetDeg: 0,    // additional X rotation of moon mesh (+ tilts top toward camera)
+  textureRollDeg:      0,    // additional Z rotation of moon mesh (+ rolls clockwise)
+};
+const CALIBRATION_LS_KEY = 'moonlander.orbitCalibration';
+
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 
@@ -143,7 +157,10 @@ let lastPinchDist = 0;           // px distance between two pointers, last frame
 let disposables = [];
 let backBtn = null;
 let resetBtn = null;
+let calibrateBtn = null;
+let calibratePanel = null;
 let almanacEl = null;
+let calibration = { ...CALIBRATION_DEFAULTS };
 let onExitCb = null;
 
 export const OrbitMode = {
@@ -151,6 +168,7 @@ export const OrbitMode = {
     console.log('🛰 OrbitMode.enter');
     canvasRef = canvas;
     onExitCb = typeof opts.onExit === 'function' ? opts.onExit : null;
+    loadCalibration();
 
     scene = new THREE.Scene();
     // Deep-space black (a hint of blue for atmospheric haze, even though
@@ -185,6 +203,7 @@ export const OrbitMode = {
     attachInputListeners();
     buildBackButton();
     buildResetButton();
+    buildCalibrateButton();
     buildAlmanacOverlay();
 
     // Kick off the lazy load. When it resolves we'll snap the camera
@@ -210,6 +229,7 @@ export const OrbitMode = {
     detachInputListeners();
     destroyBackButton();
     destroyResetButton();
+    destroyCalibrateUI();
     destroyAlmanacOverlay();
     onExitCb = null;
     for (const d of disposables) {
@@ -301,10 +321,26 @@ function buildMoon() {
   // want the prime meridian at +Z (so a no-libration camera at +Z
   // looks straight at the sub-Earth point) and east longitudes at +X
   // (screen-right). Rotating the mesh -π/2 about Y achieves both:
-  // u=0.5 → +Z, u=0.75 (lon=+90°, east) → +X.
-  moonMesh.rotation.y = -Math.PI / 2;
+  // u=0.5 → +Z, u=0.75 (lon=+90°, east) → +X. The CALIBRATION_*
+  // offsets compose on top of this so per-deployment misalignments
+  // can be dialed in via the in-mode CALIBRATE panel.
+  applyMoonRotation();
   scene.add(moonMesh);
   disposables.push({ geometry: geom, material });
+}
+
+/**
+ * Compose the base -π/2 Y rotation with the runtime calibration deltas
+ * and write it to the moon mesh. Order: Y(base+lon) · X(lat) · Z(roll),
+ * applied as an Euler with order 'YXZ' so the Y rotation runs in the
+ * scene's selenographic frame (not after the lat/roll tilts).
+ */
+function applyMoonRotation() {
+  if (!moonMesh) return;
+  const lon = -Math.PI / 2 + calibration.textureLonOffsetDeg * DEG2RAD;
+  const lat = calibration.textureLatOffsetDeg * DEG2RAD;
+  const roll = calibration.textureRollDeg * DEG2RAD;
+  moonMesh.rotation.set(lat, lon, roll, 'YXZ');
 }
 
 function buildLights() {
@@ -948,4 +984,152 @@ function buildResetButton() {
 function destroyResetButton() {
   if (resetBtn?.parentNode) resetBtn.parentNode.removeChild(resetBtn);
   resetBtn = null;
+}
+
+// ---- calibration panel --------------------------------------------------
+//
+// Exposes three nudge sliders (lon offset, lat offset, roll) that compose
+// on top of the base -π/2 Y rotation of the moon mesh. Lets the operator
+// align surface features against a reference image without touching code,
+// then copy the resulting JSON back into CALIBRATION_DEFAULTS for a
+// permanent bake. localStorage backs the live tuning so reloads don't
+// lose progress.
+
+function loadCalibration() {
+  calibration = { ...CALIBRATION_DEFAULTS };
+  try {
+    const raw = localStorage.getItem(CALIBRATION_LS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    for (const k of Object.keys(CALIBRATION_DEFAULTS)) {
+      if (typeof parsed[k] === 'number' && Number.isFinite(parsed[k])) {
+        calibration[k] = parsed[k];
+      }
+    }
+  } catch (_) { /* fall back to defaults */ }
+}
+
+function saveCalibration() {
+  try { localStorage.setItem(CALIBRATION_LS_KEY, JSON.stringify(calibration)); }
+  catch (_) { /* private mode etc. — calibration just doesn't persist */ }
+}
+
+function buildCalibrateButton() {
+  calibrateBtn = document.createElement('button');
+  calibrateBtn.type = 'button';
+  calibrateBtn.textContent = '🔧 CALIBRATE';
+  calibrateBtn.setAttribute('aria-label', 'Open texture calibration panel');
+  calibrateBtn.style.cssText =
+    'position:fixed;top:14px;left:300px;z-index:50;padding:8px 14px;' +
+    'background:rgba(0,0,0,0.65);color:#cfd;border:1px solid #4a6;' +
+    'border-radius:4px;font:13px ui-monospace,Menlo,Consolas,monospace;' +
+    'cursor:pointer;';
+  calibrateBtn.addEventListener('click', toggleCalibratePanel);
+  document.body.appendChild(calibrateBtn);
+}
+
+function toggleCalibratePanel() {
+  if (calibratePanel) {
+    destroyCalibratePanel();
+  } else {
+    buildCalibratePanel();
+  }
+}
+
+function buildCalibratePanel() {
+  calibratePanel = document.createElement('div');
+  calibratePanel.style.cssText =
+    'position:fixed;top:60px;left:14px;z-index:50;width:340px;' +
+    'padding:12px 14px;background:rgba(2,6,14,0.92);color:#cfd;' +
+    'border:1px solid #2a4a3a;border-radius:4px;' +
+    'font:12px ui-monospace,Menlo,Consolas,monospace;line-height:1.55;' +
+    'backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);';
+
+  const sliders = [
+    { key: 'textureLonOffsetDeg', label: 'LON offset (east+)', min: -180, max: 180, step: 0.25 },
+    { key: 'textureLatOffsetDeg', label: 'LAT offset (north+)', min: -45,  max: 45,  step: 0.25 },
+    { key: 'textureRollDeg',      label: 'ROLL (cw+)',          min: -45,  max: 45,  step: 0.25 },
+  ];
+
+  let html =
+    `<div style="font-weight:bold;color:#9fe;letter-spacing:0.06em;margin-bottom:8px">` +
+    `MOON CALIBRATION` +
+    `</div>` +
+    `<div style="opacity:0.65;font-size:10.5px;margin-bottom:8px">` +
+    `Nudge until the visible features match a reference moon image, then ` +
+    `copy values to bake.` +
+    `</div>`;
+  for (const s of sliders) {
+    const v = calibration[s.key];
+    html +=
+      `<label style="display:block;margin-bottom:6px">` +
+      `<div style="display:flex;justify-content:space-between"><span>${s.label}</span>` +
+      `<span data-readout="${s.key}">${v.toFixed(2)}°</span></div>` +
+      `<input type="range" data-key="${s.key}" min="${s.min}" max="${s.max}" step="${s.step}" ` +
+        `value="${v}" style="width:100%;accent-color:#5d9">` +
+      `</label>`;
+  }
+  html +=
+    `<div style="display:flex;gap:8px;margin-top:8px">` +
+    `<button data-action="copy"  style="flex:1;padding:6px;background:#152;color:#cfd;border:1px solid #4a6;border-radius:3px;cursor:pointer;font:inherit">📋 COPY</button>` +
+    `<button data-action="reset" style="flex:1;padding:6px;background:#211;color:#fcc;border:1px solid #a44;border-radius:3px;cursor:pointer;font:inherit">RESET</button>` +
+    `</div>` +
+    `<div data-status style="margin-top:8px;opacity:0.7;font-size:10.5px;min-height:1em"></div>`;
+  calibratePanel.innerHTML = html;
+
+  // Wire sliders
+  calibratePanel.querySelectorAll('input[type="range"]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const key = input.dataset.key;
+      const v = parseFloat(input.value);
+      if (!Number.isFinite(v)) return;
+      calibration[key] = v;
+      const readout = calibratePanel.querySelector(`[data-readout="${key}"]`);
+      if (readout) readout.textContent = `${v.toFixed(2)}°`;
+      applyMoonRotation();
+      saveCalibration();
+    });
+  });
+
+  // Wire buttons
+  calibratePanel.querySelector('[data-action="copy"]').addEventListener('click', async () => {
+    const text = JSON.stringify(calibration, null, 2);
+    let ok = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch (_) { /* fall through */ }
+    const status = calibratePanel.querySelector('[data-status]');
+    if (status) status.textContent = ok ? '✅ Copied to clipboard' : '⚠️ Couldn\'t access clipboard — check console';
+    if (!ok) console.log('[OrbitMode] calibration values:\n' + text);
+  });
+  calibratePanel.querySelector('[data-action="reset"]').addEventListener('click', () => {
+    calibration = { ...CALIBRATION_DEFAULTS };
+    saveCalibration();
+    applyMoonRotation();
+    // Refresh slider positions + readouts
+    calibratePanel.querySelectorAll('input[type="range"]').forEach((input) => {
+      const v = calibration[input.dataset.key];
+      input.value = v;
+      const readout = calibratePanel.querySelector(`[data-readout="${input.dataset.key}"]`);
+      if (readout) readout.textContent = `${v.toFixed(2)}°`;
+    });
+    const status = calibratePanel.querySelector('[data-status]');
+    if (status) status.textContent = '↺ Reset to baked defaults';
+  });
+
+  document.body.appendChild(calibratePanel);
+}
+
+function destroyCalibratePanel() {
+  if (calibratePanel?.parentNode) calibratePanel.parentNode.removeChild(calibratePanel);
+  calibratePanel = null;
+}
+
+function destroyCalibrateUI() {
+  destroyCalibratePanel();
+  if (calibrateBtn?.parentNode) calibrateBtn.parentNode.removeChild(calibrateBtn);
+  calibrateBtn = null;
 }
