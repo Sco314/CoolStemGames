@@ -1020,7 +1020,7 @@ function buildCalibrateButton() {
   calibrateBtn.textContent = '🔧 CALIBRATE';
   calibrateBtn.setAttribute('aria-label', 'Open texture calibration panel');
   calibrateBtn.style.cssText =
-    'position:fixed;top:14px;left:300px;z-index:50;padding:8px 14px;' +
+    'position:fixed;top:54px;left:14px;z-index:50;padding:8px 14px;' +
     'background:rgba(0,0,0,0.65);color:#cfd;border:1px solid #4a6;' +
     'border-radius:4px;font:13px ui-monospace,Menlo,Consolas,monospace;' +
     'cursor:pointer;';
@@ -1039,7 +1039,7 @@ function toggleCalibratePanel() {
 function buildCalibratePanel() {
   calibratePanel = document.createElement('div');
   calibratePanel.style.cssText =
-    'position:fixed;top:60px;left:14px;z-index:50;width:340px;' +
+    'position:fixed;top:100px;left:14px;z-index:50;width:min(340px,calc(100vw - 28px));' +
     'padding:12px 14px;background:rgba(2,6,14,0.92);color:#cfd;' +
     'border:1px solid #2a4a3a;border-radius:4px;' +
     'font:12px ui-monospace,Menlo,Consolas,monospace;line-height:1.55;' +
