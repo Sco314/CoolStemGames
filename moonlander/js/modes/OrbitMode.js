@@ -190,6 +190,7 @@ export const OrbitMode = {
     );
 
     buildMoon();
+    buildLandmarks();
     buildSun();
     buildEarth();
     buildLights();
@@ -235,6 +236,7 @@ export const OrbitMode = {
     for (const d of disposables) {
       d.geometry?.dispose();
       d.material?.dispose();
+      d.texture?.dispose();
     }
     colorTex?.dispose();
     normalTex?.dispose();
@@ -341,6 +343,107 @@ function applyMoonRotation() {
   const lat = calibration.textureLatOffsetDeg * DEG2RAD;
   const roll = calibration.textureRollDeg * DEG2RAD;
   moonMesh.rotation.set(lat, lon, roll, 'YXZ');
+}
+
+// Selenographic landmarks rendered as labelled circle sprites on the
+// moon's surface. Coordinates are IAU selenographic (positive east,
+// positive north). Sprites are parented to moonMesh so they inherit
+// the calibration rotation — wherever the texture's Tycho actually
+// sits after calibration, the marker sits there too.
+const LANDMARKS = [
+  { name: 'TYCHO', lat: -43.31, lon: -11.36 },
+];
+
+/**
+ * Convert selenographic (lat, lon) → mesh-local cartesian. Uses the
+ * Three.js SphereGeometry default UV mapping inverted: u=0.5 maps to
+ * mesh-local +X (which becomes scene +Z after the -π/2 Y rotation).
+ *
+ * Derivation: SphereGeometry's vertex generator runs
+ *   x = -R cos(phi) sin(theta)
+ *   y =  R cos(theta)
+ *   z =  R sin(phi) sin(theta)
+ * with phi = u·2π, theta = v·π, and u = (lon + 180)/360, v = (90 − lat)/180.
+ * Substituting and simplifying gives:
+ *   x = R cos(lat) cos(lon)
+ *   y = R sin(lat)
+ *   z = -R cos(lat) sin(lon)
+ */
+function selenoToMeshLocal(latDeg, lonDeg, radius = MOON_RADIUS_WU) {
+  const lat = latDeg * DEG2RAD;
+  const lon = lonDeg * DEG2RAD;
+  const cl = Math.cos(lat);
+  return new THREE.Vector3(
+    radius * cl * Math.cos(lon),
+    radius * Math.sin(lat),
+    -radius * cl * Math.sin(lon),
+  );
+}
+
+/**
+ * Build labelled marker sprites for each entry in LANDMARKS. Sprites
+ * are parented to moonMesh so they ride the texture's calibration; a
+ * Sprite is camera-facing so the circle + label always reads cleanly.
+ * depthTest:true with the marker placed at radius·1.005 keeps it
+ * occluded by the moon when on the far side of the orbiting camera.
+ */
+function buildLandmarks() {
+  if (!moonMesh) return;
+  for (const lm of LANDMARKS) {
+    const tex = makeLandmarkTexture(lm.name);
+    const mat = new THREE.SpriteMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
+      sizeAttenuation: true,
+    });
+    const sprite = new THREE.Sprite(mat);
+    // Marker is sized so the circle outline is ~150 km across — much
+    // bigger than Tycho's true ~85 km diameter, but the rim stays
+    // readable at the default orbit altitude. Canvas aspect 256:96.
+    const heightWU = 150 * KM_TO_WU;
+    sprite.scale.set(heightWU * (256 / 96), heightWU, 1);
+    // Push out 0.5% of the radius so the sprite plane never z-fights
+    // the moon mesh underneath.
+    const pos = selenoToMeshLocal(lm.lat, lm.lon, MOON_RADIUS_WU * 1.005);
+    sprite.position.copy(pos);
+    moonMesh.add(sprite);
+    disposables.push({ material: mat });
+    disposables.push({ texture: tex });
+  }
+}
+
+/** Draw a circle outline + text label onto a 256×96 canvas → CanvasTexture. */
+function makeLandmarkTexture(label) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 96;
+  const ctx = canvas.getContext('2d');
+  // Soft drop shadow so the marker reads against any albedo.
+  ctx.shadowColor = 'rgba(0,0,0,0.85)';
+  ctx.shadowBlur = 4;
+  // Circle (slightly left of center). Hollow ring so the surface
+  // detail underneath stays readable.
+  ctx.strokeStyle = 'rgba(255, 220, 100, 0.95)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(48, 48, 22, 0, 2 * Math.PI);
+  ctx.stroke();
+  // Inner crosshair for precision.
+  ctx.beginPath();
+  ctx.moveTo(48, 38); ctx.lineTo(48, 58);
+  ctx.moveTo(38, 48); ctx.lineTo(58, 48);
+  ctx.stroke();
+  // Label, right of the circle.
+  ctx.shadowBlur = 6;
+  ctx.font = 'bold 26px ui-monospace, Menlo, Consolas, monospace';
+  ctx.fillStyle = 'rgba(255, 220, 100, 0.95)';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, 82, 52);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 function buildLights() {
